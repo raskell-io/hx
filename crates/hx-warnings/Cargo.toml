@@ -1,0 +1,12 @@
+[package]
+name = "hx-warnings"
+description = "Warning system for hx"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+owo-colors = "4"
+anstream = "0.6"

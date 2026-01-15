@@ -21,6 +21,7 @@ hx-cache.workspace = true
 hx-doctor.workspace = true
 hx-ui.workspace = true
 hx-telemetry.workspace = true
+hx-warnings.workspace = true
 
 clap.workspace = true
 anyhow.workspace = true

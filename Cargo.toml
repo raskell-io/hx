@@ -11,6 +11,7 @@ members = [
     "crates/hx-doctor",
     "crates/hx-ui",
     "crates/hx-telemetry",
+    "crates/hx-warnings",
 ]
 
 [workspace.package]
@@ -43,6 +44,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 # UI
 indicatif = "0.17"
 console = "0.15"
+owo-colors = "4"
+anstream = "0.6"
 
 # Hashing
 sha2 = "0.10"
@@ -70,3 +73,4 @@ hx-cache = { path = "crates/hx-cache" }
 hx-doctor = { path = "crates/hx-doctor" }
 hx-ui = { path = "crates/hx-ui" }
 hx-telemetry = { path = "crates/hx-telemetry" }
+hx-warnings = { path = "crates/hx-warnings" }

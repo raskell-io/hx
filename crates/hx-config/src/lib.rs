@@ -6,9 +6,11 @@
 //! - Locating `.cabal` files
 //! - Merging configuration defaults
 
+pub mod combine;
 pub mod manifest;
 pub mod project;
 
+pub use combine::Combine;
 pub use manifest::{
     FormatConfig, LintConfig, Manifest, ProjectConfig, ProjectKind, ToolchainConfig,
 };

@@ -1,19 +1,44 @@
 //! CLI argument parsing.
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
+use hx_core::EnvVars;
+
+use crate::styles::STYLES;
 
 /// hx - Haskell Toolchain CLI
 #[derive(Parser, Debug)]
 #[command(name = "hx")]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about = "A fast, opinionated Haskell toolchain CLI")]
+#[command(long_about = None)]
 #[command(propagate_version = true)]
+#[command(styles = STYLES)]
+#[command(after_help = "Use `hx help <command>` for more information about a command.")]
 pub struct Cli {
-    /// Enable verbose output
-    #[arg(short, long, global = true)]
-    pub verbose: bool,
+    #[command(flatten)]
+    pub global: GlobalArgs,
 
     #[command(subcommand)]
     pub command: Option<Commands>,
+}
+
+/// Global arguments available to all commands.
+#[derive(Args, Debug)]
+pub struct GlobalArgs {
+    /// Enable verbose output
+    #[arg(short, long, global = true, env = EnvVars::HX_VERBOSE)]
+    pub verbose: bool,
+
+    /// Suppress output (use twice for complete silence)
+    #[arg(short, long, global = true, action = clap::ArgAction::Count, env = EnvVars::HX_QUIET)]
+    pub quiet: u8,
+
+    /// Disable colored output
+    #[arg(long, global = true, env = EnvVars::HX_NO_COLOR)]
+    pub no_color: bool,
+
+    /// Path to configuration file
+    #[arg(long, global = true, env = EnvVars::HX_CONFIG_FILE)]
+    pub config_file: Option<std::path::PathBuf>,
 }
 
 #[derive(Subcommand, Debug)]

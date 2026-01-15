@@ -4,10 +4,12 @@
 //! utilities used across all hx crates.
 
 pub mod command;
+pub mod env;
 pub mod error;
 pub mod version;
 
 pub use command::{CommandOutput, CommandRunner};
+pub use env::EnvVars;
 pub use error::{Error, ErrorCode, Result};
 pub use version::Version;
 

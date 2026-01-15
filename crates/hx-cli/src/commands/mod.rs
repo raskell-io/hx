@@ -12,12 +12,18 @@ mod toolchain;
 
 use crate::cli::{Cli, Commands};
 use anyhow::Result;
-use hx_ui::{Output, Verbosity};
+use hx_ui::{Output, Printer, Verbosity};
 
 /// Run the CLI command.
 pub async fn run(cli: Cli) -> Result<i32> {
-    let output = Output::with_verbosity(if cli.verbose {
+    // Create printer from global args
+    let printer = Printer::from_flags(cli.global.quiet, cli.global.verbose);
+
+    // Create output handler (for backwards compatibility)
+    let output = Output::with_verbosity(if printer.is_verbose() {
         Verbosity::Verbose
+    } else if printer.is_quiet() {
+        Verbosity::Quiet
     } else {
         Verbosity::Normal
     });
