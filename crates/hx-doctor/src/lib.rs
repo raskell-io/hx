@@ -281,10 +281,10 @@ fn check_native_deps_linux(report: &mut DoctorReport) {
 #[cfg(target_os = "linux")]
 fn check_library_linux(lib: &str) -> bool {
     // Try pkg-config first
-    if let Ok(output) = Command::new("pkg-config").args(["--exists", lib]).output() {
-        if output.status.success() {
-            return true;
-        }
+    if let Ok(output) = Command::new("pkg-config").args(["--exists", lib]).output()
+        && output.status.success()
+    {
+        return true;
     }
 
     // Try ldconfig as fallback
