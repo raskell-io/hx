@@ -1,5 +1,7 @@
 //! Integration tests for hx CLI.
 
+#![allow(deprecated)] // cargo_bin is deprecated but the replacement requires macros
+
 use assert_cmd::Command;
 use predicates::prelude::*;
 use std::fs;
