@@ -1,6 +1,6 @@
 //! Styling utilities for terminal output.
 
-use console::{style, StyledObject};
+use console::{StyledObject, style};
 
 /// Style helper for consistent terminal output.
 pub struct Style;

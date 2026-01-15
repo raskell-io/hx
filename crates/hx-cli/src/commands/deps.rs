@@ -1,7 +1,7 @@
 //! Dependency management commands (add, rm).
 
 use anyhow::Result;
-use hx_cabal::{add_dependency, remove_dependency, CabalEditError};
+use hx_cabal::{CabalEditError, add_dependency, remove_dependency};
 use hx_config::find_project_root;
 use hx_ui::Output;
 use std::fs;
@@ -29,7 +29,14 @@ pub async fn add(package: &str, _dev: bool, output: &Output) -> Result<i32> {
         }
     };
 
-    output.status("Adding", &format!("{} to {}", package, cabal_file.file_name().unwrap().to_string_lossy()));
+    output.status(
+        "Adding",
+        &format!(
+            "{} to {}",
+            package,
+            cabal_file.file_name().unwrap().to_string_lossy()
+        ),
+    );
 
     match add_dependency(&cabal_file, package, None) {
         Ok(()) => {
@@ -75,7 +82,14 @@ pub async fn remove(package: &str, output: &Output) -> Result<i32> {
         }
     };
 
-    output.status("Removing", &format!("{} from {}", package, cabal_file.file_name().unwrap().to_string_lossy()));
+    output.status(
+        "Removing",
+        &format!(
+            "{} from {}",
+            package,
+            cabal_file.file_name().unwrap().to_string_lossy()
+        ),
+    );
 
     match remove_dependency(&cabal_file, package) {
         Ok(()) => {

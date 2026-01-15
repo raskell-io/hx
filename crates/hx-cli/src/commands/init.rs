@@ -1,7 +1,7 @@
 //! Project initialization command.
 
 use anyhow::Result;
-use hx_config::{Manifest, ProjectKind, MANIFEST_FILENAME};
+use hx_config::{MANIFEST_FILENAME, Manifest, ProjectKind};
 use hx_ui::{Output, Spinner};
 use std::fs;
 use std::path::PathBuf;
@@ -158,7 +158,11 @@ indent_style = tab
         }
     }
 
-    spinner.finish_success(format!("Created {} project: {}", kind.as_str(), project_name));
+    spinner.finish_success(format!(
+        "Created {} project: {}",
+        kind.as_str(),
+        project_name
+    ));
 
     output.info("");
     output.info("Next steps:");

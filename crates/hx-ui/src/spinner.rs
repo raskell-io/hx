@@ -35,8 +35,11 @@ impl Spinner {
                 .template("{msg}")
                 .expect("valid template"),
         );
-        self.bar
-            .finish_with_message(format!("{} {}", console::style("✓").green(), message.into()));
+        self.bar.finish_with_message(format!(
+            "{} {}",
+            console::style("✓").green(),
+            message.into()
+        ));
     }
 
     /// Finish the spinner with a failure message.
@@ -101,7 +104,10 @@ impl Progress {
 
     /// Finish the progress bar.
     pub fn finish(self, message: impl Into<String>) {
-        self.bar
-            .finish_with_message(format!("{} {}", console::style("✓").green(), message.into()));
+        self.bar.finish_with_message(format!(
+            "{} {}",
+            console::style("✓").green(),
+            message.into()
+        ));
     }
 }

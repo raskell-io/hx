@@ -68,9 +68,7 @@ pub async fn build(
     };
 
     let runner = CommandRunner::new().with_working_dir(project_root);
-    let cmd_output = runner
-        .run("cabal", args.iter().map(|s| s.as_str()))
-        .await?;
+    let cmd_output = runner.run("cabal", args.iter().map(|s| s.as_str())).await?;
 
     let result = parse_build_output(&cmd_output);
 
@@ -129,14 +127,15 @@ pub async fn test(
     let spinner = Spinner::new("Testing...");
 
     let runner = CommandRunner::new().with_working_dir(project_root);
-    let cmd_output = runner
-        .run("cabal", args.iter().map(|s| s.as_str()))
-        .await?;
+    let cmd_output = runner.run("cabal", args.iter().map(|s| s.as_str())).await?;
 
     let result = parse_build_output(&cmd_output);
 
     if result.success {
-        spinner.finish_success(format!("Tests passed in {}", format_duration(result.duration)));
+        spinner.finish_success(format!(
+            "Tests passed in {}",
+            format_duration(result.duration)
+        ));
     } else {
         spinner.finish_error("Tests failed");
     }

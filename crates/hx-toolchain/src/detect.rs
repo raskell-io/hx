@@ -18,7 +18,10 @@ pub enum ToolStatus {
 impl ToolStatus {
     /// Check if the tool was found.
     pub fn is_found(&self) -> bool {
-        matches!(self, ToolStatus::Found { .. } | ToolStatus::VersionUnknown { .. })
+        matches!(
+            self,
+            ToolStatus::Found { .. } | ToolStatus::VersionUnknown { .. }
+        )
     }
 
     /// Get the version if available.
@@ -135,7 +138,11 @@ async fn detect_tool(runner: &CommandRunner, name: &str, args: &[&str]) -> Detec
                     status: ToolStatus::Found { version, path },
                 }
             } else {
-                debug!("{} found but couldn't parse version from: {}", name, version_str.trim());
+                debug!(
+                    "{} found but couldn't parse version from: {}",
+                    name,
+                    version_str.trim()
+                );
                 DetectedTool {
                     name: name.to_string(),
                     status: ToolStatus::VersionUnknown { path },

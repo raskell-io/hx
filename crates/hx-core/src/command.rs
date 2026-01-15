@@ -70,7 +70,10 @@ impl CommandRunner {
         I: IntoIterator<Item = S>,
     {
         let program_ref = program.as_ref();
-        let args_vec: Vec<_> = args.into_iter().map(|a| a.as_ref().to_os_string()).collect();
+        let args_vec: Vec<_> = args
+            .into_iter()
+            .map(|a| a.as_ref().to_os_string())
+            .collect();
 
         debug!(
             "Running command: {} {:?}",

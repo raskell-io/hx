@@ -11,4 +11,4 @@ pub mod edit;
 pub mod freeze;
 
 pub use build::{BuildOptions, BuildResult};
-pub use edit::{add_dependency, remove_dependency, CabalEditError};
+pub use edit::{CabalEditError, add_dependency, remove_dependency};

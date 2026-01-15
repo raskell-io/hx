@@ -117,7 +117,10 @@ pub enum Error {
     },
 
     #[error("project not found")]
-    ProjectNotFound { searched: Vec<PathBuf>, fixes: Vec<Fix> },
+    ProjectNotFound {
+        searched: Vec<PathBuf>,
+        fixes: Vec<Fix>,
+    },
 
     #[error("{0}")]
     Other(#[from] anyhow::Error),

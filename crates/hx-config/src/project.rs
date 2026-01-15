@@ -1,6 +1,6 @@
 //! Project detection and context.
 
-use crate::{Manifest, CACHE_DIR_NAME, LOCKFILE_FILENAME, MANIFEST_FILENAME};
+use crate::{CACHE_DIR_NAME, LOCKFILE_FILENAME, MANIFEST_FILENAME, Manifest};
 use hx_core::error::{Error, Fix};
 use std::path::{Path, PathBuf};
 use tracing::debug;
@@ -28,10 +28,7 @@ impl Project {
             message: format!("failed to load manifest: {}", e),
             path: Some(manifest_path.clone()),
             source: Some(Box::new(e)),
-            fixes: vec![Fix::with_command(
-                "Create a new project",
-                "hx init",
-            )],
+            fixes: vec![Fix::with_command("Create a new project", "hx init")],
         })?;
 
         let cabal_file = find_cabal_file(&root);
@@ -106,10 +103,7 @@ pub fn find_project_root(start: impl AsRef<Path>) -> Result<PathBuf, Error> {
 
         // Also check for .cabal file as a fallback
         if find_cabal_file(current).is_some() {
-            debug!(
-                "Found .cabal file at {} (no hx.toml)",
-                current.display()
-            );
+            debug!("Found .cabal file at {} (no hx.toml)", current.display());
             // Return this directory but note there's no hx.toml
             // The caller can decide whether to create one
         }

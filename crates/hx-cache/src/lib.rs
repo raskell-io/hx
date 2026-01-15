@@ -16,9 +16,8 @@ use tracing::debug;
 /// - macOS: `~/Library/Caches/hx`
 /// - Windows: `%LOCALAPPDATA%\hx\cache`
 pub fn global_cache_dir() -> Result<PathBuf> {
-    let dirs = ProjectDirs::from("io", "raskell", "hx").ok_or_else(|| {
-        Error::config("could not determine home directory for cache")
-    })?;
+    let dirs = ProjectDirs::from("io", "raskell", "hx")
+        .ok_or_else(|| Error::config("could not determine home directory for cache"))?;
     Ok(dirs.cache_dir().to_path_buf())
 }
 
@@ -33,9 +32,8 @@ pub fn cabal_store_dir() -> Result<PathBuf> {
 /// - macOS: `~/Library/Application Support/hx`
 /// - Windows: `%APPDATA%\hx\config`
 pub fn global_config_dir() -> Result<PathBuf> {
-    let dirs = ProjectDirs::from("io", "raskell", "hx").ok_or_else(|| {
-        Error::config("could not determine home directory for config")
-    })?;
+    let dirs = ProjectDirs::from("io", "raskell", "hx")
+        .ok_or_else(|| Error::config("could not determine home directory for config"))?;
     Ok(dirs.config_dir().to_path_buf())
 }
 

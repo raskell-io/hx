@@ -58,7 +58,10 @@ pub fn add_dependency(
     let package_lower = package.to_lowercase();
     for line in &lines {
         let trimmed = line.trim();
-        if trimmed.starts_with(&package_lower) || trimmed.starts_with(&format!(",{}", package_lower)) || trimmed.contains(&format!(" {}", package_lower)) {
+        if trimmed.starts_with(&package_lower)
+            || trimmed.starts_with(&format!(",{}", package_lower))
+            || trimmed.contains(&format!(" {}", package_lower))
+        {
             // Simple check - might have false positives but good enough for common cases
             let dep_part = trimmed.trim_start_matches(',').trim();
             if dep_part.starts_with(&package_lower) {
@@ -121,7 +124,10 @@ pub fn remove_dependency(
         // Check if this line contains the dependency to remove
         let is_target = dep_part.to_lowercase().starts_with(&package_lower)
             && (dep_part.len() == package_lower.len()
-                || dep_part.chars().nth(package_lower.len()).is_some_and(|c| c == ' ' || c == ','));
+                || dep_part
+                    .chars()
+                    .nth(package_lower.len())
+                    .is_some_and(|c| c == ' ' || c == ','));
 
         if is_target {
             found = true;

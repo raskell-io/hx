@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use hx_cabal::build::{self as cabal_build, BuildOptions};
-use hx_config::{find_project_root, Project};
+use hx_config::{Project, find_project_root};
 use hx_ui::Output;
 
 /// Run the build command.

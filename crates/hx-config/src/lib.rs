@@ -14,7 +14,7 @@ pub use combine::Combine;
 pub use manifest::{
     FormatConfig, LintConfig, Manifest, ProjectConfig, ProjectKind, ToolchainConfig,
 };
-pub use project::{find_project_root, Project};
+pub use project::{Project, find_project_root};
 
 /// The manifest filename.
 pub const MANIFEST_FILENAME: &str = "hx.toml";

@@ -2,8 +2,8 @@
 
 use anyhow::Result;
 use hx_cabal::freeze;
-use hx_config::{find_project_root, Project, LOCKFILE_FILENAME};
-use hx_lock::{parse_freeze_file, Lockfile};
+use hx_config::{LOCKFILE_FILENAME, Project, find_project_root};
+use hx_lock::{Lockfile, parse_freeze_file};
 use hx_toolchain::Toolchain;
 use hx_ui::{Output, Spinner};
 

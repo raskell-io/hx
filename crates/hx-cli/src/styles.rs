@@ -3,7 +3,7 @@
 //! This module defines custom styles for clap's help output, providing
 //! consistent colored output similar to uv's approach.
 
-use clap::builder::{styling::AnsiColor, Styles};
+use clap::builder::{Styles, styling::AnsiColor};
 
 /// Custom styles for the hx CLI.
 ///

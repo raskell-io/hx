@@ -6,9 +6,9 @@
 //! - JSON log output for debugging
 
 use tracing_subscriber::{
+    EnvFilter,
     fmt::{self, format::FmtSpan},
     prelude::*,
-    EnvFilter,
 };
 
 /// Initialize the tracing subscriber.
@@ -17,11 +17,9 @@ use tracing_subscriber::{
 /// and the verbose flag.
 pub fn init(verbose: bool) {
     let filter = if verbose {
-        EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| EnvFilter::new("hx=debug"))
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("hx=debug"))
     } else {
-        EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| EnvFilter::new("hx=warn"))
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("hx=warn"))
     };
 
     let subscriber = tracing_subscriber::registry().with(filter);

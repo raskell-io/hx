@@ -113,16 +113,12 @@ fn test_init_default_bin() {
 
 #[test]
 fn test_verbose_flag() {
-    hx().args(["--verbose", "--help"])
-        .assert()
-        .success();
+    hx().args(["--verbose", "--help"]).assert().success();
 }
 
 #[test]
 fn test_quiet_flag() {
-    hx().args(["--quiet", "--help"])
-        .assert()
-        .success();
+    hx().args(["--quiet", "--help"]).assert().success();
 }
 
 #[test]

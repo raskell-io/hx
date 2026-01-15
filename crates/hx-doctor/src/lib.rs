@@ -5,7 +5,7 @@
 
 use hx_config::MANIFEST_FILENAME;
 use hx_core::error::Fix;
-use hx_toolchain::{install::ghcup_install_command, Toolchain};
+use hx_toolchain::{Toolchain, install::ghcup_install_command};
 use hx_ui::{Output, Style};
 use std::path::Path;
 use std::process::Command;
@@ -77,12 +77,16 @@ pub struct DoctorReport {
 impl DoctorReport {
     /// Check if there are any errors.
     pub fn has_errors(&self) -> bool {
-        self.diagnostics.iter().any(|d| d.severity == Severity::Error)
+        self.diagnostics
+            .iter()
+            .any(|d| d.severity == Severity::Error)
     }
 
     /// Check if there are any warnings.
     pub fn has_warnings(&self) -> bool {
-        self.diagnostics.iter().any(|d| d.severity == Severity::Warning)
+        self.diagnostics
+            .iter()
+            .any(|d| d.severity == Severity::Warning)
     }
 
     /// Add a diagnostic.
@@ -92,9 +96,21 @@ impl DoctorReport {
 
     /// Get the count of each severity.
     pub fn counts(&self) -> (usize, usize, usize) {
-        let errors = self.diagnostics.iter().filter(|d| d.severity == Severity::Error).count();
-        let warnings = self.diagnostics.iter().filter(|d| d.severity == Severity::Warning).count();
-        let info = self.diagnostics.iter().filter(|d| d.severity == Severity::Info).count();
+        let errors = self
+            .diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Error)
+            .count();
+        let warnings = self
+            .diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Warning)
+            .count();
+        let info = self
+            .diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Info)
+            .count();
         (errors, warnings, info)
     }
 }
@@ -133,15 +149,17 @@ fn check_ghcup(toolchain: &Toolchain, report: &mut DoctorReport) {
     if !toolchain.ghcup.status.is_found() {
         report.add(
             Diagnostic::warning("ghcup not found - cannot manage toolchain versions")
-                .with_fix(Fix::with_command(
-                    "Install ghcup",
-                    ghcup_install_command(),
-                )),
+                .with_fix(Fix::with_command("Install ghcup", ghcup_install_command())),
         );
     } else {
         report.add(Diagnostic::info(format!(
             "ghcup: {}",
-            toolchain.ghcup.status.version().map(|v| v.to_string()).unwrap_or_else(|| "installed".to_string())
+            toolchain
+                .ghcup
+                .status
+                .version()
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "installed".to_string())
         )));
     }
 }
@@ -162,7 +180,12 @@ fn check_ghc(toolchain: &Toolchain, report: &mut DoctorReport) {
     } else {
         report.add(Diagnostic::info(format!(
             "ghc: {}",
-            toolchain.ghc.status.version().map(|v| v.to_string()).unwrap_or_else(|| "installed".to_string())
+            toolchain
+                .ghc
+                .status
+                .version()
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "installed".to_string())
         )));
     }
 }
@@ -170,16 +193,20 @@ fn check_ghc(toolchain: &Toolchain, report: &mut DoctorReport) {
 fn check_cabal(toolchain: &Toolchain, report: &mut DoctorReport) {
     if !toolchain.cabal.status.is_found() {
         report.add(
-            Diagnostic::error("cabal not found")
-                .with_fix(Fix::with_command(
-                    "Install Cabal via ghcup",
-                    "ghcup install cabal",
-                )),
+            Diagnostic::error("cabal not found").with_fix(Fix::with_command(
+                "Install Cabal via ghcup",
+                "ghcup install cabal",
+            )),
         );
     } else {
         report.add(Diagnostic::info(format!(
             "cabal: {}",
-            toolchain.cabal.status.version().map(|v| v.to_string()).unwrap_or_else(|| "installed".to_string())
+            toolchain
+                .cabal
+                .status
+                .version()
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "installed".to_string())
         )));
     }
 }
@@ -196,7 +223,12 @@ fn check_hls(toolchain: &Toolchain, report: &mut DoctorReport) {
     } else {
         report.add(Diagnostic::info(format!(
             "hls: {}",
-            toolchain.hls.status.version().map(|v| v.to_string()).unwrap_or_else(|| "installed".to_string())
+            toolchain
+                .hls
+                .status
+                .version()
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "installed".to_string())
         )));
     }
 }
@@ -216,7 +248,11 @@ fn check_native_deps(report: &mut DoctorReport) {
 fn check_native_deps_linux(report: &mut DoctorReport) {
     // Check for common native libraries needed by GHC
     let libs = [
-        ("libgmp", "libgmp-dev", "GMP (GNU Multiple Precision Arithmetic Library)"),
+        (
+            "libgmp",
+            "libgmp-dev",
+            "GMP (GNU Multiple Precision Arithmetic Library)",
+        ),
         ("libz", "zlib1g-dev", "zlib compression library"),
         ("libncurses", "libncurses-dev", "ncurses terminal library"),
         ("libffi", "libffi-dev", "Foreign Function Interface library"),
@@ -225,15 +261,18 @@ fn check_native_deps_linux(report: &mut DoctorReport) {
     for (lib, package, description) in libs {
         if !check_library_linux(lib) {
             report.add(
-                Diagnostic::warning(format!("{} not found - {} may fail to build", lib, description))
-                    .with_fix(Fix::with_command(
-                        format!("Install {} (Debian/Ubuntu)", package),
-                        format!("sudo apt-get install {}", package),
-                    ))
-                    .with_fix(Fix::with_command(
-                        "Install on Fedora/RHEL",
-                        format!("sudo dnf install {}-devel", lib.trim_start_matches("lib")),
-                    )),
+                Diagnostic::warning(format!(
+                    "{} not found - {} may fail to build",
+                    lib, description
+                ))
+                .with_fix(Fix::with_command(
+                    format!("Install {} (Debian/Ubuntu)", package),
+                    format!("sudo apt-get install {}", package),
+                ))
+                .with_fix(Fix::with_command(
+                    "Install on Fedora/RHEL",
+                    format!("sudo dnf install {}-devel", lib.trim_start_matches("lib")),
+                )),
             );
         }
     }
@@ -242,20 +281,14 @@ fn check_native_deps_linux(report: &mut DoctorReport) {
 #[cfg(target_os = "linux")]
 fn check_library_linux(lib: &str) -> bool {
     // Try pkg-config first
-    if let Ok(output) = Command::new("pkg-config")
-        .args(["--exists", lib])
-        .output()
-    {
+    if let Ok(output) = Command::new("pkg-config").args(["--exists", lib]).output() {
         if output.status.success() {
             return true;
         }
     }
 
     // Try ldconfig as fallback
-    if let Ok(output) = Command::new("ldconfig")
-        .args(["-p"])
-        .output()
-    {
+    if let Ok(output) = Command::new("ldconfig").args(["-p"]).output() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         if stdout.contains(lib) {
             return true;
@@ -303,11 +336,14 @@ fn check_native_deps_macos(report: &mut DoctorReport) {
     for (formula, description) in deps {
         if !check_brew_formula(formula) {
             report.add(
-                Diagnostic::warning(format!("{} not found - {} may fail to build", formula, description))
-                    .with_fix(Fix::with_command(
-                        format!("Install {}", formula),
-                        format!("brew install {}", formula),
-                    )),
+                Diagnostic::warning(format!(
+                    "{} not found - {} may fail to build",
+                    formula, description
+                ))
+                .with_fix(Fix::with_command(
+                    format!("Install {}", formula),
+                    format!("brew install {}", formula),
+                )),
             );
         }
     }
@@ -324,10 +360,7 @@ fn check_brew_formula(formula: &str) -> bool {
 #[cfg(target_os = "windows")]
 fn check_native_deps_windows(report: &mut DoctorReport) {
     // Check for MSYS2/MinGW which provides native libs on Windows
-    let msys2_paths = [
-        "C:\\msys64",
-        "C:\\msys32",
-    ];
+    let msys2_paths = ["C:\\msys64", "C:\\msys32"];
 
     let has_msys2 = msys2_paths.iter().any(|p| std::path::Path::new(p).exists());
 
@@ -345,10 +378,7 @@ fn check_project(dir: &Path, report: &mut DoctorReport) {
     if !manifest_path.exists() {
         report.add(
             Diagnostic::warning(format!("{} not found", MANIFEST_FILENAME))
-                .with_fix(Fix::with_command(
-                    "Initialize hx project",
-                    "hx init",
-                )),
+                .with_fix(Fix::with_command("Initialize hx project", "hx init")),
         );
     } else {
         report.add(Diagnostic::info(format!("{} found", MANIFEST_FILENAME)));
@@ -367,10 +397,7 @@ fn check_project(dir: &Path, report: &mut DoctorReport) {
     if !has_cabal {
         report.add(
             Diagnostic::error("no .cabal file found")
-                .with_fix(Fix::with_command(
-                    "Initialize project",
-                    "hx init",
-                )),
+                .with_fix(Fix::with_command("Initialize project", "hx init")),
         );
     } else {
         report.add(Diagnostic::info(".cabal file found"));
@@ -409,11 +436,7 @@ pub fn print_report(report: &DoctorReport, output: &Output) {
             warnings
         );
     } else if warnings > 0 {
-        eprintln!(
-            "{} {} warning(s)",
-            Style::warning("⚠"),
-            warnings
-        );
+        eprintln!("{} {} warning(s)", Style::warning("⚠"), warnings);
     } else {
         eprintln!("{} All checks passed", Style::success("✓"));
     }

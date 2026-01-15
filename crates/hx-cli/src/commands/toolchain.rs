@@ -2,8 +2,8 @@
 
 use crate::cli::ToolchainCommands;
 use anyhow::Result;
-use hx_config::{find_project_root, Manifest};
-use hx_toolchain::{install, Toolchain};
+use hx_config::{Manifest, find_project_root};
+use hx_toolchain::{Toolchain, install};
 use hx_ui::{Output, Style};
 
 /// Run a toolchain subcommand.
@@ -37,7 +37,10 @@ async fn status(output: &Output) -> Result<i32> {
     if let Some(version) = toolchain.cabal.status.version() {
         output.list_item("cabal", &format!("{} {}", Style::success("✓"), version));
     } else if toolchain.cabal.status.is_found() {
-        output.list_item("cabal", &format!("{} (version unknown)", Style::warning("?")));
+        output.list_item(
+            "cabal",
+            &format!("{} (version unknown)", Style::warning("?")),
+        );
     } else {
         output.list_item("cabal", &format!("{} not found", Style::error("✗")));
     }
@@ -46,7 +49,10 @@ async fn status(output: &Output) -> Result<i32> {
     if let Some(version) = toolchain.ghcup.status.version() {
         output.list_item("ghcup", &format!("{} {}", Style::success("✓"), version));
     } else if toolchain.ghcup.status.is_found() {
-        output.list_item("ghcup", &format!("{} (version unknown)", Style::warning("?")));
+        output.list_item(
+            "ghcup",
+            &format!("{} (version unknown)", Style::warning("?")),
+        );
     } else {
         output.list_item("ghcup", &format!("{} not found", Style::warning("○")));
     }
@@ -117,11 +123,7 @@ async fn install_components(
         return Ok(2);
     }
 
-    if success {
-        Ok(0)
-    } else {
-        Ok(4)
-    }
+    if success { Ok(0) } else { Ok(4) }
 }
 
 async fn use_profile(profile: &str, output: &Output) -> Result<i32> {

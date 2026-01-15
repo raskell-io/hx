@@ -11,9 +11,7 @@ pub async fn install_ghc(version: &str) -> Result<()> {
 
     info!("Installing GHC {} via ghcup", version);
 
-    let output = runner
-        .run("ghcup", ["install", "ghc", version])
-        .await?;
+    let output = runner.run("ghcup", ["install", "ghc", version]).await?;
 
     if output.success() {
         // Set as default
@@ -39,9 +37,7 @@ pub async fn install_cabal(version: &str) -> Result<()> {
 
     info!("Installing Cabal {} via ghcup", version);
 
-    let output = runner
-        .run("ghcup", ["install", "cabal", version])
-        .await?;
+    let output = runner.run("ghcup", ["install", "cabal", version]).await?;
 
     if output.success() {
         let _ = runner.run("ghcup", ["set", "cabal", version]).await;
@@ -66,9 +62,7 @@ pub async fn install_hls(version: &str) -> Result<()> {
 
     info!("Installing HLS {} via ghcup", version);
 
-    let output = runner
-        .run("ghcup", ["install", "hls", version])
-        .await?;
+    let output = runner.run("ghcup", ["install", "hls", version]).await?;
 
     if output.success() {
         let _ = runner.run("ghcup", ["set", "hls", version]).await;

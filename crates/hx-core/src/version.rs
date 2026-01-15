@@ -159,20 +159,16 @@ mod tests {
 
     #[test]
     fn test_parse_version() {
-        assert_eq!(
-            "9.8.2".parse::<Version>().unwrap(),
-            Version::new(9, 8, 2)
-        );
-        assert_eq!(
-            "1.0.0".parse::<Version>().unwrap(),
-            Version::new(1, 0, 0)
-        );
+        assert_eq!("9.8.2".parse::<Version>().unwrap(), Version::new(9, 8, 2));
+        assert_eq!("1.0.0".parse::<Version>().unwrap(), Version::new(1, 0, 0));
     }
 
     #[test]
     fn test_parse_from_output() {
         assert_eq!(
-            Version::parse_from_output("The Glorious Glasgow Haskell Compilation System, version 9.8.2"),
+            Version::parse_from_output(
+                "The Glorious Glasgow Haskell Compilation System, version 9.8.2"
+            ),
             Some(Version::new(9, 8, 2))
         );
         assert_eq!(
