@@ -74,3 +74,9 @@ hx-doctor = { path = "crates/hx-doctor" }
 hx-ui = { path = "crates/hx-ui" }
 hx-telemetry = { path = "crates/hx-telemetry" }
 hx-warnings = { path = "crates/hx-warnings" }
+
+# Testing
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"
+insta = { version = "1", features = ["filters"] }

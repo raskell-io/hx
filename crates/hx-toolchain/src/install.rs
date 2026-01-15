@@ -1,6 +1,6 @@
 //! Toolchain installation via ghcup.
 
-use hx_core::{CommandRunner, Error, Result};
+use hx_core::{CommandRunner, Error, Fix, Result};
 use hx_ui::Spinner;
 use tracing::info;
 
@@ -82,6 +82,75 @@ pub async fn install_hls(version: &str) -> Result<()> {
             stdout: output.stdout,
             stderr: output.stderr,
             fixes: vec![],
+        })
+    }
+}
+
+/// Set GHC version via ghcup (without installing).
+pub async fn set_ghc(version: &str) -> Result<()> {
+    let runner = CommandRunner::new();
+    info!("Setting GHC to {} via ghcup", version);
+
+    let output = runner.run("ghcup", ["set", "ghc", version]).await?;
+
+    if output.success() {
+        Ok(())
+    } else {
+        Err(Error::CommandFailed {
+            command: format!("ghcup set ghc {}", version),
+            exit_code: Some(output.exit_code),
+            stdout: output.stdout,
+            stderr: output.stderr,
+            fixes: vec![Fix::with_command(
+                format!("Install GHC {} first", version),
+                format!("hx toolchain install --ghc {}", version),
+            )],
+        })
+    }
+}
+
+/// Set Cabal version via ghcup (without installing).
+pub async fn set_cabal(version: &str) -> Result<()> {
+    let runner = CommandRunner::new();
+    info!("Setting Cabal to {} via ghcup", version);
+
+    let output = runner.run("ghcup", ["set", "cabal", version]).await?;
+
+    if output.success() {
+        Ok(())
+    } else {
+        Err(Error::CommandFailed {
+            command: format!("ghcup set cabal {}", version),
+            exit_code: Some(output.exit_code),
+            stdout: output.stdout,
+            stderr: output.stderr,
+            fixes: vec![Fix::with_command(
+                format!("Install Cabal {} first", version),
+                format!("hx toolchain install --cabal {}", version),
+            )],
+        })
+    }
+}
+
+/// Set HLS version via ghcup (without installing).
+pub async fn set_hls(version: &str) -> Result<()> {
+    let runner = CommandRunner::new();
+    info!("Setting HLS to {} via ghcup", version);
+
+    let output = runner.run("ghcup", ["set", "hls", version]).await?;
+
+    if output.success() {
+        Ok(())
+    } else {
+        Err(Error::CommandFailed {
+            command: format!("ghcup set hls {}", version),
+            exit_code: Some(output.exit_code),
+            stdout: output.stdout,
+            stderr: output.stderr,
+            fixes: vec![Fix::with_command(
+                format!("Install HLS {} first", version),
+                format!("hx toolchain install --hls {}", version),
+            )],
         })
     }
 }

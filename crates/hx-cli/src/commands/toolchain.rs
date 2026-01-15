@@ -2,6 +2,7 @@
 
 use crate::cli::ToolchainCommands;
 use anyhow::Result;
+use hx_config::{find_project_root, Manifest};
 use hx_toolchain::{install, Toolchain};
 use hx_ui::{Output, Style};
 
@@ -124,10 +125,106 @@ async fn install_components(
 }
 
 async fn use_profile(profile: &str, output: &Output) -> Result<i32> {
-    output.warn(&format!(
-        "hx toolchain use is not yet fully implemented. Profile: {}",
-        profile
-    ));
-    output.info("For now, use ghcup directly: ghcup set ghc <version>");
-    Ok(1)
+    // Check if ghcup is available
+    let toolchain = Toolchain::detect().await;
+    if !toolchain.has_ghcup() {
+        output.error("ghcup is required to switch toolchain versions");
+        output.info(&format!(
+            "Install ghcup: {}",
+            install::ghcup_install_command()
+        ));
+        return Ok(4);
+    }
+
+    match profile {
+        "project" => use_project_toolchain(output).await,
+        version => {
+            // Assume it's a GHC version
+            output.status("Switching", &format!("GHC to {}", version));
+            if let Err(e) = install::set_ghc(version).await {
+                output.print_error(&e);
+                return Ok(4);
+            }
+            output.status("Done", &format!("Now using GHC {}", version));
+            Ok(0)
+        }
+    }
+}
+
+async fn use_project_toolchain(output: &Output) -> Result<i32> {
+    // Find project root
+    let project_root = match find_project_root(".") {
+        Ok(root) => root,
+        Err(_) => {
+            output.error("Not in an hx project (no hx.toml found)");
+            output.info("Run `hx init` to create a new project, or specify a version directly:");
+            output.info("  hx toolchain use 9.8.2");
+            return Ok(3);
+        }
+    };
+
+    // Load manifest
+    let manifest_path = project_root.join("hx.toml");
+    let manifest = match Manifest::from_file(&manifest_path) {
+        Ok(m) => m,
+        Err(e) => {
+            output.error(&format!("Failed to read hx.toml: {}", e));
+            return Ok(3);
+        }
+    };
+
+    let mut success = true;
+
+    // Set GHC if specified
+    if let Some(ref ghc_version) = manifest.toolchain.ghc {
+        output.status("Switching", &format!("GHC to {}", ghc_version));
+        if let Err(e) = install::set_ghc(ghc_version).await {
+            output.print_error(&e);
+            success = false;
+        } else {
+            output.list_item("ghc", ghc_version);
+        }
+    }
+
+    // Set Cabal if specified
+    if let Some(ref cabal_version) = manifest.toolchain.cabal {
+        output.status("Switching", &format!("Cabal to {}", cabal_version));
+        if let Err(e) = install::set_cabal(cabal_version).await {
+            output.print_error(&e);
+            success = false;
+        } else {
+            output.list_item("cabal", cabal_version);
+        }
+    }
+
+    // Set HLS if specified
+    if let Some(ref hls_version) = manifest.toolchain.hls {
+        output.status("Switching", &format!("HLS to {}", hls_version));
+        if let Err(e) = install::set_hls(hls_version).await {
+            output.print_error(&e);
+            success = false;
+        } else {
+            output.list_item("hls", hls_version);
+        }
+    }
+
+    // Check if any toolchain was specified
+    if manifest.toolchain.ghc.is_none()
+        && manifest.toolchain.cabal.is_none()
+        && manifest.toolchain.hls.is_none()
+    {
+        output.warn("No toolchain versions specified in hx.toml");
+        output.info("Add a [toolchain] section to your hx.toml:");
+        output.info("  [toolchain]");
+        output.info("  ghc = \"9.8.2\"");
+        output.info("  cabal = \"3.12.1.0\"");
+        return Ok(0);
+    }
+
+    if success {
+        output.status("Done", "Toolchain configured from project");
+        Ok(0)
+    } else {
+        Ok(4)
+    }
 }

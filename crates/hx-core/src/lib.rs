@@ -10,7 +10,7 @@ pub mod version;
 
 pub use command::{CommandOutput, CommandRunner};
 pub use env::EnvVars;
-pub use error::{Error, ErrorCode, Result};
+pub use error::{Error, ErrorCode, Fix, Result};
 pub use version::Version;
 
 /// Exit codes for hx CLI.

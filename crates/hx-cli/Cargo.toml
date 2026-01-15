@@ -30,3 +30,9 @@ tracing-subscriber.workspace = true
 tokio.workspace = true
 console.workspace = true
 which.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+assert_cmd.workspace = true
+predicates.workspace = true
+insta.workspace = true

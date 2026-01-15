@@ -1,0 +1,144 @@
+//! Integration tests for hx CLI.
+
+use assert_cmd::Command;
+use predicates::prelude::*;
+use std::fs;
+use tempfile::TempDir;
+
+fn hx() -> Command {
+    Command::cargo_bin("hx").unwrap()
+}
+
+#[test]
+fn test_help() {
+    hx().arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Haskell toolchain CLI"))
+        .stdout(predicate::str::contains("Commands:"))
+        .stdout(predicate::str::contains("init"))
+        .stdout(predicate::str::contains("build"))
+        .stdout(predicate::str::contains("test"));
+}
+
+#[test]
+fn test_version() {
+    hx().arg("--version")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("hx"))
+        .stdout(predicate::str::contains("0.1.0"));
+}
+
+#[test]
+fn test_no_command_shows_help() {
+    hx().assert()
+        .success()
+        .stdout(predicate::str::contains("Haskell toolchain CLI"));
+}
+
+#[test]
+fn test_init_bin_project() {
+    let temp = TempDir::new().unwrap();
+    let project_dir = temp.path().join("myapp");
+
+    hx().args(["init", "--bin", "--name", "myapp", "--dir"])
+        .arg(&project_dir)
+        .assert()
+        .success();
+
+    // Verify files were created
+    assert!(project_dir.join("hx.toml").exists());
+    assert!(project_dir.join("myapp.cabal").exists());
+    assert!(project_dir.join("src/Main.hs").exists());
+    assert!(project_dir.join(".gitignore").exists());
+    assert!(project_dir.join(".editorconfig").exists());
+
+    // Verify hx.toml content
+    let hx_toml = fs::read_to_string(project_dir.join("hx.toml")).unwrap();
+    assert!(hx_toml.contains("name = \"myapp\""));
+    assert!(hx_toml.contains("kind = \"bin\""));
+
+    // Verify .cabal content
+    let cabal = fs::read_to_string(project_dir.join("myapp.cabal")).unwrap();
+    assert!(cabal.contains("name:"));
+    assert!(cabal.contains("executable"));
+    assert!(cabal.contains("Main.hs"));
+
+    // Verify Main.hs content
+    let main_hs = fs::read_to_string(project_dir.join("src/Main.hs")).unwrap();
+    assert!(main_hs.contains("module Main"));
+    assert!(main_hs.contains("main :: IO ()"));
+}
+
+#[test]
+fn test_init_lib_project() {
+    let temp = TempDir::new().unwrap();
+    let project_dir = temp.path().join("mylib");
+
+    hx().args(["init", "--lib", "--name", "mylib", "--dir"])
+        .arg(&project_dir)
+        .assert()
+        .success();
+
+    // Verify library-specific files
+    assert!(project_dir.join("hx.toml").exists());
+    assert!(project_dir.join("mylib.cabal").exists());
+    assert!(project_dir.join("src/Lib.hs").exists());
+
+    // Verify hx.toml content
+    let hx_toml = fs::read_to_string(project_dir.join("hx.toml")).unwrap();
+    assert!(hx_toml.contains("kind = \"lib\""));
+
+    // Verify .cabal content has library section
+    let cabal = fs::read_to_string(project_dir.join("mylib.cabal")).unwrap();
+    assert!(cabal.contains("library"));
+    assert!(cabal.contains("Lib"));
+}
+
+#[test]
+fn test_init_default_bin() {
+    let temp = TempDir::new().unwrap();
+    let project_dir = temp.path().join("defaultapp");
+
+    // Without --bin or --lib, should default to bin
+    hx().args(["init", "--name", "defaultapp", "--dir"])
+        .arg(&project_dir)
+        .assert()
+        .success();
+
+    let hx_toml = fs::read_to_string(project_dir.join("hx.toml")).unwrap();
+    assert!(hx_toml.contains("kind = \"bin\""));
+}
+
+#[test]
+fn test_verbose_flag() {
+    hx().args(["--verbose", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_quiet_flag() {
+    hx().args(["--quiet", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_subcommand_help() {
+    hx().args(["init", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Initialize"));
+
+    hx().args(["build", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Build"));
+
+    hx().args(["doctor", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("doctor"));
+}

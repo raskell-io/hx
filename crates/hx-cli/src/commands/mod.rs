@@ -2,6 +2,7 @@
 
 mod build;
 mod clean;
+mod deps;
 mod doctor;
 mod fmt;
 mod init;
@@ -69,19 +70,11 @@ pub async fn run(cli: Cli) -> Result<i32> {
         Some(Commands::Toolchain { command }) => {
             toolchain::run(command, &output).await
         }
-        Some(Commands::Add { package, dev: _ }) => {
-            output.warn(&format!(
-                "hx add is not yet implemented. Please add {} to your .cabal file manually.",
-                package
-            ));
-            Ok(1)
+        Some(Commands::Add { package, dev }) => {
+            deps::add(&package, dev, &output).await
         }
         Some(Commands::Rm { package }) => {
-            output.warn(&format!(
-                "hx rm is not yet implemented. Please remove {} from your .cabal file manually.",
-                package
-            ));
-            Ok(1)
+            deps::remove(&package, &output).await
         }
         None => {
             // No command - show help
