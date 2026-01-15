@@ -1,0 +1,37 @@
+[tools]
+rust = "1.92.0"
+
+[env]
+RUST_BACKTRACE = "1"
+
+[tasks.build]
+description = "Build the project"
+run = "cargo build --workspace"
+
+[tasks.test]
+description = "Run all tests"
+run = "cargo test --workspace"
+
+[tasks.check]
+description = "Run cargo check"
+run = "cargo check --workspace"
+
+[tasks.clippy]
+description = "Run clippy lints"
+run = "cargo clippy --workspace -- -D warnings"
+
+[tasks.fmt]
+description = "Format code"
+run = "cargo fmt --all"
+
+[tasks.fmt-check]
+description = "Check code formatting"
+run = "cargo fmt --all -- --check"
+
+[tasks.ci]
+description = "Run all CI checks"
+depends = ["fmt-check", "clippy", "test"]
+
+[tasks.run]
+description = "Run the hx CLI"
+run = "cargo run -p hx-cli --"
