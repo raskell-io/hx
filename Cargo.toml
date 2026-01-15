@@ -1,0 +1,72 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/hx-cli",
+    "crates/hx-core",
+    "crates/hx-config",
+    "crates/hx-lock",
+    "crates/hx-toolchain",
+    "crates/hx-cabal",
+    "crates/hx-cache",
+    "crates/hx-doctor",
+    "crates/hx-ui",
+    "crates/hx-telemetry",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/raskell-io/hx"
+authors = ["Raffael Schneider <raffaelschneider@users.noreply.github.com>"]
+
+[workspace.dependencies]
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+serde_json = "1"
+
+# Async
+tokio = { version = "1", features = ["full"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# UI
+indicatif = "0.17"
+console = "0.15"
+
+# Hashing
+sha2 = "0.10"
+
+# Paths
+directories = "5"
+
+# HTTP
+reqwest = { version = "0.12", features = ["json"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Utilities
+which = "7"
+once_cell = "1"
+
+# Workspace crates
+hx-core = { path = "crates/hx-core" }
+hx-config = { path = "crates/hx-config" }
+hx-lock = { path = "crates/hx-lock" }
+hx-toolchain = { path = "crates/hx-toolchain" }
+hx-cabal = { path = "crates/hx-cabal" }
+hx-cache = { path = "crates/hx-cache" }
+hx-doctor = { path = "crates/hx-doctor" }
+hx-ui = { path = "crates/hx-ui" }
+hx-telemetry = { path = "crates/hx-telemetry" }

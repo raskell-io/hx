@@ -1,0 +1,14 @@
+[package]
+name = "hx-ui"
+description = "Terminal UI helpers for hx"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+hx-core.workspace = true
+indicatif.workspace = true
+console.workspace = true
+tracing.workspace = true

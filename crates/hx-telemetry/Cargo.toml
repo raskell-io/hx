@@ -1,0 +1,15 @@
+[package]
+name = "hx-telemetry"
+description = "Telemetry and tracing for hx"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+hx-core.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde_json.workspace = true
+chrono.workspace = true

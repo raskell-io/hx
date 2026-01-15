@@ -1,0 +1,18 @@
+[package]
+name = "hx-cabal"
+description = "Cabal wrapper and output parsing for hx"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+hx-core.workspace = true
+hx-ui.workspace = true
+hx-cache.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+tracing.workspace = true
+tokio.workspace = true

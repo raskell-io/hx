@@ -1,0 +1,31 @@
+[package]
+name = "hx-cli"
+description = "Command-line interface for hx"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "hx"
+path = "src/main.rs"
+
+[dependencies]
+hx-core.workspace = true
+hx-config.workspace = true
+hx-lock.workspace = true
+hx-toolchain.workspace = true
+hx-cabal.workspace = true
+hx-cache.workspace = true
+hx-doctor.workspace = true
+hx-ui.workspace = true
+hx-telemetry.workspace = true
+
+clap.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tokio.workspace = true
+console.workspace = true
+which.workspace = true

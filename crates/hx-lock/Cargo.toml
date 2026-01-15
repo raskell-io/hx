@@ -1,0 +1,22 @@
+[package]
+name = "hx-lock"
+description = "Lockfile management for hx"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+hx-core.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+toml.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

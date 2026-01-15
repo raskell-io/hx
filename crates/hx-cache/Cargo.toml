@@ -1,0 +1,15 @@
+[package]
+name = "hx-cache"
+description = "Cache management for hx"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+hx-core.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+directories.workspace = true
+tracing.workspace = true
