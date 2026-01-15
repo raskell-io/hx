@@ -5,7 +5,7 @@
 //!
 //! - Numbers, strings, booleans: higher precedence config takes precedence
 //! - Arrays: merged with higher precedence items placed earlier
-//! - Option<T>: first Some value wins
+//! - `Option<T>`: first `Some` value wins
 
 use crate::{FormatConfig, LintConfig, Manifest, ProjectConfig, ToolchainConfig};
 
