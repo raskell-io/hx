@@ -8,6 +8,7 @@ use hx_core::error::Fix;
 use hx_toolchain::{install::ghcup_install_command, Toolchain};
 use hx_ui::{Output, Style};
 use std::path::Path;
+use std::process::Command;
 
 /// Severity of a diagnostic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -117,6 +118,9 @@ pub async fn run_checks(project_dir: Option<&Path>) -> DoctorReport {
     // Check HLS
     check_hls(&toolchain, &mut report);
 
+    // Check native dependencies (platform-specific)
+    check_native_deps(&mut report);
+
     // Check project if we're in one
     if let Some(dir) = project_dir {
         check_project(dir, &mut report);
@@ -194,6 +198,144 @@ fn check_hls(toolchain: &Toolchain, report: &mut DoctorReport) {
             "hls: {}",
             toolchain.hls.status.version().map(|v| v.to_string()).unwrap_or_else(|| "installed".to_string())
         )));
+    }
+}
+
+fn check_native_deps(report: &mut DoctorReport) {
+    #[cfg(target_os = "linux")]
+    check_native_deps_linux(report);
+
+    #[cfg(target_os = "macos")]
+    check_native_deps_macos(report);
+
+    #[cfg(target_os = "windows")]
+    check_native_deps_windows(report);
+}
+
+#[cfg(target_os = "linux")]
+fn check_native_deps_linux(report: &mut DoctorReport) {
+    // Check for common native libraries needed by GHC
+    let libs = [
+        ("libgmp", "libgmp-dev", "GMP (GNU Multiple Precision Arithmetic Library)"),
+        ("libz", "zlib1g-dev", "zlib compression library"),
+        ("libncurses", "libncurses-dev", "ncurses terminal library"),
+        ("libffi", "libffi-dev", "Foreign Function Interface library"),
+    ];
+
+    for (lib, package, description) in libs {
+        if !check_library_linux(lib) {
+            report.add(
+                Diagnostic::warning(format!("{} not found - {} may fail to build", lib, description))
+                    .with_fix(Fix::with_command(
+                        format!("Install {} (Debian/Ubuntu)", package),
+                        format!("sudo apt-get install {}", package),
+                    ))
+                    .with_fix(Fix::with_command(
+                        "Install on Fedora/RHEL",
+                        format!("sudo dnf install {}-devel", lib.trim_start_matches("lib")),
+                    )),
+            );
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn check_library_linux(lib: &str) -> bool {
+    // Try pkg-config first
+    if let Ok(output) = Command::new("pkg-config")
+        .args(["--exists", lib])
+        .output()
+    {
+        if output.status.success() {
+            return true;
+        }
+    }
+
+    // Try ldconfig as fallback
+    if let Ok(output) = Command::new("ldconfig")
+        .args(["-p"])
+        .output()
+    {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if stdout.contains(lib) {
+            return true;
+        }
+    }
+
+    // Check common library paths
+    let lib_paths = [
+        format!("/usr/lib/x86_64-linux-gnu/{}.so", lib),
+        format!("/usr/lib/{}.so", lib),
+        format!("/lib/x86_64-linux-gnu/{}.so", lib),
+    ];
+
+    for path in lib_paths {
+        if std::path::Path::new(&path).exists() {
+            return true;
+        }
+    }
+
+    false
+}
+
+#[cfg(target_os = "macos")]
+fn check_native_deps_macos(report: &mut DoctorReport) {
+    // Check if Homebrew is available
+    let has_brew = Command::new("brew").arg("--version").output().is_ok();
+
+    if !has_brew {
+        report.add(
+            Diagnostic::warning("Homebrew not found - recommended for installing native dependencies")
+                .with_fix(Fix::with_command(
+                    "Install Homebrew",
+                    "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"",
+                )),
+        );
+        return;
+    }
+
+    // Check for common dependencies
+    let deps = [
+        ("gmp", "GMP arithmetic library"),
+        ("zlib", "zlib compression"),
+    ];
+
+    for (formula, description) in deps {
+        if !check_brew_formula(formula) {
+            report.add(
+                Diagnostic::warning(format!("{} not found - {} may fail to build", formula, description))
+                    .with_fix(Fix::with_command(
+                        format!("Install {}", formula),
+                        format!("brew install {}", formula),
+                    )),
+            );
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn check_brew_formula(formula: &str) -> bool {
+    Command::new("brew")
+        .args(["list", formula])
+        .output()
+        .is_ok_and(|o| o.status.success())
+}
+
+#[cfg(target_os = "windows")]
+fn check_native_deps_windows(report: &mut DoctorReport) {
+    // Check for MSYS2/MinGW which provides native libs on Windows
+    let msys2_paths = [
+        "C:\\msys64",
+        "C:\\msys32",
+    ];
+
+    let has_msys2 = msys2_paths.iter().any(|p| std::path::Path::new(p).exists());
+
+    if !has_msys2 {
+        report.add(
+            Diagnostic::warning("MSYS2 not found - some packages may fail to build")
+                .with_fix(Fix::new("Install MSYS2 from https://www.msys2.org/")),
+        );
     }
 }
 

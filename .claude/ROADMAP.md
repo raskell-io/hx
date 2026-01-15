@@ -5,21 +5,21 @@
 ### Done Definition
 
 hx v0.1.0 is shippable when:
-- `hx init` creates a project that builds on at least Linux/macOS
-- `hx toolchain status` works robustly
-- `hx build/test/run/repl` work for a basic project
-- `hx lock` produces deterministic lockfile
-- `hx sync` enforces the lock
-- `hx doctor` gives actionable fixes for missing tools/mismatch
+- [x] `hx init` creates a project that builds on at least Linux/macOS
+- [x] `hx toolchain status` works robustly
+- [x] `hx build/test/run/repl` work for a basic project
+- [x] `hx lock` produces deterministic lockfile
+- [x] `hx sync` enforces the lock
+- [x] `hx doctor` gives actionable fixes for missing tools/mismatch
 
 ---
 
-## Milestone A: Scaffolding
+## Milestone A: Scaffolding ✅
 
 **Goal:** Basic project structure and CLI framework
 
 ### Tasks
-- [ ] Create Rust workspace with all crates:
+- [x] Create Rust workspace with all crates:
   - `hx-cli`
   - `hx-core`
   - `hx-config`
@@ -30,126 +30,127 @@ hx v0.1.0 is shippable when:
   - `hx-doctor`
   - `hx-ui`
   - `hx-telemetry`
-- [ ] Implement `hx --version`
-- [ ] Implement `hx help`
-- [ ] Implement config loading (hx.toml parsing)
-- [ ] Implement project root detection
-- [ ] Add structured logging with `tracing`
-- [ ] Add `hx-ui` output helpers (spinners, progress)
+  - `hx-warnings`
+- [x] Implement `hx --version`
+- [x] Implement `hx help`
+- [x] Implement config loading (hx.toml parsing)
+- [x] Implement project root detection
+- [x] Add structured logging with `tracing`
+- [x] Add `hx-ui` output helpers (spinners, progress)
 
 ### Deliverables
-- Workspace compiles
-- `cargo run -p hx-cli -- --version` works
-- `cargo run -p hx-cli -- help` shows command list
+- [x] Workspace compiles
+- [x] `cargo run -p hx-cli -- --version` works
+- [x] `cargo run -p hx-cli -- help` shows command list
 
 ---
 
-## Milestone B: Toolchain Detection
+## Milestone B: Toolchain Detection ✅
 
 **Goal:** Detect and report installed Haskell tools
 
 ### Tasks
-- [ ] Implement `hx toolchain status`
-- [ ] Detect `ghc` on PATH, parse version
-- [ ] Detect `cabal` on PATH, parse version
-- [ ] Detect `ghcup` on PATH, parse version
-- [ ] Detect `hls` (haskell-language-server-wrapper), parse version
-- [ ] Implement basic `hx doctor`:
-  - [ ] Missing tool detection
-  - [ ] Version mismatch warnings
-  - [ ] Actionable fix suggestions
+- [x] Implement `hx toolchain status`
+- [x] Detect `ghc` on PATH, parse version
+- [x] Detect `cabal` on PATH, parse version
+- [x] Detect `ghcup` on PATH, parse version
+- [x] Detect `hls` (haskell-language-server-wrapper), parse version
+- [x] Implement basic `hx doctor`:
+  - [x] Missing tool detection
+  - [x] Version mismatch warnings
+  - [x] Actionable fix suggestions
 
 ### Deliverables
-- `hx toolchain status` shows all detected tools
-- `hx doctor` identifies missing/mismatched tools
+- [x] `hx toolchain status` shows all detected tools
+- [x] `hx doctor` identifies missing/mismatched tools
 
 ---
 
-## Milestone C: Build/Test/Run Plumbing
+## Milestone C: Build/Test/Run Plumbing ✅
 
 **Goal:** Core build workflow via Cabal
 
 ### Tasks
-- [ ] Implement `hx build`:
-  - [ ] Resolve project root
-  - [ ] Ensure toolchain present (or fail with fix)
-  - [ ] Call `cabal build` with stable directories:
+- [x] Implement `hx build`:
+  - [x] Resolve project root
+  - [x] Ensure toolchain present (or fail with fix)
+  - [x] Call `cabal build` with stable directories:
     - `--store-dir ~/.cache/hx/cabal/store`
     - `--builddir .hx/cabal/dist-newstyle`
-  - [ ] Capture and parse output
-  - [ ] Show time + summary
-- [ ] Implement `hx test`:
-  - [ ] Call `cabal test`
-  - [ ] Parse test output
-  - [ ] Show summary
-- [ ] Implement `hx run`:
-  - [ ] Build first
-  - [ ] Find and execute binary
-  - [ ] Pass through args
-- [ ] Implement `hx repl`:
-  - [ ] Call `cabal repl`
-  - [ ] Pass through to ghci
-- [ ] Implement `hx check`:
-  - [ ] Alias to `hx build` (fast typecheck)
-- [ ] Create friendly error messages for common failures
+  - [x] Capture and parse output
+  - [x] Show time + summary
+- [x] Implement `hx test`:
+  - [x] Call `cabal test`
+  - [x] Parse test output
+  - [x] Show summary
+- [x] Implement `hx run`:
+  - [x] Build first
+  - [x] Find and execute binary
+  - [x] Pass through args
+- [x] Implement `hx repl`:
+  - [x] Call `cabal repl`
+  - [x] Pass through to ghci
+- [x] Implement `hx check`:
+  - [x] Alias to `hx build` (fast typecheck)
+- [x] Create friendly error messages for common failures
 
 ### Deliverables
-- `hx build` compiles a project
-- `hx test` runs tests
-- `hx run` executes the binary
-- `hx repl` opens ghci
+- [x] `hx build` compiles a project
+- [x] `hx test` runs tests
+- [x] `hx run` executes the binary
+- [x] `hx repl` opens ghci
 
 ---
 
-## Milestone D: Project Initialization
+## Milestone D: Project Initialization ✅
 
 **Goal:** Create new Haskell projects with sane defaults
 
 ### Tasks
-- [ ] Implement `hx init`:
-  - [ ] `--bin` flag for executable project
-  - [ ] `--lib` flag for library project
-  - [ ] `--name <name>` for project name
-  - [ ] `--dir <path>` for target directory
-- [ ] Generate files:
-  - [ ] `hx.toml` with sensible defaults
-  - [ ] `.gitignore` with `.hx/` entry
-  - [ ] Minimal `.cabal` file
-  - [ ] `src/Main.hs` (for bin) or `src/Lib.hs` (for lib)
-  - [ ] `.editorconfig`
-- [ ] Optional: generate `.github/workflows/ci.yml`
-- [ ] Infer toolchain versions from environment
+- [x] Implement `hx init`:
+  - [x] `--bin` flag for executable project
+  - [x] `--lib` flag for library project
+  - [x] `--name <name>` for project name
+  - [x] `--dir <path>` for target directory
+- [x] Generate files:
+  - [x] `hx.toml` with sensible defaults
+  - [x] `.gitignore` with `.hx/` entry
+  - [x] Minimal `.cabal` file
+  - [x] `src/Main.hs` (for bin) or `src/Lib.hs` (for lib)
+  - [x] `.editorconfig`
+- [ ] Optional: generate `.github/workflows/ci.yml` (--ci flag)
+- [x] Infer toolchain versions from environment
 
 ### Deliverables
-- `hx init --bin --name hello` creates buildable project
-- Generated project passes `hx build`
+- [x] `hx init --bin --name hello` creates buildable project
+- [x] Generated project passes `hx build`
 
 ---
 
-## Milestone E: Lock/Sync (Core Product)
+## Milestone E: Lock/Sync (Core Product) ✅
 
 **Goal:** Deterministic, reproducible builds
 
 ### Tasks
-- [ ] Implement `hx lock`:
-  - [ ] Run `cabal update`
-  - [ ] Run `cabal build --dry-run` to generate plan
-  - [ ] Run `cabal freeze` to pin dependencies
-  - [ ] Parse freeze file and/or plan
-  - [ ] Extract:
+- [x] Implement `hx lock`:
+  - [x] Run `cabal update`
+  - [x] Run `cabal build --dry-run` to generate plan
+  - [x] Run `cabal freeze` to pin dependencies
+  - [x] Parse freeze file and/or plan
+  - [x] Extract:
     - Compiler ID
     - Platform
     - Index state
     - Package list with versions
-  - [ ] Compute fingerprint hash
-  - [ ] Write `hx.lock` (TOML format)
-- [ ] Implement `hx sync`:
-  - [ ] Verify `hx.lock` exists
-  - [ ] Verify toolchain matches lock
-  - [ ] Offer automatic toolchain install if mismatch
-  - [ ] Apply constraints from lock
-  - [ ] Build with frozen dependencies
-- [ ] Implement fingerprint calculation:
+  - [x] Compute fingerprint hash
+  - [x] Write `hx.lock` (TOML format)
+- [x] Implement `hx sync`:
+  - [x] Verify `hx.lock` exists
+  - [x] Verify toolchain matches lock
+  - [x] Offer automatic toolchain install if mismatch
+  - [x] Apply constraints from lock
+  - [x] Build with frozen dependencies
+- [x] Implement fingerprint calculation:
   ```
   fingerprint = sha256(
     toolchain(ghc, cabal) +
@@ -184,60 +185,82 @@ hash = "sha256:..."
 ```
 
 ### Deliverables
-- `hx lock` creates `hx.lock`
-- `hx sync` enforces lock during build
-- Builds are reproducible given same lock
+- [x] `hx lock` creates `hx.lock`
+- [x] `hx sync` enforces lock during build
+- [x] Builds are reproducible given same lock
 
 ---
 
-## Milestone F: Format/Lint
+## Milestone F: Format/Lint ✅
 
 **Goal:** Integrated code quality tools
 
 ### Tasks
-- [ ] Implement `hx fmt`:
-  - [ ] Detect fourmolu in PATH (preferred)
-  - [ ] Fall back to ormolu
-  - [ ] Run across all `.hs` files
-  - [ ] Support `--check` mode
-- [ ] Implement `hx lint`:
-  - [ ] Detect hlint in PATH
-  - [ ] Run with baseline config
-  - [ ] Parse and format output
-  - [ ] Support `--fix` for auto-fixes
+- [x] Implement `hx fmt`:
+  - [x] Detect fourmolu in PATH (preferred)
+  - [x] Fall back to ormolu
+  - [x] Run across all `.hs` files
+  - [x] Support `--check` mode
+- [x] Implement `hx lint`:
+  - [x] Detect hlint in PATH
+  - [x] Run with baseline config
+  - [x] Parse and format output
+  - [x] Support `--fix` for auto-fixes
 
 ### Deliverables
-- `hx fmt` formats all Haskell files
-- `hx lint` reports issues with suggestions
+- [x] `hx fmt` formats all Haskell files
+- [x] `hx lint` reports issues with suggestions
 
 ---
 
-## Milestone G: Doctor-Grade Diagnostics
+## Milestone G: Doctor-Grade Diagnostics 🔄
 
 **Goal:** World-class error messages and fixes
 
 ### Tasks
-- [ ] Enhance `hx doctor`:
-  - [ ] `hx.toml` present check
-  - [ ] `.cabal` file exists check
-  - [ ] ghcup/ghc/cabal versions OK check
-  - [ ] HLS matches GHC major/minor check
-  - [ ] `cabal --version` sanity check
+- [x] Enhance `hx doctor`:
+  - [x] `hx.toml` present check
+  - [x] `.cabal` file exists check
+  - [x] ghcup/ghc/cabal versions OK check
+  - [x] HLS matches GHC major/minor check
+  - [x] `cabal --version` sanity check
 - [ ] Platform-specific native dependency checks:
   - [ ] Linux: check for libgmp, libz, libncurses
   - [ ] macOS: check via brew/pkg-config
   - [ ] Windows: basic checks
-- [ ] Better Cabal error extraction:
-  - [ ] Parse common error patterns
-  - [ ] Identify root cause
-  - [ ] Suggest specific fixes
-- [ ] Generate "fix commands" automatically
-- [ ] Summary report output with priorities
+- [x] Better Cabal error extraction:
+  - [x] Parse common error patterns
+  - [x] Identify root cause
+  - [x] Suggest specific fixes
+- [x] Generate "fix commands" automatically
+- [x] Summary report output with priorities
 
 ### Deliverables
-- `hx doctor` identifies all common setup issues
-- Each issue has an actionable fix command
-- Output is clear and prioritized
+- [x] `hx doctor` identifies all common setup issues
+- [x] Each issue has an actionable fix command
+- [x] Output is clear and prioritized
+
+---
+
+## Bonus: UV-Inspired Improvements ✅
+
+Applied patterns from the uv (Astral) codebase:
+
+- [x] `hx-warnings` crate with `warn_user!` and `warn_user_once!` macros
+- [x] `Printer` abstraction with Silent/Quiet/Normal/Verbose modes
+- [x] `EnvVars` constants for environment variable configuration
+- [x] `Combine` trait for config merging
+- [x] Custom CLI styling with clap styles
+- [x] `GlobalArgs` with verbose/quiet/no-color/config-file flags
+- [x] Error chain formatting with `write_error_chain`
+
+---
+
+## Bonus: CI/CD & Testing ✅
+
+- [x] GitHub Actions workflow (lint, test matrix, build, docs)
+- [x] Integration test infrastructure with assert_cmd
+- [x] 26 passing tests
 
 ---
 
@@ -254,8 +277,8 @@ hash = "sha256:..."
 - [ ] Workspace-aware commands
 
 ### Toolchain Management
-- [ ] `hx toolchain install` via ghcup
-- [ ] `hx toolchain use <profile>` for per-project pins
+- [x] `hx toolchain install` via ghcup
+- [x] `hx toolchain use <profile>` for per-project pins
 - [ ] Automatic toolchain installation on mismatch
 
 ---
@@ -286,6 +309,9 @@ hx doctor
 hx lock
 hx sync
 hx clean
+
+hx add
+hx rm
 
 hx toolchain status
 hx toolchain install

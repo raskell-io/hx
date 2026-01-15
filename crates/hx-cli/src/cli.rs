@@ -60,6 +60,10 @@ pub enum Commands {
         /// Target directory
         #[arg(long)]
         dir: Option<String>,
+
+        /// Generate GitHub Actions CI workflow
+        #[arg(long)]
+        ci: bool,
     },
 
     /// Build the project

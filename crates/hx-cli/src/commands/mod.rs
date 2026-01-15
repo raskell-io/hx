@@ -30,8 +30,8 @@ pub async fn run(cli: Cli) -> Result<i32> {
     });
 
     match cli.command {
-        Some(Commands::Init { bin, lib, name, dir }) => {
-            init::run(bin, lib, name, dir, &output).await
+        Some(Commands::Init { bin, lib, name, dir, ci }) => {
+            init::run(bin, lib, name, dir, ci, &output).await
         }
         Some(Commands::Build { release, jobs, target }) => {
             build::run(release, jobs, target, &output).await

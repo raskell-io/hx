@@ -12,6 +12,7 @@ pub async fn run(
     lib: bool,
     name: Option<String>,
     dir: Option<String>,
+    ci: bool,
     output: &Output,
 ) -> Result<i32> {
     let spinner = Spinner::new("Initializing project...");
@@ -147,6 +148,16 @@ indent_style = tab
         )?;
     }
 
+    // Create GitHub Actions CI workflow if requested
+    if ci {
+        let workflows_dir = project_dir.join(".github").join("workflows");
+        fs::create_dir_all(&workflows_dir)?;
+        let ci_path = workflows_dir.join("ci.yml");
+        if !ci_path.exists() {
+            fs::write(&ci_path, generate_ci_workflow(&project_name, kind))?;
+        }
+    }
+
     spinner.finish_success(format!("Created {} project: {}", kind.as_str(), project_name));
 
     output.info("");
@@ -201,4 +212,70 @@ library
 "#
         ),
     }
+}
+
+fn generate_ci_workflow(_name: &str, kind: ProjectKind) -> String {
+    let test_step = if kind == ProjectKind::Lib {
+        ""
+    } else {
+        r#"
+      - name: Run tests
+        run: hx test
+"#
+    };
+
+    format!(
+        r#"name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ${{{{ matrix.os }}}}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        ghc: ['9.8.2']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: ${{{{ matrix.ghc }}}}
+          cabal-version: '3.12'
+
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cabal/store
+            dist-newstyle
+          key: ${{{{ runner.os }}}}-ghc-${{{{ matrix.ghc }}}}-${{{{ hashFiles('**/*.cabal') }}}}
+          restore-keys: |
+            ${{{{ runner.os }}}}-ghc-${{{{ matrix.ghc }}}}-
+
+      - name: Install hx
+        run: |
+          cargo install --git https://github.com/raskell-io/hx hx-cli
+        continue-on-error: true
+
+      - name: Build
+        run: cabal build all
+
+      - name: Check formatting
+        run: |
+          cabal install fourmolu
+          fourmolu --mode check src/
+        continue-on-error: true
+{test_step}
+"#
+    )
 }
