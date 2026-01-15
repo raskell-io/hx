@@ -7,7 +7,7 @@
 
 use directories::ProjectDirs;
 use hx_core::error::{Error, Result};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::debug;
 
 /// Get the global cache directory.
@@ -65,7 +65,7 @@ pub fn clean_global_cache() -> Result<()> {
 }
 
 /// Clean a project's local cache.
-pub fn clean_project_cache(project_root: &PathBuf) -> Result<()> {
+pub fn clean_project_cache(project_root: &Path) -> Result<()> {
     let cache_dir = project_root.join(".hx");
     if cache_dir.exists() {
         debug!("Removing project cache: {}", cache_dir.display());

@@ -72,12 +72,12 @@ pub fn add_dependency(
 
     // Find where to insert (after the last dependency in this section)
     let mut insert_idx = build_depends_idx + 1;
-    for i in (build_depends_idx + 1)..lines.len() {
-        let trimmed = lines[i].trim();
+    for (i, line) in lines.iter().enumerate().skip(build_depends_idx + 1) {
+        let trimmed = line.trim();
         // Check if we're still in the build-depends list
         if trimmed.starts_with(',') || trimmed.is_empty() {
             insert_idx = i + 1;
-        } else if !trimmed.is_empty() && !lines[i].starts_with(' ') && !lines[i].starts_with('\t') {
+        } else if !trimmed.is_empty() && !line.starts_with(' ') && !line.starts_with('\t') {
             // Hit a new section
             break;
         } else if trimmed.contains(':') && !trimmed.starts_with(',') {

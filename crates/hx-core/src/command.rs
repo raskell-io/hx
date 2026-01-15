@@ -109,7 +109,7 @@ impl CommandRunner {
                     source: Some(Box::new(e)),
                     fixes: vec![Fix::with_command(
                         format!("Install {}", program_str),
-                        format!("hx toolchain install"),
+                        "hx toolchain install".to_string(),
                     )],
                 }
             } else {

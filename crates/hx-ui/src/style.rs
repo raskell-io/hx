@@ -63,10 +63,10 @@ pub fn colors_enabled() -> bool {
     }
 
     // Check CLICOLOR
-    if let Ok(val) = std::env::var("CLICOLOR") {
-        if val == "0" {
-            return false;
-        }
+    if let Ok(val) = std::env::var("CLICOLOR")
+        && val == "0"
+    {
+        return false;
     }
 
     // Default to checking if stdout is a tty

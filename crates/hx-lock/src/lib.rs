@@ -112,7 +112,7 @@ impl Lockfile {
     }
 
     /// Parse a lockfile from a TOML string.
-    pub fn from_str(s: &str) -> Result<Self, LockError> {
+    pub fn parse(s: &str) -> Result<Self, LockError> {
         let lock: Lockfile = toml::from_str(s)?;
         if lock.version != LOCK_VERSION {
             return Err(LockError::VersionMismatch {
@@ -126,7 +126,7 @@ impl Lockfile {
     /// Parse a lockfile from a file.
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, LockError> {
         let content = std::fs::read_to_string(path)?;
-        Self::from_str(&content)
+        Self::parse(&content)
     }
 
     /// Serialize the lockfile to a TOML string.
@@ -200,19 +200,20 @@ pub fn parse_freeze_file(content: &str) -> Vec<LockedPackage> {
 
         // Look for constraint lines like "constraints: pkg ==version"
         // or "             pkg ==version,"
-        if let Some(constraint) = line
+        let constraint = line
             .strip_prefix("constraints:")
-            .or_else(|| Some(line))
-            .map(|s| s.trim().trim_end_matches(','))
+            .or(Some(line))
+            .map(|s| s.trim().trim_end_matches(','));
+
+        if let Some(constraint) = constraint
+            && let Some((name, version)) = parse_constraint(constraint)
         {
-            if let Some((name, version)) = parse_constraint(constraint) {
-                packages.push(LockedPackage {
-                    name,
-                    version,
-                    source: "hackage".to_string(),
-                    hash: None,
-                });
-            }
+            packages.push(LockedPackage {
+                name,
+                version,
+                source: "hackage".to_string(),
+                hash: None,
+            });
         }
     }
 
@@ -259,7 +260,7 @@ mod tests {
         });
 
         let toml = lock.to_string().unwrap();
-        let parsed = Lockfile::from_str(&toml).unwrap();
+        let parsed = Lockfile::parse(&toml).unwrap();
 
         assert_eq!(parsed.toolchain.ghc, Some("9.8.2".to_string()));
         assert_eq!(parsed.packages.len(), 1);

@@ -3,7 +3,7 @@
 use hx_cache::{cabal_store_dir, ensure_dir};
 use hx_core::{CommandOutput, CommandRunner, Error, Result};
 use hx_ui::{Output, Spinner};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tracing::{debug, info};
 
@@ -105,8 +105,8 @@ pub async fn build(
 
 /// Run cabal test.
 pub async fn test(
-    project_root: &PathBuf,
-    build_dir: &PathBuf,
+    project_root: &Path,
+    build_dir: &Path,
     pattern: Option<&str>,
     output: &Output,
 ) -> Result<BuildResult> {
@@ -156,8 +156,8 @@ pub async fn test(
 
 /// Run cabal run.
 pub async fn run(
-    project_root: &PathBuf,
-    build_dir: &PathBuf,
+    project_root: &Path,
+    build_dir: &Path,
     args: &[String],
     _output: &Output,
 ) -> Result<i32> {
@@ -194,10 +194,10 @@ pub async fn run(
 }
 
 /// Run cabal repl.
-pub async fn repl(project_root: &PathBuf, build_dir: &PathBuf) -> Result<i32> {
+pub async fn repl(project_root: &Path, build_dir: &Path) -> Result<i32> {
     let store_dir = cabal_store_dir()?;
 
-    let args = vec![
+    let args = [
         "repl".to_string(),
         format!("--builddir={}", build_dir.display()),
         format!("--store-dir={}", store_dir.display()),

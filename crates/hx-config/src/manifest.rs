@@ -124,14 +124,14 @@ pub struct Manifest {
 
 impl Manifest {
     /// Parse a manifest from a TOML string.
-    pub fn from_str(s: &str) -> Result<Self, ManifestError> {
+    pub fn parse(s: &str) -> Result<Self, ManifestError> {
         Ok(toml::from_str(s)?)
     }
 
     /// Parse a manifest from a file.
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ManifestError> {
         let content = std::fs::read_to_string(path)?;
-        Self::from_str(&content)
+        Self::parse(&content)
     }
 
     /// Serialize the manifest to a TOML string.
@@ -172,7 +172,7 @@ mod tests {
 [project]
 name = "myapp"
 "#;
-        let manifest = Manifest::from_str(toml).unwrap();
+        let manifest = Manifest::parse(toml).unwrap();
         assert_eq!(manifest.project.name, "myapp");
         assert_eq!(manifest.project.kind, ProjectKind::Bin);
     }
@@ -196,7 +196,7 @@ formatter = "fourmolu"
 [lint]
 hlint = true
 "#;
-        let manifest = Manifest::from_str(toml).unwrap();
+        let manifest = Manifest::parse(toml).unwrap();
         assert_eq!(manifest.project.name, "myapp");
         assert_eq!(manifest.toolchain.ghc, Some("9.8.2".to_string()));
         assert_eq!(manifest.format.formatter, "fourmolu");
@@ -207,7 +207,7 @@ hlint = true
     fn test_roundtrip() {
         let manifest = Manifest::new("test", ProjectKind::Lib);
         let toml = manifest.to_string().unwrap();
-        let parsed = Manifest::from_str(&toml).unwrap();
+        let parsed = Manifest::parse(&toml).unwrap();
         assert_eq!(parsed.project.name, "test");
         assert_eq!(parsed.project.kind, ProjectKind::Lib);
     }

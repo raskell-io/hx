@@ -3,7 +3,7 @@
 use hx_cache::cabal_store_dir;
 use hx_core::{CommandRunner, Error, Result};
 use hx_ui::Spinner;
-use std::path::PathBuf;
+use std::path::Path;
 use tracing::{debug, info};
 
 /// Run cabal update to refresh the package index.
@@ -41,7 +41,7 @@ pub async fn update(verbose: bool) -> Result<()> {
 }
 
 /// Run cabal freeze to generate constraints.
-pub async fn freeze(project_root: &PathBuf, build_dir: &PathBuf) -> Result<String> {
+pub async fn freeze(project_root: &Path, build_dir: &Path) -> Result<String> {
     let store_dir = cabal_store_dir()?;
 
     let build_dir_str = build_dir.to_string_lossy().to_string();
@@ -91,19 +91,19 @@ pub async fn freeze(project_root: &PathBuf, build_dir: &PathBuf) -> Result<Strin
 }
 
 /// Get the build plan dry-run output.
-pub async fn dry_run(project_root: &PathBuf, build_dir: &PathBuf) -> Result<String> {
+pub async fn dry_run(project_root: &Path, build_dir: &Path) -> Result<String> {
     let store_dir = cabal_store_dir()?;
 
     let build_dir_str = build_dir.to_string_lossy().to_string();
     let store_dir_str = store_dir.to_string_lossy().to_string();
 
-    let args = vec![
+    let args = [
         "build",
         "--dry-run",
         "--builddir",
-        &build_dir_str,
+        &build_dir_str as &str,
         "--store-dir",
-        &store_dir_str,
+        &store_dir_str as &str,
     ];
 
     info!("Running cabal build --dry-run");

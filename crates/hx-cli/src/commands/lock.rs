@@ -87,15 +87,14 @@ pub async fn sync(force: bool, output: &Output) -> Result<i32> {
 
         if let (Some(lock_ghc), Some(detected_ghc)) =
             (&lockfile.toolchain.ghc, toolchain.ghc.status.version())
+            && lock_ghc != &detected_ghc.to_string()
         {
-            if lock_ghc != &detected_ghc.to_string() {
-                output.warn(&format!(
-                    "GHC version mismatch: lock has {}, detected {}",
-                    lock_ghc, detected_ghc
-                ));
-                output.info("Run `hx toolchain install` to install the correct version");
-                output.info("Or run `hx sync --force` to override");
-            }
+            output.warn(&format!(
+                "GHC version mismatch: lock has {}, detected {}",
+                lock_ghc, detected_ghc
+            ));
+            output.info("Run `hx toolchain install` to install the correct version");
+            output.info("Or run `hx sync --force` to override");
         }
     }
 
