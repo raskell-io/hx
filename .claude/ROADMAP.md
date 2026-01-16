@@ -1,6 +1,6 @@
 # HX Roadmap
 
-## v0.1.0 - Initial Release
+## v0.1.0 - Initial Release ✅
 
 ### Done Definition
 
@@ -12,492 +12,220 @@ hx v0.1.0 is shippable when:
 - [x] `hx sync` enforces the lock
 - [x] `hx doctor` gives actionable fixes for missing tools/mismatch
 
----
+### Milestone A: Scaffolding ✅
+- [x] Create Rust workspace with all crates
+- [x] Implement `hx --version`, `hx help`
+- [x] Config loading (hx.toml parsing)
+- [x] Project root detection
+- [x] Structured logging with `tracing`
+- [x] UI helpers (spinners, progress)
 
-## Milestone A: Scaffolding ✅
+### Milestone B: Toolchain Detection ✅
+- [x] `hx toolchain status` - detect ghc, cabal, ghcup, hls
+- [x] `hx doctor` with actionable fixes
 
-**Goal:** Basic project structure and CLI framework
+### Milestone C: Build/Test/Run ✅
+- [x] `hx build`, `hx test`, `hx run`, `hx repl`, `hx check`
+- [x] Stable build directories
+- [x] Friendly error messages
 
-### Tasks
-- [x] Create Rust workspace with all crates:
-  - `hx-cli`
-  - `hx-core`
-  - `hx-config`
-  - `hx-lock`
-  - `hx-toolchain`
-  - `hx-cabal`
-  - `hx-cache`
-  - `hx-doctor`
-  - `hx-ui`
-  - `hx-telemetry`
-  - `hx-warnings`
-- [x] Implement `hx --version`
-- [x] Implement `hx help`
-- [x] Implement config loading (hx.toml parsing)
-- [x] Implement project root detection
-- [x] Add structured logging with `tracing`
-- [x] Add `hx-ui` output helpers (spinners, progress)
+### Milestone D: Project Initialization ✅
+- [x] `hx init` with --bin, --lib, --name, --dir, --ci flags
+- [x] Generate hx.toml, .gitignore, .cabal, source files
 
-### Deliverables
-- [x] Workspace compiles
-- [x] `cargo run -p hx-cli -- --version` works
-- [x] `cargo run -p hx-cli -- help` shows command list
+### Milestone E: Lock/Sync ✅
+- [x] `hx lock` - generate hx.lock with fingerprint
+- [x] `hx sync` - enforce lockfile during build
 
----
+### Milestone F: Format/Lint ✅
+- [x] `hx fmt` (fourmolu/ormolu)
+- [x] `hx lint` (hlint with --fix)
 
-## Milestone B: Toolchain Detection ✅
-
-**Goal:** Detect and report installed Haskell tools
-
-### Tasks
-- [x] Implement `hx toolchain status`
-- [x] Detect `ghc` on PATH, parse version
-- [x] Detect `cabal` on PATH, parse version
-- [x] Detect `ghcup` on PATH, parse version
-- [x] Detect `hls` (haskell-language-server-wrapper), parse version
-- [x] Implement basic `hx doctor`:
-  - [x] Missing tool detection
-  - [x] Version mismatch warnings
-  - [x] Actionable fix suggestions
-
-### Deliverables
-- [x] `hx toolchain status` shows all detected tools
-- [x] `hx doctor` identifies missing/mismatched tools
+### Milestone G: Doctor Diagnostics ✅
+- [x] Platform-specific native dependency checks
+- [x] Better Cabal error extraction
+- [x] Actionable fix commands
 
 ---
 
-## Milestone C: Build/Test/Run Plumbing ✅
-
-**Goal:** Core build workflow via Cabal
-
-### Tasks
-- [x] Implement `hx build`:
-  - [x] Resolve project root
-  - [x] Ensure toolchain present (or fail with fix)
-  - [x] Call `cabal build` with stable directories:
-    - `--store-dir ~/.cache/hx/cabal/store`
-    - `--builddir .hx/cabal/dist-newstyle`
-  - [x] Capture and parse output
-  - [x] Show time + summary
-- [x] Implement `hx test`:
-  - [x] Call `cabal test`
-  - [x] Parse test output
-  - [x] Show summary
-- [x] Implement `hx run`:
-  - [x] Build first
-  - [x] Find and execute binary
-  - [x] Pass through args
-- [x] Implement `hx repl`:
-  - [x] Call `cabal repl`
-  - [x] Pass through to ghci
-- [x] Implement `hx check`:
-  - [x] Alias to `hx build` (fast typecheck)
-- [x] Create friendly error messages for common failures
-
-### Deliverables
-- [x] `hx build` compiles a project
-- [x] `hx test` runs tests
-- [x] `hx run` executes the binary
-- [x] `hx repl` opens ghci
-
----
-
-## Milestone D: Project Initialization ✅
-
-**Goal:** Create new Haskell projects with sane defaults
-
-### Tasks
-- [x] Implement `hx init`:
-  - [x] `--bin` flag for executable project
-  - [x] `--lib` flag for library project
-  - [x] `--name <name>` for project name
-  - [x] `--dir <path>` for target directory
-- [x] Generate files:
-  - [x] `hx.toml` with sensible defaults
-  - [x] `.gitignore` with `.hx/` entry
-  - [x] Minimal `.cabal` file
-  - [x] `src/Main.hs` (for bin) or `src/Lib.hs` (for lib)
-  - [x] `.editorconfig`
-- [x] Optional: generate `.github/workflows/ci.yml` (--ci flag)
-- [x] Infer toolchain versions from environment
-
-### Deliverables
-- [x] `hx init --bin --name hello` creates buildable project
-- [x] Generated project passes `hx build`
-
----
-
-## Milestone E: Lock/Sync (Core Product) ✅
-
-**Goal:** Deterministic, reproducible builds
-
-### Tasks
-- [x] Implement `hx lock`:
-  - [x] Run `cabal update`
-  - [x] Run `cabal build --dry-run` to generate plan
-  - [x] Run `cabal freeze` to pin dependencies
-  - [x] Parse freeze file and/or plan
-  - [x] Extract:
-    - Compiler ID
-    - Platform
-    - Index state
-    - Package list with versions
-  - [x] Compute fingerprint hash
-  - [x] Write `hx.lock` (TOML format)
-- [x] Implement `hx sync`:
-  - [x] Verify `hx.lock` exists
-  - [x] Verify toolchain matches lock
-  - [x] Offer automatic toolchain install if mismatch
-  - [x] Apply constraints from lock
-  - [x] Build with frozen dependencies
-- [x] Implement fingerprint calculation:
-  ```
-  fingerprint = sha256(
-    toolchain(ghc, cabal) +
-    platform(triple) +
-    package list (name@version) +
-    flags +
-    index-state +
-    freeze constraints
-  )
-  ```
-
-### hx.lock Format
-```toml
-version = 1
-created_at = "2026-01-15T00:00:00Z"
-
-[toolchain]
-ghc = "9.8.2"
-cabal = "3.12.1.0"
-
-[plan]
-compiler_id = "ghc-9.8.2"
-platform = "x86_64-linux"
-index_state = "2026-01-15T00:00:00Z"
-hash = "sha256:..."
-
-[[packages]]
-name = "text"
-version = "2.1.1"
-source = "hackage"
-hash = "sha256:..."
-```
-
-### Deliverables
-- [x] `hx lock` creates `hx.lock`
-- [x] `hx sync` enforces lock during build
-- [x] Builds are reproducible given same lock
-
----
-
-## Milestone F: Format/Lint ✅
-
-**Goal:** Integrated code quality tools
-
-### Tasks
-- [x] Implement `hx fmt`:
-  - [x] Detect fourmolu in PATH (preferred)
-  - [x] Fall back to ormolu
-  - [x] Run across all `.hs` files
-  - [x] Support `--check` mode
-- [x] Implement `hx lint`:
-  - [x] Detect hlint in PATH
-  - [x] Run with baseline config
-  - [x] Parse and format output
-  - [x] Support `--fix` for auto-fixes
-
-### Deliverables
-- [x] `hx fmt` formats all Haskell files
-- [x] `hx lint` reports issues with suggestions
-
----
-
-## Milestone G: Doctor-Grade Diagnostics ✅
-
-**Goal:** World-class error messages and fixes
-
-### Tasks
-- [x] Enhance `hx doctor`:
-  - [x] `hx.toml` present check
-  - [x] `.cabal` file exists check
-  - [x] ghcup/ghc/cabal versions OK check
-  - [x] HLS matches GHC major/minor check
-  - [x] `cabal --version` sanity check
-- [x] Platform-specific native dependency checks:
-  - [x] Linux: check for libgmp, libz, libncurses, libffi (pkg-config + paths)
-  - [x] macOS: check via brew/pkg-config, Xcode CLI tools
-  - [x] Windows: MSYS2 detection and library checks
-- [x] Better Cabal error extraction:
-  - [x] Parse common error patterns
-  - [x] Identify root cause
-  - [x] Suggest specific fixes
-- [x] Generate "fix commands" automatically
-- [x] Summary report output with priorities
-
-### Deliverables
-- [x] `hx doctor` identifies all common setup issues
-- [x] Each issue has an actionable fix command
-- [x] Output is clear and prioritized
-
----
-
-## Bonus: UV-Inspired Improvements ✅
-
-Applied patterns from the uv (Astral) codebase:
-
-- [x] `hx-warnings` crate with `warn_user!` and `warn_user_once!` macros
-- [x] `Printer` abstraction with Silent/Quiet/Normal/Verbose modes
-- [x] `EnvVars` constants for environment variable configuration
-- [x] `Combine` trait for config merging
-- [x] Custom CLI styling with clap styles
-- [x] `GlobalArgs` with verbose/quiet/no-color/config-file flags
-- [x] Error chain formatting with `write_error_chain`
-
----
-
-## Bonus: CI/CD & Testing ✅
-
-- [x] GitHub Actions workflow (lint, test matrix, build, docs)
-- [x] Integration test infrastructure with assert_cmd
-- [x] 26 passing tests
-
----
-
-## v0.2.0 - Performance & Caching ✅
+## v0.2.0 - Feature Complete ✅
 
 ### Performance & Caching
 - [x] Shared build store keyed by fingerprints
-  - `StoreIndex` tracks builds by SHA256 fingerprint
-  - `hx cache status` shows cache statistics
-  - `hx cache prune` removes old entries
-  - `hx cache clean` clears entire cache
-- [x] Smarter incremental builds
-  - Source fingerprinting (hashes all .hs, .cabal, hx.toml files)
-  - Build state tracking in `.hx/build-state.json`
-  - No-op detection skips `cabal build` when nothing changed
-  - Shows "Fresh" status for unchanged projects (~100ms)
-- [x] Better parallel fetch
-  - New `hx fetch` command for pre-downloading dependencies
-  - Uses `cabal fetch -j8` for parallel downloads
-  - Integrates with lockfile for exact version fetching
+- [x] `hx cache status|prune|clean` commands
+- [x] Source fingerprinting for incremental builds
+- [x] `hx fetch` for parallel dependency downloads
 
 ### Workspace Support
 - [x] Multi-package repos (cabal.project parsing)
-- [x] Consistent `hx.lock` for workspaces
-  - Single lockfile at workspace root covers all packages
-  - Stores workspace package info (name, version, path)
-  - Filters local packages from external dependencies
-  - Validates workspace consistency on `hx sync`
-- [x] Workspace-aware commands (--package flag)
+- [x] Single lockfile for workspaces
+- [x] `--package` flag for workspace commands
 
 ### Toolchain Management
 - [x] `hx toolchain install` via ghcup
-- [x] `hx toolchain use <profile>` for per-project pins
+- [x] `hx toolchain use` for per-project pins
 - [x] Automatic toolchain installation on mismatch
-  - Checks toolchain requirements from hx.toml before build/test/run/bench
-  - Interactive prompt for installation (respects CI/non-TTY)
-  - `--auto-install` flag for unattended installation
-  - `--no-auto-install` flag to disable prompts
 
----
-
-## v0.3.0 - Replace Selected Cabal Parts ✅
-
-### Lock Resolution Layer
-- [x] Custom dependency resolver (`hx-solver` crate)
-  - [x] PVP version parsing and constraints (==, >=, >, <, <=, ^>=, &&, ||)
-  - [x] Hackage 01-index.tar.gz parsing
-  - [x] .cabal file parsing for build-depends extraction
-  - [x] Backtracking dependency resolution algorithm
-  - [x] Cycle detection in dependency graphs
-  - [x] Native solver is now the default (`hx lock --cabal` for old behavior)
-- [x] Offline solver cache
-  - [x] Binary caching of PackageIndex (bincode serialization)
-  - [x] Resolution result caching keyed by dependency fingerprint
-  - [x] Automatic cache invalidation when source changes
----
-
-## v0.4.0 - Native Fetching & Index Mirroring ✅
+### Native Dependency Resolver
+- [x] `hx-solver` crate with PVP version parsing
+- [x] Hackage 01-index.tar.gz parsing
+- [x] Backtracking dependency resolution
+- [x] Cycle detection
+- [x] Binary caching of PackageIndex
 
 ### Native Package Fetching
-- [x] Direct package download from Hackage (`hx-solver/fetch` module)
-  - [x] Parallel downloads with configurable concurrency
-  - [x] Progress tracking with ETA display
-  - [x] SHA256 verification from Hackage
-  - [x] Integration with build plans
+- [x] Direct Hackage downloads with parallel concurrency
+- [x] SHA256 verification
+- [x] Progress tracking with ETA
 
 ### Build Plan Generation
-- [x] Native build plan generation (`hx-solver/plan` module)
-  - [x] Topological sorting of dependencies
-  - [x] Cycle detection
-  - [x] Pre-installed package detection (base, ghc-prim, etc.)
-  - [x] Build fingerprint calculation
+- [x] Topological sorting of dependencies
+- [x] Pre-installed package detection
+- [x] Build fingerprint calculation
 
-### UX Improvements
-- [x] Better test output parsing and display
-- [x] Improved benchmark workflow integration
-- [x] Performance testing infrastructure (criterion benchmarks)
-- [x] Integration test suite for solver
+### Hackage Index Mirroring
+- [x] `hx index update|status|clear`
+- [x] HTTP conditional requests (ETag, If-Modified-Since)
+- [x] Auto-update when stale
 
-### Controlled Hackage Index Mirroring
-- [x] `hx index update` - Direct download from Hackage
-- [x] `hx index status` - Show index age and statistics
-- [x] `hx index clear` - Clear local index
-- [x] HTTP conditional requests for incremental updates (ETag, If-Modified-Since)
-- [x] Auto-update on `hx lock` when index is stale (>24 hours)
-- [x] Offline-capable resolution (prefers hx-managed index, falls back to cabal)
-- [x] Index stored in `~/.cache/hx/index/`
+### Project Templates
+- [x] `hx new webapp|cli|library`
+- [x] `hx new --template <git-url>`
+- [x] Template variable substitution
 
----
+### Artifact Caching
+- [x] Content-addressed storage for .o/.hi files
+- [x] `hx cache artifacts status|prune|clear`
 
-## v0.5.0 - Native Build & Templates
+### Module Dependency Analysis
+- [x] Import statement parsing
+- [x] Topological ordering for compilation
+- [x] Parallel compilation grouping
 
-### Project Templates ✅
-- [x] Built-in project templates
-  - [x] `hx new webapp` - Servant web app with routing, types, tests
-  - [x] `hx new cli` - optparse-applicative CLI with subcommands
-  - [x] `hx new library` - Library with Haddock setup and changelog
-- [x] Template variable substitution (project name, author, year)
-- [x] Auto git repository initialization
-- [ ] Custom template support from git repos (future)
+### Native Build Orchestration
+- [x] `hx build --native` for direct GHC invocation
+- [x] Module dependency graph extraction
+- [x] Parallel compilation with dependency tracking
+- [x] Package database integration
 
-### Binary Caching / Artifact Sharing ✅
-- [x] Cache compiled artifacts by content hash
-  - [x] Store `.o` and `.hi` files in `~/.cache/hx/artifacts/`
-  - [x] Content-addressed storage (hash of source + flags + deps)
-  - [x] Share build artifacts across projects
-  - [x] Artifact pruning by age
-  - [x] `hx cache artifacts status|prune|clear` commands
+### Documentation Generation
+- [x] `hx docs` with --open, --deps, --serve flags
 
-### Module Dependency Analysis ✅
-- [x] Module dependency graph extraction (`hx-solver/modules`)
-  - [x] Import statement parsing from .hs files
-  - [x] Haskell file discovery in source directories
-  - [x] Topological ordering for compilation
-  - [x] Parallel compilation grouping
+### IDE Integration
+- [x] `hx ide setup|status`
+- [x] Auto-generate hie.yaml
+- [x] HLS version compatibility checks
 
-### Native Build Orchestration (Experimental) ✅
-- [x] Direct GHC invocation infrastructure (`hx build --native`)
-  - [x] Module dependency graph extraction
-  - [x] Parallel compilation with dependency tracking
-  - [x] Incremental rebuild (only recompile changed modules)
-  - [x] Per-module build state tracking
-  - [x] GHC flag management
-- [x] Native build enhancements
-  - [x] Package database integration (for external deps)
-  - [x] Custom progress display during compilation
-  - [x] GHC flag configuration from hx.toml [build] section
+### Package Publishing
+- [x] `hx publish` with pre-publish checks
+- [x] Hackage upload, dry-run mode, --docs flag
 
----
-
-## v0.6.0 - Developer Experience ✅
-
-### Custom Templates from Git ✅
-- [x] `hx new --template <git-url>` support
-  - [x] Clone git repos as project templates
-  - [x] Template variable substitution in cloned files
-  - [x] Support for GitHub shorthand (user/repo)
-  - [x] Branch selection (--branch flag)
-
-### Documentation Generation ✅
-- [x] `hx docs` command
-  - [x] Wrapper around haddock
-  - [x] Auto-open in browser (--open flag)
-  - [x] Generate docs for dependencies (--deps flag)
-  - [x] Serve locally (--serve flag with --port)
-
-### HLS Integration ✅
-- [x] `hx ide setup` enhancements
-  - [x] Auto-generate hie.yaml for projects
-  - [x] Workspace-aware cradle configuration
-  - [x] HLS version compatibility checks
-  - [x] `hx ide status` for diagnostics
-
-### Package Publishing ✅
-- [x] `hx publish` command
-  - [x] Pre-publish checks (version bump, changelog, tests)
-  - [x] Hackage upload via cabal
-  - [x] Dry-run mode
-  - [x] Auto-generate documentation (--docs flag)
-  - [x] Git status and tag validation
-
-### Changelog Generation ✅
-- [x] `hx changelog` command
-  - [x] Parse git commits since last tag
-  - [x] Conventional commits support
-  - [x] Group by type (feat, fix, docs, etc.)
-  - [x] Output to CHANGELOG.md
-  - [x] Preview mode (--preview)
-  - [x] Unreleased changes only (--unreleased)
-
----
-
-## v0.7.0 - Production & Ecosystem
-
-### Cross-Compilation Support
-- [ ] `hx build --target <triple>` for cross-compilation
-  - [ ] Target triple detection and validation
-  - [ ] GHC cross-compiler detection
-  - [ ] Cross-compilation flags for cabal
-  - [ ] Common targets: aarch64-linux, x86_64-windows
+### Changelog Generation
+- [x] `hx changelog` from git commits
+- [x] Conventional commits support
+- [x] --preview and --unreleased flags
 
 ### Nix Integration
-- [ ] `hx nix` command for Nix/flake generation
-  - [ ] Generate flake.nix from hx.toml
-  - [ ] Generate shell.nix for development
-  - [ ] Lockfile to Nix derivation mapping
-  - [ ] `hx nix shell` for nix-shell integration
-
-### Remote Build Caching
-- [ ] Remote cache support (sccache-like)
-  - [ ] S3/GCS/Azure blob storage backends
-  - [ ] Cache key generation from build inputs
-  - [ ] Upload/download compiled artifacts
-  - [ ] `hx cache remote configure`
+- [x] `hx nix flake|shell` for Nix file generation
+- [x] Generate flake.nix/shell.nix from hx.toml
 
 ### Profiling Integration
-- [ ] `hx profile` command
-  - [ ] Build with profiling enabled (-prof)
-  - [ ] Run with RTS options (+RTS -p)
-  - [ ] Parse and display profiling output
-  - [ ] Heap profiling support (-hc, -hm)
+- [x] `hx profile` with --heap, --time flags
+- [x] Build with -prof, run with RTS options
+- [x] Parse and display profiling output
 
 ### Single-File Scripts
-- [ ] `hx script <file.hs>` command
-  - [ ] Parse dependencies from file header
-  - [ ] Cache compiled scripts
-  - [ ] Shebang support (#!/usr/bin/env hx script)
-  - [ ] REPL mode for scripts
+- [x] `hx script <file.hs>`
+- [x] Parse dependencies from file header
+- [x] Cache compiled scripts
 
 ### Stack Project Import
-- [ ] `hx import --from stack` command
-  - [ ] Parse stack.yaml configuration
-  - [ ] Convert resolver to GHC version
-  - [ ] Map extra-deps to hx.toml dependencies
-  - [ ] Generate hx.lock from stack.yaml.lock
+- [x] `hx import --from stack|cabal`
+- [x] Parse stack.yaml, convert resolver to GHC version
 
 ### Package Search
-- [ ] `hx search <query>` command
-  - [ ] Search Hackage package index
-  - [ ] Display package info (description, version, deps)
-  - [ ] Filter by category, author, license
-  - [ ] Show download statistics
+- [x] `hx search <query>` with fuzzy matching
+- [x] --limit and --detailed flags
 
 ### Dependency Audit
-- [ ] `hx audit` command
-  - [ ] Check for known vulnerabilities
-  - [ ] Detect outdated dependencies
-  - [ ] License compatibility checking
-  - [ ] Security advisories integration
+- [x] `hx audit` for vulnerability scanning
+- [x] Detect outdated/deprecated packages
+- [x] License checking, --fix flag
 
 ---
 
-## Command Namespace (Final)
+## v0.3.0 - Native Build & Beyond
+
+### Full Native Build Replacement
+- [ ] Complete GHC invocation without cabal dependency
+  - [ ] Native package compilation from source
+  - [ ] Linking and executable generation
+  - [ ] Library installation to package database
+  - [ ] Full dependency build orchestration
+  - [ ] Cabal file generation/modification
+- [ ] Drop cabal as runtime dependency for builds
+- [ ] Performance parity with cabal builds
+
+### Watch Mode
+- [ ] `hx watch` for auto-rebuild on file changes
+  - [ ] File system monitoring (notify crate)
+  - [ ] Debounced rebuilds
+  - [ ] Test re-run on change
+  - [ ] Clear terminal between runs
+
+### Dependency Visualization
+- [ ] `hx deps graph` command
+  - [ ] Graphviz DOT output
+  - [ ] ASCII tree fallback
+  - [ ] Filter by depth
+  - [ ] Highlight specific packages
+
+### Language Server Features
+- [ ] Built-in diagnostics without HLS
+  - [ ] Type error extraction from GHC
+  - [ ] Warning aggregation
+  - [ ] Quick-fix suggestions
+- [ ] `hx lsp` for minimal language server
+
+### Plugin System
+- [ ] User-defined commands via hooks
+  - [ ] Pre/post build hooks
+  - [ ] Custom command registration
+  - [ ] Lua or WASM plugin runtime
+
+### Cloud Builds
+- [ ] Remote build execution
+  - [ ] Build server protocol
+  - [ ] Distributed compilation
+  - [ ] Result caching and sharing
+
+### GHC Version Manager
+- [ ] Replace ghcup dependency
+  - [ ] Direct GHC binary downloads
+  - [ ] Version switching
+  - [ ] Per-project GHC installations
+
+### Binary Distribution
+- [ ] `hx dist` command
+  - [ ] Create release tarballs
+  - [ ] Static linking options
+  - [ ] Cross-platform installers
+  - [ ] Homebrew/apt/chocolatey formulas
+
+### Test Coverage
+- [ ] `hx coverage` command
+  - [ ] Integration with hpc
+  - [ ] HTML coverage reports
+  - [ ] Coverage thresholds
+  - [ ] CI integration
+
+---
+
+## Command Namespace (Current)
 
 ```
 hx init [--bin|--lib] [--ci]
-hx build [--package <name>] [--native]
+hx build [--package <name>] [--native] [--target <triple>]
 hx test [--package <name>]
 hx run [--package <name>]
 hx repl
@@ -553,7 +281,7 @@ hx upgrade [--check]
 |---------|---------|
 | Formatter | fourmolu |
 | Linter | hlint |
-| Build system | cabal v2 |
+| Build system | native (cabal fallback) |
 | Store/build dirs | hx-managed |
 | Lockfile format | TOML |
 | Error output | short + fixes |
