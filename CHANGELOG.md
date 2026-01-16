@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-01-16
+
+### Added
+- `hx completions <shell>` - Generate shell completions for bash, zsh, fish, PowerShell
+- `hx upgrade` - Self-update to latest version from GitHub releases
+- `hx upgrade --check` - Check for updates without installing
+- `hx upgrade --target <version>` - Install a specific version
+
+### Improved
+- Enhanced error messages with actionable fix suggestions
+- Added convenience error constructors with intelligent default fixes
+- Toolchain missing errors now suggest both ghcup and hx commands
+- Build errors analyze content to suggest relevant fixes
+
 ## [0.1.0] - 2026-01-15
 
 ### Added
@@ -61,5 +75,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration test infrastructure with assert_cmd
 - CI/CD with GitHub Actions (Linux, macOS, Windows)
 
-[Unreleased]: https://github.com/raskell-io/hx/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/raskell-io/hx/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/raskell-io/hx/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/raskell-io/hx/releases/tag/v0.1.0
