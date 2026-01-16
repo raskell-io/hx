@@ -165,6 +165,7 @@ fn is_executable(path: &std::path::Path) -> bool {
         if let Ok(metadata) = fs::metadata(path) {
             return metadata.permissions().mode() & 0o111 != 0;
         }
+        false
     }
 
     #[cfg(not(unix))]
@@ -172,8 +173,6 @@ fn is_executable(path: &std::path::Path) -> bool {
         // On Windows, check for .exe extension
         path.extension().map(|e| e == "exe").unwrap_or(false)
     }
-
-    false
 }
 
 /// Display a summary of the profiling results.

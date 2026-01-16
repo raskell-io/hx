@@ -114,7 +114,7 @@ fn bench_resolve_all(c: &mut Criterion) {
     let resolver = Resolver::new(&index);
 
     let deps: Vec<Dependency> = (0..10)
-        .map(|i| Dependency::with_constraint(&format!("pkg-{}", i * 3), VersionConstraint::Any))
+        .map(|i| Dependency::with_constraint(format!("pkg-{}", i * 3), VersionConstraint::Any))
         .collect();
 
     c.bench_function("resolve_all_10_deps", |b| {
