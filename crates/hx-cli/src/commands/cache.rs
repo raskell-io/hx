@@ -1,7 +1,10 @@
 //! Cache management command implementation.
 
 use anyhow::Result;
-use hx_cache::{StoreIndex, clean_global_cache, store_disk_size};
+use hx_cache::{
+    clear_artifacts, global_cache_dir, prune_artifacts, ArtifactIndex, StoreIndex,
+    clean_global_cache, store_disk_size,
+};
 use hx_ui::Output;
 
 /// Show cache statistics.
@@ -71,6 +74,59 @@ pub async fn clean(output: &Output) -> Result<i32> {
 
     output.status("Cleaned", "global cache removed");
     output.info("Run `hx lock && hx build` to rebuild dependencies");
+
+    Ok(0)
+}
+
+/// Show artifact cache status.
+pub async fn artifacts_status(output: &Output) -> Result<i32> {
+    let cache_dir = global_cache_dir()?;
+    let index = ArtifactIndex::load(&cache_dir).unwrap_or_default();
+    let stats = index.stats();
+
+    output.header("Artifact Cache Status");
+    output.list_item("cached modules", &stats.entry_count.to_string());
+    output.list_item("total size", &stats.size_string());
+
+    if stats.entry_count > 0 {
+        output.info("");
+        output.info("Use `hx cache artifacts prune` to remove old artifacts");
+    }
+
+    Ok(0)
+}
+
+/// Prune old artifacts.
+pub async fn artifacts_prune(days: u64, output: &Output) -> Result<i32> {
+    let cache_dir = global_cache_dir()?;
+
+    output.status("Pruning", &format!("artifacts older than {} days", days));
+
+    let result = prune_artifacts(&cache_dir, days)?;
+
+    if result.removed_count > 0 {
+        output.status(
+            "Pruned",
+            &format!(
+                "{} artifacts ({})",
+                result.removed_count,
+                format_bytes(result.removed_size)
+            ),
+        );
+    } else {
+        output.info("No old artifacts to prune");
+    }
+
+    Ok(0)
+}
+
+/// Clear all artifacts.
+pub async fn artifacts_clear(output: &Output) -> Result<i32> {
+    let cache_dir = global_cache_dir()?;
+
+    output.status("Clearing", "artifact cache");
+    clear_artifacts(&cache_dir)?;
+    output.status("Cleared", "all artifacts removed");
 
     Ok(0)
 }

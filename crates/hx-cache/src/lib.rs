@@ -7,7 +7,9 @@
 //! - Shared build store with fingerprint tracking
 //! - Source fingerprinting for incremental builds
 //! - Build state tracking
+//! - Binary artifact caching for compiled modules
 
+pub mod artifacts;
 pub mod build_state;
 pub mod source;
 pub mod store;
@@ -17,11 +19,16 @@ use hx_core::error::{Error, Result};
 use std::path::{Path, PathBuf};
 use tracing::debug;
 
+pub use artifacts::{
+    clear_artifacts, compute_artifact_hash, hash_file, prune_artifacts, retrieve_artifacts,
+    store_artifacts, ArtifactEntry, ArtifactIndex, ArtifactStats, PruneResult,
+};
 pub use build_state::{BuildState, PackageBuildInfo, PackageStatus};
 pub use source::{
-    SourceFingerprint, compute_source_fingerprint, load_source_fingerprint, save_source_fingerprint,
+    compute_source_fingerprint, load_source_fingerprint, save_source_fingerprint,
+    SourceFingerprint,
 };
-pub use store::{BuildCacheEntry, StoreIndex, StoreStats, calculate_fingerprint, store_disk_size};
+pub use store::{calculate_fingerprint, store_disk_size, BuildCacheEntry, StoreIndex, StoreStats};
 
 /// Get the global cache directory.
 ///

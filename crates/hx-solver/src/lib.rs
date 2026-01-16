@@ -32,6 +32,7 @@ pub mod cabal;
 pub mod fetch;
 pub mod index;
 pub mod mirror;
+pub mod modules;
 pub mod package;
 pub mod plan;
 pub mod resolver;
@@ -50,6 +51,10 @@ pub use mirror::{
     best_index_path, clear_index, index_dir, index_is_current, index_path, index_state_path,
     index_status, load_index_state, update_index, IndexState, IndexStatus, MirrorError,
     MirrorOptions, UpdateResult,
+};
+pub use modules::{
+    build_module_graph, find_haskell_files, parse_imports, path_to_module_name, ModuleError,
+    ModuleGraph, ModuleInfo,
 };
 pub use package::{
     Dependency, InstallPlan, Package, PackageIndex, PackageVersion, ResolvedPackage,

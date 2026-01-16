@@ -351,6 +351,49 @@ Applied patterns from the uv (Astral) codebase:
 
 ---
 
+## v0.5.0 - Native Build & Templates
+
+### Project Templates ✅
+- [x] Built-in project templates
+  - [x] `hx new webapp` - Servant web app with routing, types, tests
+  - [x] `hx new cli` - optparse-applicative CLI with subcommands
+  - [x] `hx new library` - Library with Haddock setup and changelog
+- [x] Template variable substitution (project name, author, year)
+- [x] Auto git repository initialization
+- [ ] Custom template support from git repos (future)
+
+### Binary Caching / Artifact Sharing ✅
+- [x] Cache compiled artifacts by content hash
+  - [x] Store `.o` and `.hi` files in `~/.cache/hx/artifacts/`
+  - [x] Content-addressed storage (hash of source + flags + deps)
+  - [x] Share build artifacts across projects
+  - [x] Artifact pruning by age
+  - [x] `hx cache artifacts status|prune|clear` commands
+
+### Module Dependency Analysis ✅
+- [x] Module dependency graph extraction (`hx-solver/modules`)
+  - [x] Import statement parsing from .hs files
+  - [x] Haskell file discovery in source directories
+  - [x] Topological ordering for compilation
+  - [x] Parallel compilation grouping
+
+### Native Build Orchestration (In Progress)
+- [ ] Replace `cabal build` with direct GHC invocation
+  - [x] Module dependency graph extraction ✅
+  - [ ] Parallel compilation with dependency tracking
+  - [ ] Incremental rebuild (only recompile changed modules)
+  - [ ] Custom progress display during compilation
+  - [ ] GHC flag management from hx.toml
+
+### Future Candidates
+- [ ] Custom templates from git repos
+- [ ] Documentation generation (`hx docs`)
+- [ ] Better HLS integration (auto hie.yaml)
+- [ ] Package publishing improvements
+- [ ] Changelog generation from git commits
+
+---
+
 ## Command Namespace (Final)
 
 ```
@@ -362,6 +405,7 @@ hx repl
 hx check
 
 hx new module|test|benchmark <name>
+hx new webapp|cli|library <name>
 hx bench [--package <name>]
 hx publish [--dry-run] [--docs]
 

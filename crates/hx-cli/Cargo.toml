@@ -37,6 +37,7 @@ tracing-subscriber.workspace = true
 tokio.workspace = true
 console.workspace = true
 which.workspace = true
+chrono.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

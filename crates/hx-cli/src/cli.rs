@@ -301,6 +301,28 @@ pub enum CacheCommands {
 
     /// Clean the entire cache
     Clean,
+
+    /// Manage compiled artifact cache
+    Artifacts {
+        #[command(subcommand)]
+        command: ArtifactCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ArtifactCommands {
+    /// Show artifact cache status
+    Status,
+
+    /// Prune old artifacts
+    Prune {
+        /// Maximum age in days (default: 30)
+        #[arg(long, default_value = "30")]
+        days: u64,
+    },
+
+    /// Clear all artifacts
+    Clear,
 }
 
 #[derive(Subcommand, Debug)]
@@ -329,6 +351,36 @@ pub enum NewCommands {
     Benchmark {
         /// Benchmark module name
         name: String,
+    },
+
+    /// Create a web application project (Servant)
+    Webapp {
+        /// Project name
+        name: String,
+
+        /// Target directory (defaults to project name)
+        #[arg(long)]
+        dir: Option<String>,
+    },
+
+    /// Create a CLI application project (optparse-applicative)
+    Cli {
+        /// Project name
+        name: String,
+
+        /// Target directory (defaults to project name)
+        #[arg(long)]
+        dir: Option<String>,
+    },
+
+    /// Create a library project with documentation setup
+    Library {
+        /// Project name
+        name: String,
+
+        /// Target directory (defaults to project name)
+        #[arg(long)]
+        dir: Option<String>,
     },
 }
 

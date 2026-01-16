@@ -8,6 +8,7 @@ use clap::Parser;
 mod cli;
 mod commands;
 mod styles;
+mod templates;
 
 use cli::Cli;
 

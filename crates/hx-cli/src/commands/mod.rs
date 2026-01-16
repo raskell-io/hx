@@ -20,7 +20,7 @@ mod run;
 mod toolchain;
 mod upgrade;
 
-use crate::cli::{CacheCommands, Cli, Commands, GlobalArgs, IndexCommands};
+use crate::cli::{ArtifactCommands, CacheCommands, Cli, Commands, GlobalArgs, IndexCommands};
 use anyhow::Result;
 use hx_toolchain::AutoInstallPolicy;
 use hx_ui::{Output, Printer, Verbosity};
@@ -115,6 +115,11 @@ pub async fn run(cli: Cli) -> Result<i32> {
             CacheCommands::Status => cache::status(&output).await,
             CacheCommands::Prune { days } => cache::prune(days, &output).await,
             CacheCommands::Clean => cache::clean(&output).await,
+            CacheCommands::Artifacts { command } => match command {
+                ArtifactCommands::Status => cache::artifacts_status(&output).await,
+                ArtifactCommands::Prune { days } => cache::artifacts_prune(days, &output).await,
+                ArtifactCommands::Clear => cache::artifacts_clear(&output).await,
+            },
         },
         None => {
             // No command - show help
