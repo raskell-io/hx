@@ -285,31 +285,42 @@ fn check_native_deps(report: &mut DoctorReport) {
 #[cfg(target_os = "linux")]
 fn check_native_deps_linux(report: &mut DoctorReport) {
     // Check for common native libraries needed by GHC
+    // Format: (pkg-config name, debian pkg, fedora pkg, arch pkg, description)
     let libs = [
-        (
-            "libgmp",
-            "libgmp-dev",
-            "GMP (GNU Multiple Precision Arithmetic Library)",
-        ),
-        ("libz", "zlib1g-dev", "zlib compression library"),
-        ("libncurses", "libncurses-dev", "ncurses terminal library"),
-        ("libffi", "libffi-dev", "Foreign Function Interface library"),
+        ("gmp", "libgmp-dev", "gmp-devel", "gmp", "GMP arithmetic library"),
+        ("zlib", "zlib1g-dev", "zlib-devel", "zlib", "zlib compression"),
+        ("ncurses", "libncurses-dev", "ncurses-devel", "ncurses", "ncurses terminal library"),
+        ("libffi", "libffi-dev", "libffi-devel", "libffi", "Foreign Function Interface"),
     ];
 
-    for (lib, package, description) in libs {
-        if !check_library_linux(lib) {
+    let mut missing_libs = Vec::new();
+
+    for (pkg_name, deb_pkg, fedora_pkg, arch_pkg, description) in libs {
+        if !check_library_linux(pkg_name) {
+            missing_libs.push((pkg_name, deb_pkg, fedora_pkg, arch_pkg, description));
+        }
+    }
+
+    if missing_libs.is_empty() {
+        report.add(Diagnostic::info("Native libraries: all found"));
+    } else {
+        for (pkg_name, deb_pkg, fedora_pkg, arch_pkg, description) in missing_libs {
             report.add(
                 Diagnostic::warning(format!(
                     "{} not found - {} may fail to build",
-                    lib, description
+                    pkg_name, description
                 ))
                 .with_fix(Fix::with_command(
-                    format!("Install {} (Debian/Ubuntu)", package),
-                    format!("sudo apt-get install {}", package),
+                    format!("Install on Debian/Ubuntu"),
+                    format!("sudo apt-get install {}", deb_pkg),
                 ))
                 .with_fix(Fix::with_command(
                     "Install on Fedora/RHEL",
-                    format!("sudo dnf install {}-devel", lib.trim_start_matches("lib")),
+                    format!("sudo dnf install {}", fedora_pkg),
+                ))
+                .with_fix(Fix::with_command(
+                    "Install on Arch Linux",
+                    format!("sudo pacman -S {}", arch_pkg),
                 )),
             );
         }
@@ -318,11 +329,14 @@ fn check_native_deps_linux(report: &mut DoctorReport) {
 
 #[cfg(target_os = "linux")]
 fn check_library_linux(lib: &str) -> bool {
-    // Try pkg-config first
-    if let Ok(output) = Command::new("pkg-config").args(["--exists", lib]).output()
-        && output.status.success()
+    // Try pkg-config first (most reliable)
+    if let Ok(output) = Command::new("pkg-config")
+        .args(["--exists", lib])
+        .output()
     {
-        return true;
+        if output.status.success() {
+            return true;
+        }
     }
 
     // Try ldconfig as fallback
@@ -333,11 +347,16 @@ fn check_library_linux(lib: &str) -> bool {
         }
     }
 
-    // Check common library paths
+    // Check common library paths for various architectures
     let lib_paths = [
-        format!("/usr/lib/x86_64-linux-gnu/{}.so", lib),
-        format!("/usr/lib/{}.so", lib),
-        format!("/lib/x86_64-linux-gnu/{}.so", lib),
+        // x86_64
+        format!("/usr/lib/x86_64-linux-gnu/lib{}.so", lib),
+        format!("/usr/lib64/lib{}.so", lib),
+        // aarch64
+        format!("/usr/lib/aarch64-linux-gnu/lib{}.so", lib),
+        // Generic
+        format!("/usr/lib/lib{}.so", lib),
+        format!("/lib/lib{}.so", lib),
     ];
 
     for path in lib_paths {
@@ -351,6 +370,24 @@ fn check_library_linux(lib: &str) -> bool {
 
 #[cfg(target_os = "macos")]
 fn check_native_deps_macos(report: &mut DoctorReport) {
+    // Check for Xcode Command Line Tools
+    let has_xcode_cli = Command::new("xcode-select")
+        .args(["--print-path"])
+        .output()
+        .is_ok_and(|o| o.status.success());
+
+    if !has_xcode_cli {
+        report.add(
+            Diagnostic::warning("Xcode Command Line Tools not found - required for building")
+                .with_fix(Fix::with_command(
+                    "Install Xcode CLI Tools",
+                    "xcode-select --install",
+                )),
+        );
+    } else {
+        report.add(Diagnostic::info("Xcode CLI Tools: installed"));
+    }
+
     // Check if Homebrew is available
     let has_brew = Command::new("brew").arg("--version").output().is_ok();
 
@@ -368,11 +405,13 @@ fn check_native_deps_macos(report: &mut DoctorReport) {
     // Check for common dependencies
     let deps = [
         ("gmp", "GMP arithmetic library"),
-        ("zlib", "zlib compression"),
+        ("libffi", "Foreign Function Interface"),
     ];
 
+    let mut all_found = true;
     for (formula, description) in deps {
-        if !check_brew_formula(formula) {
+        if !check_native_lib_macos(formula) {
+            all_found = false;
             report.add(
                 Diagnostic::warning(format!(
                     "{} not found - {} may fail to build",
@@ -385,28 +424,104 @@ fn check_native_deps_macos(report: &mut DoctorReport) {
             );
         }
     }
+
+    if all_found {
+        report.add(Diagnostic::info("Native libraries: all found"));
+    }
 }
 
 #[cfg(target_os = "macos")]
-fn check_brew_formula(formula: &str) -> bool {
-    Command::new("brew")
-        .args(["list", formula])
+fn check_native_lib_macos(lib: &str) -> bool {
+    // Try pkg-config first
+    if Command::new("pkg-config")
+        .args(["--exists", lib])
         .output()
         .is_ok_and(|o| o.status.success())
+    {
+        return true;
+    }
+
+    // Try brew list
+    if Command::new("brew")
+        .args(["list", lib])
+        .output()
+        .is_ok_and(|o| o.status.success())
+    {
+        return true;
+    }
+
+    // Check common paths
+    let paths = [
+        format!("/opt/homebrew/lib/lib{}.dylib", lib),
+        format!("/usr/local/lib/lib{}.dylib", lib),
+        format!("/opt/homebrew/opt/{}/lib/lib{}.dylib", lib, lib),
+        format!("/usr/local/opt/{}/lib/lib{}.dylib", lib, lib),
+    ];
+
+    for path in paths {
+        if std::path::Path::new(&path).exists() {
+            return true;
+        }
+    }
+
+    false
 }
 
 #[cfg(target_os = "windows")]
 fn check_native_deps_windows(report: &mut DoctorReport) {
     // Check for MSYS2/MinGW which provides native libs on Windows
-    let msys2_paths = ["C:\\msys64", "C:\\msys32"];
+    let msys2_paths = [
+        "C:\\msys64",
+        "C:\\msys32",
+        "C:\\ghcup\\msys64",
+    ];
 
-    let has_msys2 = msys2_paths.iter().any(|p| std::path::Path::new(p).exists());
+    let msys2_path = msys2_paths
+        .iter()
+        .find(|p| std::path::Path::new(p).exists());
 
-    if !has_msys2 {
+    if let Some(path) = msys2_path {
+        report.add(Diagnostic::info(format!("MSYS2: found at {}", path)));
+
+        // Check for required libraries in MSYS2
+        let mingw_lib_path = format!("{}\\mingw64\\lib", path);
+        let libs = [
+            ("libgmp", "GMP arithmetic library"),
+            ("libffi", "Foreign Function Interface"),
+            ("libz", "zlib compression"),
+        ];
+
+        for (lib, description) in libs {
+            let lib_file = format!("{}\\{}.a", mingw_lib_path, lib);
+            if !std::path::Path::new(&lib_file).exists() {
+                report.add(
+                    Diagnostic::warning(format!(
+                        "{} not found in MSYS2 - {} may fail to build",
+                        lib, description
+                    ))
+                    .with_fix(Fix::with_command(
+                        format!("Install {} via MSYS2", lib),
+                        format!("pacman -S mingw-w64-x86_64-{}", lib.trim_start_matches("lib")),
+                    )),
+                );
+            }
+        }
+    } else {
         report.add(
             Diagnostic::warning("MSYS2 not found - some packages may fail to build")
-                .with_fix(Fix::new("Install MSYS2 from https://www.msys2.org/")),
+                .with_fix(Fix::new("Install MSYS2 from https://www.msys2.org/"))
+                .with_fix(Fix::new("Or install via ghcup which includes MSYS2")),
         );
+    }
+
+    // Check for chocolatey as alternative package manager
+    let has_choco = Command::new("choco")
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success());
+
+    if has_choco {
+        report.add(Diagnostic::info("Chocolatey: installed"));
     }
 }
 

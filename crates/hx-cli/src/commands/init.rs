@@ -219,13 +219,12 @@ library
 }
 
 fn generate_ci_workflow(_name: &str, kind: ProjectKind) -> String {
-    let test_step = if kind == ProjectKind::Lib {
-        ""
-    } else {
-        r#"
-      - name: Run tests
-        run: hx test
-"#
+    let run_target = match kind {
+        ProjectKind::Bin => r#"
+      - name: Run executable
+        run: cabal run
+"#,
+        ProjectKind::Lib => "",
     };
 
     format!(
@@ -239,13 +238,13 @@ on:
 
 jobs:
   build:
-    name: Build
+    name: Build and Test
     runs-on: ${{{{ matrix.os }}}}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        ghc: ['9.8.2']
+        ghc: ['9.8.2', '9.6.6']
 
     steps:
       - uses: actions/checkout@v4
@@ -256,7 +255,7 @@ jobs:
           ghc-version: ${{{{ matrix.ghc }}}}
           cabal-version: '3.12'
 
-      - name: Cache
+      - name: Cache Cabal
         uses: actions/cache@v4
         with:
           path: |
@@ -266,20 +265,37 @@ jobs:
           restore-keys: |
             ${{{{ runner.os }}}}-ghc-${{{{ matrix.ghc }}}}-
 
-      - name: Install hx
-        run: |
-          cargo install --git https://github.com/raskell-io/hx hx-cli
-        continue-on-error: true
+      - name: Install dependencies
+        run: cabal build all --only-dependencies
 
       - name: Build
         run: cabal build all
 
-      - name: Check formatting
-        run: |
-          cabal install fourmolu
-          fourmolu --mode check src/
-        continue-on-error: true
-{test_step}
+      - name: Run tests
+        run: cabal test all
+{run_target}
+  lint:
+    name: Lint and Format
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.8.2'
+          cabal-version: '3.12'
+
+      - name: Check formatting with fourmolu
+        uses: haskell-actions/run-fourmolu@v10
+        with:
+          version: "0.16.2.0"
+
+      - name: Lint with hlint
+        uses: haskell-actions/hlint-scan@v1
+        with:
+          path: src/
 "#
     )
 }

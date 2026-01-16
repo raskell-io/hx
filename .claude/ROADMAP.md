@@ -118,7 +118,7 @@ hx v0.1.0 is shippable when:
   - [x] Minimal `.cabal` file
   - [x] `src/Main.hs` (for bin) or `src/Lib.hs` (for lib)
   - [x] `.editorconfig`
-- [ ] Optional: generate `.github/workflows/ci.yml` (--ci flag)
+- [x] Optional: generate `.github/workflows/ci.yml` (--ci flag)
 - [x] Infer toolchain versions from environment
 
 ### Deliverables
@@ -213,7 +213,7 @@ hash = "sha256:..."
 
 ---
 
-## Milestone G: Doctor-Grade Diagnostics 🔄
+## Milestone G: Doctor-Grade Diagnostics ✅
 
 **Goal:** World-class error messages and fixes
 
@@ -224,10 +224,10 @@ hash = "sha256:..."
   - [x] ghcup/ghc/cabal versions OK check
   - [x] HLS matches GHC major/minor check
   - [x] `cabal --version` sanity check
-- [ ] Platform-specific native dependency checks:
-  - [ ] Linux: check for libgmp, libz, libncurses
-  - [ ] macOS: check via brew/pkg-config
-  - [ ] Windows: basic checks
+- [x] Platform-specific native dependency checks:
+  - [x] Linux: check for libgmp, libz, libncurses, libffi (pkg-config + paths)
+  - [x] macOS: check via brew/pkg-config, Xcode CLI tools
+  - [x] Windows: MSYS2 detection and library checks
 - [x] Better Cabal error extraction:
   - [x] Parse common error patterns
   - [x] Identify root cause
@@ -272,9 +272,9 @@ Applied patterns from the uv (Astral) codebase:
 - [ ] Better parallel fetch
 
 ### Workspace Support
-- [ ] Multi-package repos
+- [x] Multi-package repos (cabal.project parsing)
 - [ ] Consistent `hx.lock` for workspaces
-- [ ] Workspace-aware commands
+- [x] Workspace-aware commands (--package flag)
 
 ### Toolchain Management
 - [x] `hx toolchain install` via ghcup
@@ -295,27 +295,36 @@ Applied patterns from the uv (Astral) codebase:
 ## Command Namespace (Final)
 
 ```
-hx init
-hx build
-hx test
-hx run
+hx init [--bin|--lib] [--ci]
+hx build [--package <name>]
+hx test [--package <name>]
+hx run [--package <name>]
 hx repl
 hx check
 
-hx fmt
-hx lint
+hx new module|test|benchmark <name>
+hx bench [--package <name>]
+hx publish [--dry-run] [--docs]
+
+hx fmt [--check]
+hx lint [--fix]
 hx doctor
 
 hx lock
 hx sync
-hx clean
+hx clean [--global]
 
-hx add
-hx rm
+hx add <package>
+hx rm <package>
+
+hx ide setup|status
 
 hx toolchain status
 hx toolchain install
 hx toolchain use
+
+hx completions <shell>
+hx upgrade [--check]
 ```
 
 ---
