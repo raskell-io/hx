@@ -13,11 +13,15 @@ categories.workspace = true
 hx-core.workspace = true
 hx-ui.workspace = true
 hx-cache.workspace = true
+hx-solver.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
 serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
 tracing.workspace = true
 tokio.workspace = true
+num_cpus = "1.16"
 
 [dev-dependencies]
 tempfile.workspace = true

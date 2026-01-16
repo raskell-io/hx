@@ -92,6 +92,10 @@ pub enum Commands {
         /// Build specific package (in workspace)
         #[arg(short, long)]
         package: Option<String>,
+
+        /// Use native GHC build (experimental)
+        #[arg(long)]
+        native: bool,
     },
 
     /// Run tests

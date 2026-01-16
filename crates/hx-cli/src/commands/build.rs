@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use hx_cabal::build::{self as cabal_build, BuildOptions};
+use hx_cabal::native::{GhcConfig, NativeBuildOptions, NativeBuilder};
 use hx_cache::{BuildState, StoreIndex, compute_source_fingerprint, save_source_fingerprint};
 use hx_config::{Project, find_project_root};
 use hx_lock::Lockfile;
@@ -15,6 +16,7 @@ pub async fn run(
     jobs: Option<usize>,
     target: Option<String>,
     package: Option<String>,
+    native: bool,
     policy: AutoInstallPolicy,
     output: &Output,
 ) -> Result<i32> {
@@ -56,6 +58,11 @@ pub async fn run(
         Some(pkg) if project.is_workspace() => pkg.as_str(),
         _ => project.name(),
     };
+
+    // Use native build if requested
+    if native {
+        return run_native_build(&project, release, jobs, &toolchain, output).await;
+    }
 
     // Check lockfile for fingerprint
     let (lock_fingerprint, package_count) = get_build_fingerprint(&project);
@@ -246,4 +253,76 @@ async fn check_toolchain(project: &Project, policy: AutoInstallPolicy) -> hx_cor
         policy,
     )
     .await
+}
+
+/// Run native GHC build (experimental).
+async fn run_native_build(
+    project: &Project,
+    release: bool,
+    jobs: Option<usize>,
+    toolchain: &Toolchain,
+    output: &Output,
+) -> Result<i32> {
+    output.warn("Native build is experimental - use --native only for testing");
+
+    // Get GHC version
+    let ghc_version = toolchain
+        .ghc
+        .status
+        .version()
+        .map(|v| v.to_string())
+        .unwrap_or_default();
+
+    // Configure GHC
+    let ghc_config = GhcConfig {
+        ghc_path: std::path::PathBuf::from("ghc"),
+        version: ghc_version,
+        package_dbs: vec![],
+        packages: vec!["base".to_string()], // Always need base
+    };
+
+    // Configure native build options
+    let native_options = NativeBuildOptions {
+        src_dirs: vec![std::path::PathBuf::from("src")],
+        output_dir: project.root.join(".hx/native-build"),
+        optimization: if release { 2 } else { 1 },
+        warnings: true,
+        werror: false,
+        extra_flags: vec![],
+        jobs: jobs.unwrap_or_else(num_cpus::get),
+        verbose: output.is_verbose(),
+        main_module: Some("Main".to_string()),
+        output_exe: Some(project.root.join(".hx/native-build").join(project.name())),
+    };
+
+    // Create builder and run
+    let builder = NativeBuilder::new(ghc_config);
+
+    output.status("Building", &format!("{} (native)", project.name()));
+
+    match builder.build(&project.root, &native_options, output).await {
+        Ok(result) => {
+            if result.success {
+                if result.modules_skipped > 0 {
+                    output.info(&format!(
+                        "Compiled {} modules ({} skipped)",
+                        result.modules_compiled, result.modules_skipped
+                    ));
+                }
+                if let Some(exe) = result.executable {
+                    output.info(&format!("Executable: {}", exe.display()));
+                }
+                Ok(0)
+            } else {
+                for error in &result.errors {
+                    output.error(error);
+                }
+                Ok(5)
+            }
+        }
+        Err(e) => {
+            output.print_error(&e);
+            Ok(5)
+        }
+    }
 }

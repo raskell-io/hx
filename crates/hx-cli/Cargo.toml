@@ -38,6 +38,7 @@ tokio.workspace = true
 console.workspace = true
 which.workspace = true
 chrono.workspace = true
+num_cpus = "1.16"
 
 [dev-dependencies]
 tempfile.workspace = true

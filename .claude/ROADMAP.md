@@ -377,13 +377,17 @@ Applied patterns from the uv (Astral) codebase:
   - [x] Topological ordering for compilation
   - [x] Parallel compilation grouping
 
-### Native Build Orchestration (In Progress)
-- [ ] Replace `cabal build` with direct GHC invocation
-  - [x] Module dependency graph extraction ✅
-  - [ ] Parallel compilation with dependency tracking
-  - [ ] Incremental rebuild (only recompile changed modules)
+### Native Build Orchestration (Experimental)
+- [x] Direct GHC invocation infrastructure (`hx build --native`)
+  - [x] Module dependency graph extraction
+  - [x] Parallel compilation with dependency tracking
+  - [x] Incremental rebuild (only recompile changed modules)
+  - [x] Per-module build state tracking
+  - [x] GHC flag management
+- [ ] Full cabal replacement (future)
+  - [ ] Package database integration (for external deps)
   - [ ] Custom progress display during compilation
-  - [ ] GHC flag management from hx.toml
+  - [ ] GHC flag configuration from hx.toml
 
 ### Future Candidates
 - [ ] Custom templates from git repos
@@ -398,7 +402,7 @@ Applied patterns from the uv (Astral) codebase:
 
 ```
 hx init [--bin|--lib] [--ci]
-hx build [--package <name>]
+hx build [--package <name>] [--native]
 hx test [--package <name>]
 hx run [--package <name>]
 hx repl
