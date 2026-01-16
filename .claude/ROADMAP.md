@@ -433,6 +433,66 @@ Applied patterns from the uv (Astral) codebase:
 
 ---
 
+## v0.7.0 - Production & Ecosystem
+
+### Cross-Compilation Support
+- [ ] `hx build --target <triple>` for cross-compilation
+  - [ ] Target triple detection and validation
+  - [ ] GHC cross-compiler detection
+  - [ ] Cross-compilation flags for cabal
+  - [ ] Common targets: aarch64-linux, x86_64-windows
+
+### Nix Integration
+- [ ] `hx nix` command for Nix/flake generation
+  - [ ] Generate flake.nix from hx.toml
+  - [ ] Generate shell.nix for development
+  - [ ] Lockfile to Nix derivation mapping
+  - [ ] `hx nix shell` for nix-shell integration
+
+### Remote Build Caching
+- [ ] Remote cache support (sccache-like)
+  - [ ] S3/GCS/Azure blob storage backends
+  - [ ] Cache key generation from build inputs
+  - [ ] Upload/download compiled artifacts
+  - [ ] `hx cache remote configure`
+
+### Profiling Integration
+- [ ] `hx profile` command
+  - [ ] Build with profiling enabled (-prof)
+  - [ ] Run with RTS options (+RTS -p)
+  - [ ] Parse and display profiling output
+  - [ ] Heap profiling support (-hc, -hm)
+
+### Single-File Scripts
+- [ ] `hx script <file.hs>` command
+  - [ ] Parse dependencies from file header
+  - [ ] Cache compiled scripts
+  - [ ] Shebang support (#!/usr/bin/env hx script)
+  - [ ] REPL mode for scripts
+
+### Stack Project Import
+- [ ] `hx import --from stack` command
+  - [ ] Parse stack.yaml configuration
+  - [ ] Convert resolver to GHC version
+  - [ ] Map extra-deps to hx.toml dependencies
+  - [ ] Generate hx.lock from stack.yaml.lock
+
+### Package Search
+- [ ] `hx search <query>` command
+  - [ ] Search Hackage package index
+  - [ ] Display package info (description, version, deps)
+  - [ ] Filter by category, author, license
+  - [ ] Show download statistics
+
+### Dependency Audit
+- [ ] `hx audit` command
+  - [ ] Check for known vulnerabilities
+  - [ ] Detect outdated dependencies
+  - [ ] License compatibility checking
+  - [ ] Security advisories integration
+
+---
+
 ## Command Namespace (Final)
 
 ```
@@ -473,6 +533,13 @@ hx toolchain use
 hx index update [--force]
 hx index status
 hx index clear
+
+hx nix flake|shell [--output <file>]
+hx profile [--heap] [--time] <args>
+hx script <file.hs> [args]
+hx import --from stack|cabal
+hx search <query> [--limit <n>]
+hx audit [--fix] [--ignore <advisory>]
 
 hx completions <shell>
 hx upgrade [--check]

@@ -314,6 +314,118 @@ pub enum Commands {
         #[arg(long)]
         preview: bool,
     },
+
+    /// Nix/Flake integration
+    Nix {
+        #[command(subcommand)]
+        command: NixCommands,
+    },
+
+    /// Run with profiling enabled
+    Profile {
+        /// Enable heap profiling
+        #[arg(long)]
+        heap: bool,
+
+        /// Enable time profiling (default)
+        #[arg(long)]
+        time: bool,
+
+        /// Profiling detail level (default: 2)
+        #[arg(long, default_value = "2")]
+        detail: u8,
+
+        /// Arguments to pass to the program
+        #[arg(last = true)]
+        args: Vec<String>,
+    },
+
+    /// Run a single-file Haskell script
+    Script {
+        /// Path to the Haskell script
+        file: String,
+
+        /// Arguments to pass to the script
+        #[arg(last = true)]
+        args: Vec<String>,
+    },
+
+    /// Import project from another build tool
+    Import {
+        /// Source format to import from
+        #[arg(long, value_enum)]
+        from: ImportSource,
+
+        /// Path to source configuration (default: auto-detect)
+        #[arg(long)]
+        path: Option<String>,
+    },
+
+    /// Search for packages on Hackage
+    Search {
+        /// Search query
+        query: String,
+
+        /// Maximum results to show
+        #[arg(long, default_value = "10")]
+        limit: usize,
+
+        /// Show detailed package info
+        #[arg(long)]
+        detailed: bool,
+    },
+
+    /// Audit dependencies for vulnerabilities and issues
+    Audit {
+        /// Attempt to fix issues automatically
+        #[arg(long)]
+        fix: bool,
+
+        /// Ignore specific advisories
+        #[arg(long)]
+        ignore: Vec<String>,
+
+        /// Check for outdated dependencies
+        #[arg(long)]
+        outdated: bool,
+
+        /// Check license compatibility
+        #[arg(long)]
+        licenses: bool,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum ImportSource {
+    /// Import from stack.yaml
+    Stack,
+    /// Import from cabal.project
+    Cabal,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum NixCommands {
+    /// Generate a flake.nix file
+    Flake {
+        /// Output file (default: flake.nix)
+        #[arg(long, short)]
+        output: Option<String>,
+
+        /// Overwrite existing file
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Generate a shell.nix file
+    Shell {
+        /// Output file (default: shell.nix)
+        #[arg(long, short)]
+        output: Option<String>,
+
+        /// Overwrite existing file
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]

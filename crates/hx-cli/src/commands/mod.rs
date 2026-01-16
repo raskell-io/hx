@@ -1,5 +1,6 @@
 //! Command implementations.
 
+mod audit;
 mod bench;
 mod build;
 mod cache;
@@ -12,17 +13,22 @@ mod doctor;
 mod fetch;
 mod fmt;
 mod ide;
+mod import;
 mod index;
 mod init;
 mod lint;
 mod lock;
 mod new;
+mod nix;
+mod profile;
 mod publish;
 mod run;
+mod script;
+mod search;
 mod toolchain;
 mod upgrade;
 
-use crate::cli::{ArtifactCommands, CacheCommands, Cli, Commands, GlobalArgs, IndexCommands};
+use crate::cli::{ArtifactCommands, CacheCommands, Cli, Commands, GlobalArgs, IndexCommands, NixCommands};
 use anyhow::Result;
 use hx_toolchain::AutoInstallPolicy;
 use hx_ui::{Output, Printer, Verbosity};
@@ -136,6 +142,33 @@ pub async fn run(cli: Cli) -> Result<i32> {
                 ArtifactCommands::Clear => cache::artifacts_clear(&output).await,
             },
         },
+        Some(Commands::Nix { command }) => match command {
+            NixCommands::Flake { output: out_file, force } => {
+                nix::flake(out_file, force, &output).await
+            }
+            NixCommands::Shell { output: out_file, force } => {
+                nix::shell(out_file, force, &output).await
+            }
+        },
+        Some(Commands::Profile {
+            heap,
+            time,
+            detail,
+            args,
+        }) => profile::run(heap, time, detail, args, policy, &output).await,
+        Some(Commands::Script { file, args }) => script::run(&file, args, &output).await,
+        Some(Commands::Import { from, path }) => import::run(from, path, &output).await,
+        Some(Commands::Search {
+            query,
+            limit,
+            detailed,
+        }) => search::run(&query, limit, detailed, &output).await,
+        Some(Commands::Audit {
+            fix,
+            ignore,
+            outdated,
+            licenses,
+        }) => audit::run(fix, ignore, outdated, licenses, &output).await,
         None => {
             // No command - show help
             use clap::CommandFactory;

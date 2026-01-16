@@ -1,0 +1,356 @@
+//! Import from other build tools (Stack, Cabal).
+
+use anyhow::{Context, Result, bail};
+use hx_ui::Output;
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+
+use crate::cli::ImportSource;
+
+/// Run the import command.
+pub async fn run(
+    source: ImportSource,
+    path: Option<String>,
+    output: &Output,
+) -> Result<i32> {
+    match source {
+        ImportSource::Stack => import_from_stack(path, output).await,
+        ImportSource::Cabal => import_from_cabal(path, output).await,
+    }
+}
+
+/// Import from stack.yaml.
+async fn import_from_stack(path: Option<String>, output: &Output) -> Result<i32> {
+    let stack_yaml = path.unwrap_or_else(|| "stack.yaml".to_string());
+    let stack_path = Path::new(&stack_yaml);
+
+    if !stack_path.exists() {
+        output.error(&format!("{} not found", stack_yaml));
+        output.info("Specify path with --path or run from a Stack project directory");
+        return Ok(1);
+    }
+
+    output.status("Importing", &format!("from {}", stack_yaml));
+
+    let content = fs::read_to_string(stack_path)
+        .with_context(|| format!("Failed to read {}", stack_yaml))?;
+
+    // Parse stack.yaml (basic YAML parsing)
+    let stack_config = parse_stack_yaml(&content)?;
+
+    // Convert resolver to GHC version
+    let ghc_version = resolver_to_ghc(&stack_config.resolver);
+
+    output.list_item("resolver", &stack_config.resolver);
+    output.list_item("ghc version", &ghc_version);
+
+    // Build hx.toml content
+    let mut hx_toml = format!(
+        r#"[project]
+name = "{}"
+
+[toolchain]
+ghc = "{}"
+"#,
+        stack_config.name.as_deref().unwrap_or("project"),
+        ghc_version
+    );
+
+    // Add dependencies
+    if !stack_config.extra_deps.is_empty() {
+        hx_toml.push_str("\n[dependencies]\n");
+        for dep in &stack_config.extra_deps {
+            let (name, version) = parse_dependency(dep);
+            hx_toml.push_str(&format!("{} = \"{}\"\n", name, version));
+            output.list_item("dependency", dep);
+        }
+    }
+
+    // Check for existing hx.toml
+    let hx_toml_path = Path::new("hx.toml");
+    if hx_toml_path.exists() {
+        output.warn("hx.toml already exists");
+        output.info("Generated configuration:");
+        println!("\n{}", hx_toml);
+        output.info("Manually merge the above into your existing hx.toml");
+        return Ok(0);
+    }
+
+    // Write hx.toml
+    fs::write(hx_toml_path, &hx_toml)
+        .context("Failed to write hx.toml")?;
+
+    output.status("Created", "hx.toml");
+
+    // Remind about lockfile
+    output.info("Run `hx lock` to generate the lockfile");
+
+    Ok(0)
+}
+
+/// Import from cabal.project.
+async fn import_from_cabal(path: Option<String>, output: &Output) -> Result<i32> {
+    let cabal_project = path.unwrap_or_else(|| "cabal.project".to_string());
+    let cabal_path = Path::new(&cabal_project);
+
+    if !cabal_path.exists() {
+        output.error(&format!("{} not found", cabal_project));
+        return Ok(1);
+    }
+
+    output.status("Importing", &format!("from {}", cabal_project));
+
+    let content = fs::read_to_string(cabal_path)
+        .with_context(|| format!("Failed to read {}", cabal_project))?;
+
+    // Parse cabal.project
+    let cabal_config = parse_cabal_project(&content);
+
+    // Find the package name from .cabal file
+    let package_name = find_cabal_package_name()?;
+
+    // Build hx.toml
+    let mut hx_toml = format!(
+        r#"[project]
+name = "{}"
+"#,
+        package_name.as_deref().unwrap_or("project")
+    );
+
+    // Add GHC version if specified
+    if let Some(ghc) = &cabal_config.with_compiler {
+        let version = ghc.strip_prefix("ghc-").unwrap_or(ghc);
+        hx_toml.push_str(&format!(
+            r#"
+[toolchain]
+ghc = "{}"
+"#,
+            version
+        ));
+        output.list_item("ghc", version);
+    }
+
+    // Add constraints as dependencies
+    if !cabal_config.constraints.is_empty() {
+        hx_toml.push_str("\n[dependencies]\n");
+        for constraint in &cabal_config.constraints {
+            let (name, version) = parse_constraint(constraint);
+            if !version.is_empty() {
+                hx_toml.push_str(&format!("{} = \"{}\"\n", name, version));
+                output.list_item("constraint", constraint);
+            }
+        }
+    }
+
+    // Check for existing hx.toml
+    let hx_toml_path = Path::new("hx.toml");
+    if hx_toml_path.exists() {
+        output.warn("hx.toml already exists");
+        output.info("Generated configuration:");
+        println!("\n{}", hx_toml);
+        return Ok(0);
+    }
+
+    fs::write(hx_toml_path, &hx_toml)
+        .context("Failed to write hx.toml")?;
+
+    output.status("Created", "hx.toml");
+    output.info("Run `hx lock` to generate the lockfile");
+
+    Ok(0)
+}
+
+/// Basic stack.yaml configuration.
+#[derive(Debug, Default)]
+struct StackConfig {
+    name: Option<String>,
+    resolver: String,
+    extra_deps: Vec<String>,
+    packages: Vec<String>,
+}
+
+/// Parse stack.yaml content.
+fn parse_stack_yaml(content: &str) -> Result<StackConfig> {
+    let mut config = StackConfig::default();
+    let mut in_extra_deps = false;
+    let mut in_packages = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        // Skip comments and empty lines
+        if trimmed.starts_with('#') || trimmed.is_empty() {
+            continue;
+        }
+
+        // Check for section starts
+        if trimmed.starts_with("extra-deps:") {
+            in_extra_deps = true;
+            in_packages = false;
+            continue;
+        }
+
+        if trimmed.starts_with("packages:") {
+            in_packages = true;
+            in_extra_deps = false;
+            continue;
+        }
+
+        // Parse resolver
+        if let Some(resolver) = trimmed.strip_prefix("resolver:") {
+            config.resolver = resolver.trim().to_string();
+            in_extra_deps = false;
+            in_packages = false;
+            continue;
+        }
+
+        // Parse list items
+        if trimmed.starts_with("- ") {
+            let value = trimmed.strip_prefix("- ").unwrap().trim().to_string();
+            if in_extra_deps {
+                config.extra_deps.push(value);
+            } else if in_packages {
+                config.packages.push(value);
+            }
+            continue;
+        }
+
+        // Other top-level keys end current section
+        if !trimmed.starts_with(' ') && !trimmed.starts_with('\t') && trimmed.contains(':') {
+            in_extra_deps = false;
+            in_packages = false;
+        }
+    }
+
+    if config.resolver.is_empty() {
+        bail!("No resolver found in stack.yaml");
+    }
+
+    Ok(config)
+}
+
+/// Convert Stack resolver to GHC version.
+fn resolver_to_ghc(resolver: &str) -> String {
+    // LTS resolvers map to GHC versions
+    // This is a simplified mapping; a real implementation would use a lookup table
+    let resolver_ghc_map: HashMap<&str, &str> = [
+        ("lts-22", "9.6.4"),
+        ("lts-21", "9.4.8"),
+        ("lts-20", "9.2.8"),
+        ("lts-19", "9.0.2"),
+        ("lts-18", "8.10.7"),
+        ("nightly", "9.8.2"),
+    ]
+    .into_iter()
+    .collect();
+
+    // Try exact match first
+    if let Some(ghc) = resolver_ghc_map.get(resolver) {
+        return ghc.to_string();
+    }
+
+    // Try prefix match (e.g., lts-22.7 -> lts-22)
+    for (prefix, ghc) in &resolver_ghc_map {
+        if resolver.starts_with(prefix) {
+            return ghc.to_string();
+        }
+    }
+
+    // Check for ghc- prefix in resolver
+    if let Some(version) = resolver.strip_prefix("ghc-") {
+        return version.to_string();
+    }
+
+    // Default to recent GHC
+    "9.6.4".to_string()
+}
+
+/// Parse a dependency string like "package-1.2.3" or "package-1.2.3@sha256:..."
+fn parse_dependency(dep: &str) -> (String, String) {
+    // Remove hash suffix if present
+    let dep = dep.split('@').next().unwrap_or(dep);
+
+    // Find the last dash followed by a digit (version separator)
+    let mut last_dash = None;
+    for (i, c) in dep.char_indices() {
+        if c == '-' && dep[i + 1..].starts_with(|c: char| c.is_ascii_digit()) {
+            last_dash = Some(i);
+        }
+    }
+
+    if let Some(pos) = last_dash {
+        (dep[..pos].to_string(), dep[pos + 1..].to_string())
+    } else {
+        (dep.to_string(), "*".to_string())
+    }
+}
+
+/// Basic cabal.project configuration.
+#[derive(Debug, Default)]
+struct CabalProjectConfig {
+    with_compiler: Option<String>,
+    constraints: Vec<String>,
+    packages: Vec<String>,
+}
+
+/// Parse cabal.project content.
+fn parse_cabal_project(content: &str) -> CabalProjectConfig {
+    let mut config = CabalProjectConfig::default();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if let Some(compiler) = trimmed.strip_prefix("with-compiler:") {
+            config.with_compiler = Some(compiler.trim().to_string());
+        }
+
+        if let Some(constraint) = trimmed.strip_prefix("constraints:") {
+            for c in constraint.split(',') {
+                let c = c.trim();
+                if !c.is_empty() {
+                    config.constraints.push(c.to_string());
+                }
+            }
+        }
+
+        if let Some(packages) = trimmed.strip_prefix("packages:") {
+            for p in packages.split_whitespace() {
+                config.packages.push(p.to_string());
+            }
+        }
+    }
+
+    config
+}
+
+/// Parse a constraint like "package ==1.2.3" or "package >= 1.0"
+fn parse_constraint(constraint: &str) -> (String, String) {
+    let parts: Vec<&str> = constraint.split_whitespace().collect();
+    if parts.len() >= 2 {
+        let name = parts[0];
+        let version = parts[1..].join(" ");
+        (name.to_string(), version)
+    } else {
+        (constraint.to_string(), String::new())
+    }
+}
+
+/// Find package name from .cabal file in current directory.
+fn find_cabal_package_name() -> Result<Option<String>> {
+    let entries = fs::read_dir(".")?;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().map(|e| e == "cabal").unwrap_or(false) {
+            let content = fs::read_to_string(&path)?;
+            for line in content.lines() {
+                if let Some(name) = line.strip_prefix("name:") {
+                    return Ok(Some(name.trim().to_string()));
+                }
+            }
+        }
+    }
+
+    Ok(None)
+}
