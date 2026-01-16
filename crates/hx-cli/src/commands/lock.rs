@@ -1,15 +1,24 @@
 //! Lock command implementation.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use hx_cabal::freeze;
 use hx_config::{LOCKFILE_FILENAME, Project, find_project_root};
-use hx_lock::{Lockfile, WorkspacePackageInfo, parse_freeze_file};
+use hx_lock::{LockedPackage, Lockfile, WorkspacePackageInfo, parse_freeze_file};
+use hx_solver::{
+    compute_deps_fingerprint, default_index_path, load_cached_index, load_cached_resolution,
+    load_index, parse_cabal, save_index_cache, save_resolution_cache, Dependency, IndexOptions,
+    Resolver, ResolverConfig,
+};
 use hx_toolchain::Toolchain;
 use hx_ui::{Output, Spinner};
 use std::path::Path;
 
 /// Run the lock command.
-pub async fn run(output: &Output) -> Result<i32> {
+pub async fn run(use_cabal: bool, output: &Output) -> Result<i32> {
+    // Default is native solver, --cabal uses cabal freeze
+    if !use_cabal {
+        return run_native(output).await;
+    }
     // Find project root
     let project_root = find_project_root(".")?;
     let project = Project::load(&project_root)?;
@@ -61,6 +70,172 @@ pub async fn run(output: &Output) -> Result<i32> {
         if !workspace_names.contains(&pkg.name) {
             lockfile.add_package(pkg);
         }
+    }
+
+    // Calculate fingerprint
+    let fingerprint = lockfile.fingerprint();
+    lockfile.plan.hash = Some(fingerprint);
+
+    // Detect platform
+    lockfile.plan.platform = Some(detect_platform());
+
+    // Write lockfile
+    let lockfile_path = project.lockfile_path();
+    lockfile.to_file(&lockfile_path)?;
+
+    if project.is_workspace() {
+        spinner.finish_success(format!(
+            "Created {} with {} workspace packages and {} external dependencies",
+            LOCKFILE_FILENAME,
+            lockfile.workspace.packages.len(),
+            lockfile.packages.len()
+        ));
+    } else {
+        spinner.finish_success(format!(
+            "Created {} with {} packages",
+            LOCKFILE_FILENAME,
+            lockfile.packages.len()
+        ));
+    }
+
+    output.info(&format!("Lockfile: {}", lockfile_path.display()));
+
+    Ok(0)
+}
+
+/// Run the lock command using the native solver.
+async fn run_native(output: &Output) -> Result<i32> {
+    // Find project root
+    let project_root = find_project_root(".")?;
+    let project = Project::load(&project_root)?;
+
+    if project.is_workspace() {
+        output.status(
+            "Locking",
+            &format!("{} ({} packages)", project.name(), project.package_count()),
+        );
+    } else {
+        output.status("Locking", project.name());
+    }
+
+    // Collect dependencies from project .cabal files first
+    // (so we can check the resolution cache before loading the index)
+    let spinner = Spinner::new("Collecting project dependencies...");
+    let mut all_deps: Vec<Dependency> = Vec::new();
+    let workspace_names: Vec<String> = project
+        .package_names()
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+
+    for pkg in &project.workspace_packages {
+        let content = std::fs::read_to_string(&pkg.cabal_file)
+            .with_context(|| format!("Failed to read {}", pkg.cabal_file.display()))?;
+        let cabal = parse_cabal(&content);
+        for dep in cabal.all_dependencies() {
+            // Skip workspace packages
+            if !workspace_names.contains(&dep.name) && !all_deps.iter().any(|d| d.name == dep.name)
+            {
+                all_deps.push(dep);
+            }
+        }
+    }
+    spinner.finish_success(format!("Found {} dependencies", all_deps.len()));
+
+    // Compute fingerprint for dependencies (for resolution cache)
+    let deps_for_fingerprint: Vec<(String, String)> = all_deps
+        .iter()
+        .map(|d| (d.name.clone(), d.constraint.to_string()))
+        .collect();
+    let deps_fingerprint = compute_deps_fingerprint(&deps_for_fingerprint);
+
+    // Try to load cached resolution
+    let plan = if let Ok(cached_plan) = load_cached_resolution(&deps_fingerprint) {
+        output.info("Using cached resolution");
+        cached_plan
+    } else {
+        // Find the Hackage index
+        let index_path = default_index_path().context(
+            "Hackage index not found. Run `cabal update` to download the package index.",
+        )?;
+
+        // Try to load cached index, fall back to parsing the tar.gz
+        let spinner = Spinner::new("Loading package index...");
+        let index = match load_cached_index(&index_path) {
+            Ok(cached_index) => {
+                spinner.finish_success(format!(
+                    "Loaded {} packages from cache",
+                    cached_index.package_count()
+                ));
+                cached_index
+            }
+            Err(_) => {
+                // Parse from source and cache
+                let index = load_index(&index_path, &IndexOptions::default())
+                    .context("Failed to load Hackage index")?;
+
+                // Save to cache for next time
+                if let Err(e) = save_index_cache(&index, &index_path) {
+                    output.warn(&format!("Failed to cache index: {}", e));
+                }
+
+                spinner.finish_success(format!(
+                    "Loaded {} packages with {} versions",
+                    index.package_count(),
+                    index.version_count()
+                ));
+                index
+            }
+        };
+
+        // Run the resolver
+        let spinner = Spinner::new("Resolving dependencies...");
+        let config = ResolverConfig::default();
+        let resolver = Resolver::with_config(&index, config);
+
+        let plan = resolver
+            .resolve_all(&all_deps)
+            .context("Failed to resolve dependencies")?;
+
+        // Cache the resolution result
+        if let Err(e) = save_resolution_cache(&deps_fingerprint, &plan) {
+            output.warn(&format!("Failed to cache resolution: {}", e));
+        }
+
+        spinner.finish_success(format!("Resolved {} packages", plan.packages.len()));
+        plan
+    };
+
+    // Create lockfile
+    let spinner = Spinner::new("Creating lockfile...");
+
+    let mut lockfile = Lockfile::new();
+
+    // Set toolchain versions from detected tools
+    let toolchain = Toolchain::detect().await;
+    lockfile.set_toolchain(
+        toolchain.ghc.status.version().map(|v| v.to_string()),
+        toolchain.cabal.status.version().map(|v| v.to_string()),
+    );
+
+    // Set workspace info if this is a workspace
+    if project.is_workspace() {
+        let workspace_packages = collect_workspace_packages(&project);
+        lockfile.set_workspace(workspace_packages);
+    }
+
+    // Add resolved packages to lockfile
+    for pkg in &plan.packages {
+        // Skip base packages (they come with GHC)
+        if pkg.name == "base" || pkg.name == "ghc-prim" || pkg.name == "integer-gmp" {
+            continue;
+        }
+        lockfile.add_package(LockedPackage {
+            name: pkg.name.clone(),
+            version: pkg.version.to_string(),
+            source: "hackage".to_string(),
+            hash: None,
+        });
     }
 
     // Calculate fingerprint

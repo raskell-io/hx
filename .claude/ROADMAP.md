@@ -302,17 +302,21 @@ Applied patterns from the uv (Astral) codebase:
 
 ---
 
-## Future: v0.3.0 - Replace Selected Cabal Parts
+## v0.3.0 - Replace Selected Cabal Parts ✅
 
 ### Lock Resolution Layer
-- [ ] Custom dependency resolver
-  - Parse package constraints from Hackage index
-  - Implement version resolution algorithm
-  - Generate solve plans without calling cabal freeze
-- [ ] Offline solver cache
-  - Cache resolution results for faster repeated solves
-  - Invalidate on index-state change
-- [ ] Controlled Hackage index mirroring
+- [x] Custom dependency resolver (`hx-solver` crate)
+  - [x] PVP version parsing and constraints (==, >=, >, <, <=, ^>=, &&, ||)
+  - [x] Hackage 01-index.tar.gz parsing
+  - [x] .cabal file parsing for build-depends extraction
+  - [x] Backtracking dependency resolution algorithm
+  - [x] Cycle detection in dependency graphs
+  - [x] Native solver is now the default (`hx lock --cabal` for old behavior)
+- [x] Offline solver cache
+  - [x] Binary caching of PackageIndex (bincode serialization)
+  - [x] Resolution result caching keyed by dependency fingerprint
+  - [x] Automatic cache invalidation when source changes
+- [ ] Controlled Hackage index mirroring (future)
   - Local package index management
   - Faster index updates
   - Offline-capable resolution
@@ -337,7 +341,7 @@ hx fmt [--check]
 hx lint [--fix]
 hx doctor
 
-hx lock
+hx lock [--cabal]
 hx fetch [-j <jobs>]
 hx sync
 hx clean [--global]

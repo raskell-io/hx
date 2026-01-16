@@ -24,6 +24,7 @@ hx-doctor.workspace = true
 hx-ui.workspace = true
 hx-telemetry.workspace = true
 hx-warnings.workspace = true
+hx-solver.workspace = true
 
 clap.workspace = true
 clap_complete.workspace = true

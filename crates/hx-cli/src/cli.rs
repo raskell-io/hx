@@ -140,7 +140,11 @@ pub enum Commands {
     Doctor,
 
     /// Create or update the lockfile
-    Lock,
+    Lock {
+        /// Use cabal freeze instead of native solver
+        #[arg(long)]
+        cabal: bool,
+    },
 
     /// Pre-fetch dependencies in parallel
     Fetch {

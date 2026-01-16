@@ -1,10 +1,11 @@
 //! Package metadata types for dependency resolution.
 
 use crate::version::{Version, VersionConstraint};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// A dependency on another package.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Dependency {
     /// Package name
     pub name: String,
@@ -40,7 +41,7 @@ impl Dependency {
 }
 
 /// Metadata about a single package version.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageVersion {
     /// Package name
     pub name: String,
@@ -73,7 +74,7 @@ impl PackageVersion {
 }
 
 /// All available versions of a package.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Package {
     /// Package name
     pub name: String,
@@ -117,7 +118,7 @@ impl Package {
 }
 
 /// The package index containing all available packages.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PackageIndex {
     /// All packages by name
     pub packages: HashMap<String, Package>,
@@ -160,7 +161,7 @@ impl PackageIndex {
 }
 
 /// A resolved dependency in the installation plan.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResolvedPackage {
     /// Package name
     pub name: String,
@@ -171,7 +172,7 @@ pub struct ResolvedPackage {
 }
 
 /// An installation plan with resolved versions.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct InstallPlan {
     /// Resolved packages in topological order (dependencies first)
     pub packages: Vec<ResolvedPackage>,

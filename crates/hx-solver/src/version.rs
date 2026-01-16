@@ -5,12 +5,13 @@
 //! - C is the minor version (non-breaking additions)
 //! - D is the patch version (bug fixes)
 
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fmt;
 use std::str::FromStr;
 
 /// A PVP-compliant version number.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Version {
     /// Version components (e.g., [1, 2, 3, 0] for "1.2.3.0")
     pub components: Vec<u32>,
@@ -104,7 +105,7 @@ pub enum VersionParseError {
 }
 
 /// A version constraint that can match versions.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VersionConstraint {
     /// Any version matches
     Any,
