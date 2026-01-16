@@ -1,10 +1,11 @@
 //! Publish to Hackage command implementation.
 
 use anyhow::Result;
-use hx_config::find_project_root;
+use hx_config::{Project, find_project_root};
 use hx_core::CommandRunner;
 use hx_ui::{Output, Spinner};
 use std::fs;
+use std::path::Path;
 
 /// Run the publish command.
 pub async fn run(
@@ -15,6 +16,7 @@ pub async fn run(
     output: &Output,
 ) -> Result<i32> {
     let project_root = find_project_root(".")?;
+    let _project = Project::load(&project_root)?;
 
     // Find the cabal file to get package info
     let cabal_files: Vec<_> = fs::read_dir(&project_root)?
@@ -37,6 +39,98 @@ pub async fn run(
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("package");
+
+    output.status("Pre-publish", "running checks...");
+
+    // Run pre-publish checks
+    let mut issues = Vec::new();
+
+    // Check 1: Version in cabal file
+    let cabal_version = extract_cabal_version(cabal_file);
+    if let Some(version) = &cabal_version {
+        output.list_item("version", version);
+    } else {
+        issues.push("Could not extract version from .cabal file");
+    }
+
+    // Check 2: Changelog exists and mentions version
+    let changelog_path = project_root.join("CHANGELOG.md");
+    if changelog_path.exists() {
+        if let Some(version) = &cabal_version {
+            let changelog = fs::read_to_string(&changelog_path).unwrap_or_default();
+            if changelog.contains(version) {
+                output.list_item("changelog", &format!("mentions v{}", version));
+            } else {
+                output.list_item("changelog", "exists (version not mentioned)");
+                issues.push("CHANGELOG.md does not mention the current version");
+            }
+        } else {
+            output.list_item("changelog", "exists");
+        }
+    } else {
+        output.list_item("changelog", "missing");
+        issues.push("No CHANGELOG.md found (run `hx changelog` to generate)");
+    }
+
+    // Check 3: Git status clean
+    let runner = CommandRunner::new().with_working_dir(&project_root);
+    let git_status = runner.run("git", ["status", "--porcelain"]).await;
+    if let Ok(status) = git_status {
+        if status.stdout.trim().is_empty() {
+            output.list_item("git status", "clean");
+        } else {
+            output.list_item("git status", "uncommitted changes");
+            issues.push("Working directory has uncommitted changes");
+        }
+    }
+
+    // Check 4: Git tag matches version
+    if let Some(version) = &cabal_version {
+        let expected_tag = format!("v{}", version);
+        let tag_check = runner.run("git", ["tag", "-l", &expected_tag]).await;
+        if let Ok(tag_output) = tag_check {
+            if tag_output.stdout.trim() == expected_tag {
+                output.list_item("git tag", &format!("{} exists", expected_tag));
+            } else {
+                output.list_item("git tag", &format!("{} missing", expected_tag));
+                issues.push("Git tag for current version does not exist");
+            }
+        }
+    }
+
+    // Check 5: Tests pass
+    if !dry_run {
+        let spinner = Spinner::new("Running tests...");
+        let test_output = runner.run("cabal", ["test"]).await;
+        match test_output {
+            Ok(result) if result.success() => {
+                spinner.finish_success("Tests passed");
+            }
+            Ok(result) => {
+                spinner.finish_error("Tests failed");
+                if !result.stderr.is_empty() {
+                    output.verbose(&result.stderr);
+                }
+                issues.push("Tests failed");
+            }
+            Err(_) => {
+                spinner.finish_error("Could not run tests");
+            }
+        }
+    }
+
+    // Report issues
+    if !issues.is_empty() {
+        output.warn(&format!("{} issue(s) found:", issues.len()));
+        for issue in &issues {
+            output.info(&format!("  - {}", issue));
+        }
+
+        if !dry_run {
+            output.error("Fix issues before publishing, or use --dry-run to see all checks");
+            return Ok(1);
+        }
+    }
 
     if dry_run {
         output.status("Dry run", "checking package...");
@@ -149,4 +243,23 @@ pub async fn run(
     output.status("Published", &format!("{} to Hackage", package_name));
 
     Ok(0)
+}
+
+/// Extract version from a .cabal file.
+fn extract_cabal_version(cabal_file: &Path) -> Option<String> {
+    let content = fs::read_to_string(cabal_file).ok()?;
+
+    for line in content.lines() {
+        let trimmed = line.trim().to_lowercase();
+        if trimmed.starts_with("version:") {
+            let version = line
+                .trim()
+                .strip_prefix("version:")
+                .or_else(|| line.trim().strip_prefix("Version:"))
+                .map(|v| v.trim().to_string());
+            return version;
+        }
+    }
+
+    None
 }

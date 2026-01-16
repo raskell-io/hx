@@ -2,7 +2,8 @@
 
 use anyhow::{Context, Result};
 use hx_config::find_project_root;
-use hx_ui::Output;
+use hx_core::CommandRunner;
+use hx_ui::{Output, Spinner};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -21,6 +22,9 @@ pub async fn run(command: NewCommands, output: &Output) -> Result<i32> {
         NewCommands::Webapp { name, dir } => create_project_from_template(&name, dir, "webapp", output),
         NewCommands::Cli { name, dir } => create_project_from_template(&name, dir, "cli", output),
         NewCommands::Library { name, dir } => create_project_from_template(&name, dir, "library", output),
+        NewCommands::Template { url, name, dir, branch } => {
+            create_project_from_git_template(&url, &name, dir, &branch, output).await
+        }
     }
 }
 
@@ -249,4 +253,199 @@ benchmarks = bgroup "{name}"
 "#,
         name = name
     )
+}
+
+/// Create a project from a git repository template.
+async fn create_project_from_git_template(
+    url: &str,
+    name: &str,
+    dir: Option<String>,
+    branch: &str,
+    output: &Output,
+) -> Result<i32> {
+    let target_dir = dir.unwrap_or_else(|| name.to_string());
+    let target_path = Path::new(&target_dir);
+
+    // Check if directory already exists and is not empty
+    if target_path.exists() {
+        let entries: Vec<_> = fs::read_dir(target_path)?.collect();
+        if !entries.is_empty() {
+            output.error(&format!(
+                "Directory '{}' already exists and is not empty",
+                target_dir
+            ));
+            return Ok(1);
+        }
+    }
+
+    // Normalize the URL (support GitHub shorthand)
+    let git_url = normalize_git_url(url);
+
+    output.status("Cloning", &format!("template from {}", git_url));
+
+    // Clone the repository
+    let spinner = Spinner::new("Downloading template...");
+
+    let runner = CommandRunner::new();
+    let clone_output = runner
+        .run(
+            "git",
+            [
+                "clone",
+                "--depth=1",
+                "--branch",
+                branch,
+                &git_url,
+                &target_dir,
+            ],
+        )
+        .await;
+
+    match clone_output {
+        Ok(result) if result.success() => {
+            spinner.finish_success("Template downloaded");
+        }
+        Ok(result) => {
+            spinner.finish_error("Clone failed");
+            eprintln!("{}", result.stderr);
+
+            // Try without branch specification
+            output.info("Retrying without branch specification...");
+            let retry = runner
+                .run("git", ["clone", "--depth=1", &git_url, &target_dir])
+                .await?;
+
+            if !retry.success() {
+                output.error("Failed to clone template repository");
+                eprintln!("{}", retry.stderr);
+                return Ok(1);
+            }
+        }
+        Err(e) => {
+            spinner.finish_error("Clone failed");
+            output.error(&format!("Git error: {}", e));
+            return Ok(1);
+        }
+    }
+
+    // Remove .git directory to start fresh
+    let git_dir = target_path.join(".git");
+    if git_dir.exists() {
+        fs::remove_dir_all(&git_dir)
+            .with_context(|| "Failed to remove .git directory")?;
+    }
+
+    // Apply template variable substitution
+    let spinner = Spinner::new("Applying template variables...");
+
+    let ctx = TemplateContext::new(name);
+    apply_template_substitutions(target_path, &ctx)?;
+
+    // Rename files that contain template variables in their names
+    rename_template_files(target_path, &ctx)?;
+
+    spinner.finish_success("Template customized");
+
+    // Initialize new git repository
+    let _ = std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(target_path)
+        .status();
+
+    output.status("Created", &format!("project '{}' in '{}'", name, target_dir));
+    output.info("");
+    output.info("Next steps:");
+    output.info(&format!("  cd {}", target_dir));
+    output.info("  hx build");
+
+    Ok(0)
+}
+
+/// Normalize a git URL, supporting GitHub shorthand (user/repo).
+fn normalize_git_url(url: &str) -> String {
+    // If it's already a full URL, return as-is
+    if url.starts_with("http://")
+        || url.starts_with("https://")
+        || url.starts_with("git@")
+        || url.starts_with("ssh://")
+    {
+        return url.to_string();
+    }
+
+    // Check for GitHub shorthand (user/repo)
+    if url.contains('/') && !url.contains(':') {
+        return format!("https://github.com/{}.git", url);
+    }
+
+    url.to_string()
+}
+
+/// Apply template variable substitutions to all files in a directory.
+fn apply_template_substitutions(dir: &Path, ctx: &TemplateContext) -> Result<()> {
+    let entries: Vec<_> = walkdir::WalkDir::new(dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .collect();
+
+    for entry in entries {
+        let path = entry.path();
+
+        // Skip binary files
+        if is_binary_file(path) {
+            continue;
+        }
+
+        // Read and substitute
+        if let Ok(content) = fs::read_to_string(path) {
+            let substituted = ctx.substitute(&content);
+            if substituted != content {
+                fs::write(path, substituted)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Rename files that contain template variables in their names.
+fn rename_template_files(dir: &Path, ctx: &TemplateContext) -> Result<()> {
+    let entries: Vec<_> = walkdir::WalkDir::new(dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .collect();
+
+    // Process in reverse order (deepest first) to handle nested renames
+    for entry in entries.into_iter().rev() {
+        let path = entry.path();
+        let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+        // Check if filename contains template variables
+        if file_name.contains("{{") {
+            let new_name = ctx.substitute(file_name);
+            if new_name != file_name {
+                let new_path = path.with_file_name(&new_name);
+                fs::rename(path, &new_path)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Check if a file is likely binary.
+fn is_binary_file(path: &Path) -> bool {
+    let binary_extensions = [
+        "png", "jpg", "jpeg", "gif", "ico", "bmp", "webp",
+        "pdf", "zip", "tar", "gz", "bz2", "xz", "7z",
+        "exe", "dll", "so", "dylib", "a", "o",
+        "woff", "woff2", "ttf", "otf", "eot",
+        "mp3", "mp4", "avi", "mov", "wav", "ogg",
+        "sqlite", "db",
+    ];
+
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| binary_extensions.contains(&e.to_lowercase().as_str()))
+        .unwrap_or(false)
 }

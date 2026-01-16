@@ -3,9 +3,11 @@
 mod bench;
 mod build;
 mod cache;
+mod changelog;
 mod clean;
 mod completions;
 mod deps;
+mod docs;
 mod doctor;
 mod fetch;
 mod fmt;
@@ -112,6 +114,18 @@ pub async fn run(cli: Cli) -> Result<i32> {
             IndexCommands::Status => index::status(&output).await,
             IndexCommands::Clear { yes } => index::clear(yes, &output).await,
         },
+        Some(Commands::Docs {
+            open,
+            deps,
+            serve,
+            port,
+        }) => docs::run(open, deps, serve, port, &output).await,
+        Some(Commands::Changelog {
+            unreleased,
+            output: output_file,
+            all,
+            preview,
+        }) => changelog::run(unreleased, output_file, all, preview, &output).await,
         Some(Commands::Cache { command }) => match command {
             CacheCommands::Status => cache::status(&output).await,
             CacheCommands::Prune { days } => cache::prune(days, &output).await,

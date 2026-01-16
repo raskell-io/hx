@@ -276,6 +276,44 @@ pub enum Commands {
         #[command(subcommand)]
         command: IndexCommands,
     },
+
+    /// Generate documentation
+    Docs {
+        /// Open in browser after generating
+        #[arg(long)]
+        open: bool,
+
+        /// Include dependency documentation
+        #[arg(long)]
+        deps: bool,
+
+        /// Serve documentation locally
+        #[arg(long)]
+        serve: bool,
+
+        /// Port for local server (default: 8080)
+        #[arg(long, default_value = "8080")]
+        port: u16,
+    },
+
+    /// Generate or update CHANGELOG.md from git history
+    Changelog {
+        /// Only show unreleased changes (since last tag)
+        #[arg(long)]
+        unreleased: bool,
+
+        /// Output file (default: CHANGELOG.md)
+        #[arg(long, short)]
+        output: Option<String>,
+
+        /// Include all commits (not just conventional commits)
+        #[arg(long)]
+        all: bool,
+
+        /// Show changelog preview without writing
+        #[arg(long)]
+        preview: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -385,6 +423,23 @@ pub enum NewCommands {
         /// Target directory (defaults to project name)
         #[arg(long)]
         dir: Option<String>,
+    },
+
+    /// Create a project from a git repository template
+    Template {
+        /// Git repository URL or GitHub shorthand (user/repo)
+        url: String,
+
+        /// Project name
+        name: String,
+
+        /// Target directory (defaults to project name)
+        #[arg(long)]
+        dir: Option<String>,
+
+        /// Git branch to use
+        #[arg(long, default_value = "main")]
+        branch: String,
     },
 }
 

@@ -377,24 +377,59 @@ Applied patterns from the uv (Astral) codebase:
   - [x] Topological ordering for compilation
   - [x] Parallel compilation grouping
 
-### Native Build Orchestration (Experimental)
+### Native Build Orchestration (Experimental) ✅
 - [x] Direct GHC invocation infrastructure (`hx build --native`)
   - [x] Module dependency graph extraction
   - [x] Parallel compilation with dependency tracking
   - [x] Incremental rebuild (only recompile changed modules)
   - [x] Per-module build state tracking
   - [x] GHC flag management
-- [ ] Full cabal replacement (future)
-  - [ ] Package database integration (for external deps)
-  - [ ] Custom progress display during compilation
-  - [ ] GHC flag configuration from hx.toml
+- [x] Native build enhancements
+  - [x] Package database integration (for external deps)
+  - [x] Custom progress display during compilation
+  - [x] GHC flag configuration from hx.toml [build] section
 
-### Future Candidates
-- [ ] Custom templates from git repos
-- [ ] Documentation generation (`hx docs`)
-- [ ] Better HLS integration (auto hie.yaml)
-- [ ] Package publishing improvements
-- [ ] Changelog generation from git commits
+---
+
+## v0.6.0 - Developer Experience ✅
+
+### Custom Templates from Git ✅
+- [x] `hx new --template <git-url>` support
+  - [x] Clone git repos as project templates
+  - [x] Template variable substitution in cloned files
+  - [x] Support for GitHub shorthand (user/repo)
+  - [x] Branch selection (--branch flag)
+
+### Documentation Generation ✅
+- [x] `hx docs` command
+  - [x] Wrapper around haddock
+  - [x] Auto-open in browser (--open flag)
+  - [x] Generate docs for dependencies (--deps flag)
+  - [x] Serve locally (--serve flag with --port)
+
+### HLS Integration ✅
+- [x] `hx ide setup` enhancements
+  - [x] Auto-generate hie.yaml for projects
+  - [x] Workspace-aware cradle configuration
+  - [x] HLS version compatibility checks
+  - [x] `hx ide status` for diagnostics
+
+### Package Publishing ✅
+- [x] `hx publish` command
+  - [x] Pre-publish checks (version bump, changelog, tests)
+  - [x] Hackage upload via cabal
+  - [x] Dry-run mode
+  - [x] Auto-generate documentation (--docs flag)
+  - [x] Git status and tag validation
+
+### Changelog Generation ✅
+- [x] `hx changelog` command
+  - [x] Parse git commits since last tag
+  - [x] Conventional commits support
+  - [x] Group by type (feat, fix, docs, etc.)
+  - [x] Output to CHANGELOG.md
+  - [x] Preview mode (--preview)
+  - [x] Unreleased changes only (--unreleased)
 
 ---
 
@@ -410,8 +445,11 @@ hx check
 
 hx new module|test|benchmark <name>
 hx new webapp|cli|library <name>
+hx new --template <git-url> <name>
 hx bench [--package <name>]
+hx docs [--open] [--deps] [--serve]
 hx publish [--dry-run] [--docs]
+hx changelog [--unreleased] [--output <file>]
 
 hx fmt [--check]
 hx lint [--fix]
