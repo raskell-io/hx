@@ -14,10 +14,16 @@ use hx_ui::{Output, Spinner};
 use std::path::Path;
 
 /// Run the lock command.
-pub async fn run(use_cabal: bool, output: &Output) -> Result<i32> {
+pub async fn run(use_cabal: bool, update: Option<Vec<String>>, output: &Output) -> Result<i32> {
     // Default is native solver, --cabal uses cabal freeze
     if !use_cabal {
-        return run_native(output).await;
+        return run_native(update, output).await;
+    }
+
+    // --update is only supported with native solver
+    if update.is_some() {
+        output.warn("--update flag is only supported with native solver (without --cabal)");
+        output.info("Run `hx lock --update` without --cabal to update specific packages");
     }
     // Find project root
     let project_root = find_project_root(".")?;
@@ -104,12 +110,44 @@ pub async fn run(use_cabal: bool, output: &Output) -> Result<i32> {
 }
 
 /// Run the lock command using the native solver.
-async fn run_native(output: &Output) -> Result<i32> {
+async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32> {
     // Find project root
     let project_root = find_project_root(".")?;
     let project = Project::load(&project_root)?;
 
-    if project.is_workspace() {
+    let is_update_mode = update.is_some();
+    let update_packages = update.unwrap_or_default();
+
+    // Load existing lockfile if updating
+    let existing_lockfile = if is_update_mode {
+        let lockfile_path = project.lockfile_path();
+        if lockfile_path.exists() {
+            match Lockfile::from_file(&lockfile_path) {
+                Ok(lf) => Some(lf),
+                Err(e) => {
+                    output.warn(&format!("Could not read existing lockfile: {}", e));
+                    output.info("Performing full resolution instead");
+                    None
+                }
+            }
+        } else {
+            output.warn("No existing lockfile found, performing full resolution");
+            None
+        }
+    } else {
+        None
+    };
+
+    if is_update_mode {
+        if update_packages.is_empty() {
+            output.status("Updating", "all packages to latest versions");
+        } else {
+            output.status(
+                "Updating",
+                &format!("packages: {}", update_packages.join(", ")),
+            );
+        }
+    } else if project.is_workspace() {
         output.status(
             "Locking",
             &format!("{} ({} packages)", project.name(), project.package_count()),
@@ -149,10 +187,23 @@ async fn run_native(output: &Output) -> Result<i32> {
         .collect();
     let deps_fingerprint = compute_deps_fingerprint(&deps_for_fingerprint);
 
-    // Try to load cached resolution
-    let plan = if let Ok(cached_plan) = load_cached_resolution(&deps_fingerprint) {
-        output.info("Using cached resolution");
-        cached_plan
+    // Skip cache if we're updating packages
+    let use_cache = !is_update_mode;
+
+    // Try to load cached resolution (only if not updating)
+    let plan = if use_cache {
+        if let Ok(cached_plan) = load_cached_resolution(&deps_fingerprint) {
+            output.info("Using cached resolution");
+            Some(cached_plan)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let plan = if let Some(plan) = plan {
+        plan
     } else {
         // Find the Hackage index
         let index_path = default_index_path().context(
@@ -190,7 +241,28 @@ async fn run_native(output: &Output) -> Result<i32> {
 
         // Run the resolver
         let spinner = Spinner::new("Resolving dependencies...");
-        let config = ResolverConfig::default();
+
+        // Configure resolver with pinned versions if updating specific packages
+        let mut config = ResolverConfig::default();
+
+        if is_update_mode && !update_packages.is_empty() {
+            // Pin versions from existing lockfile for packages we're NOT updating
+            if let Some(ref existing) = existing_lockfile {
+                for pkg in &existing.packages {
+                    // Don't pin packages that are being updated
+                    if !update_packages.iter().any(|u| u.eq_ignore_ascii_case(&pkg.name))
+                        && let Ok(version) = pkg.version.parse()
+                    {
+                        config.installed.insert(pkg.name.clone(), version);
+                    }
+                }
+                let pinned_count = config.installed.len();
+                if pinned_count > 0 {
+                    output.info(&format!("Pinning {} packages at their locked versions", pinned_count));
+                }
+            }
+        }
+
         let resolver = Resolver::with_config(&index, config);
 
         let plan = resolver
@@ -224,18 +296,46 @@ async fn run_native(output: &Output) -> Result<i32> {
         lockfile.set_workspace(workspace_packages);
     }
 
-    // Add resolved packages to lockfile
+    // Add resolved packages to lockfile and track updates
+    let mut updated_packages: Vec<(String, String, String)> = Vec::new(); // (name, old_version, new_version)
+
     for pkg in &plan.packages {
         // Skip base packages (they come with GHC)
         if pkg.name == "base" || pkg.name == "ghc-prim" || pkg.name == "integer-gmp" {
             continue;
         }
+
+        // Track version changes when updating
+        if is_update_mode
+            && let Some(ref existing) = existing_lockfile
+            && let Some(old_pkg) = existing.packages.iter().find(|p| p.name == pkg.name)
+        {
+            let new_version = pkg.version.to_string();
+            if old_pkg.version != new_version {
+                updated_packages.push((
+                    pkg.name.clone(),
+                    old_pkg.version.clone(),
+                    new_version,
+                ));
+            }
+        }
+
         lockfile.add_package(LockedPackage {
             name: pkg.name.clone(),
             version: pkg.version.to_string(),
             source: "hackage".to_string(),
             hash: None,
         });
+    }
+
+    // Show updated packages
+    if is_update_mode && !updated_packages.is_empty() {
+        output.info(&format!("Updated {} package(s):", updated_packages.len()));
+        for (name, old_ver, new_ver) in &updated_packages {
+            output.info(&format!("  {} {} -> {}", name, old_ver, new_ver));
+        }
+    } else if is_update_mode {
+        output.info("No package updates available");
     }
 
     // Calculate fingerprint

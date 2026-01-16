@@ -12,26 +12,28 @@ use tracing::{debug, trace};
 /// Error type for resolution failures.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ResolveError {
-    #[error("package not found: {0}")]
-    PackageNotFound(String),
+    #[error("package not found: {name}\n\n  The package '{name}' was not found in the Hackage index.\n\n  Suggestions:\n    - Check the spelling of the package name\n    - Run `cabal update` to refresh the package index\n    - Verify the package exists on Hackage: https://hackage.haskell.org/package/{name}")]
+    PackageNotFound { name: String },
 
-    #[error("no version of {package} satisfies constraint {constraint}")]
+    #[error("no version of {package} satisfies {constraint}\n\n  Available versions: {}\n\n  Suggestions:\n    - Relax the version constraint in your .cabal file\n    - Check if a newer version exists that satisfies other constraints", .available.join(", "))]
     NoMatchingVersion {
         package: String,
         constraint: VersionConstraint,
+        available: Vec<String>,
     },
 
-    #[error("conflict: {package} required at {required} but already selected {selected}")]
+    #[error("version conflict for {package}\n\n  Required: {required}\n  But already selected: {selected}\n  Required by: {}\n\n  Suggestions:\n    - Check for conflicting version bounds in your dependencies\n    - Try allowing a wider version range", .required_by.join(", "))]
     VersionConflict {
         package: String,
         required: VersionConstraint,
         selected: Version,
+        required_by: Vec<String>,
     },
 
-    #[error("dependency cycle detected: {}", .0.join(" -> "))]
+    #[error("dependency cycle detected\n\n  Cycle: {}\n\n  This usually indicates a problem with package metadata on Hackage.", .0.join(" -> "))]
     CycleDetected(Vec<String>),
 
-    #[error("resolution exhausted after {attempts} attempts")]
+    #[error("resolution exhausted after {attempts} attempts\n\n  The solver tried {attempts} combinations without finding a valid solution.\n\n  Suggestions:\n    - Simplify your dependencies\n    - Try pinning specific versions\n    - Check for known incompatibilities between packages")]
     Exhausted { attempts: usize },
 }
 
@@ -144,10 +146,15 @@ impl<'a> Resolver<'a> {
 
                     // Try to backtrack
                     if !self.backtrack(state) {
+                        let required_by = req.parent
+                            .clone()
+                            .map(|p| vec![p])
+                            .unwrap_or_else(|| vec!["(root)".to_string()]);
                         return Err(ResolveError::VersionConflict {
                             package: req.package,
                             required: req.constraint,
                             selected: selected_version,
+                            required_by,
                         });
                     }
                     continue;
@@ -160,7 +167,7 @@ impl<'a> Resolver<'a> {
             let package = self
                 .index
                 .get_package(&req.package)
-                .ok_or_else(|| ResolveError::PackageNotFound(req.package.clone()))?;
+                .ok_or_else(|| ResolveError::PackageNotFound { name: req.package.clone() })?;
 
             let mut candidates = package.matching_versions(&req.constraint);
 
@@ -169,9 +176,15 @@ impl<'a> Resolver<'a> {
                 debug!("No matching version for {} {}", req.package, req.constraint);
 
                 if !self.backtrack(state) {
+                    let available = package
+                        .versions_descending()
+                        .iter()
+                        .map(|v| v.to_string())
+                        .collect();
                     return Err(ResolveError::NoMatchingVersion {
                         package: req.package,
                         constraint: req.constraint,
+                        available,
                     });
                 }
                 continue;
@@ -487,7 +500,7 @@ mod tests {
         let resolver = Resolver::new(&index);
 
         let result = resolver.resolve("nonexistent", &VersionConstraint::Any);
-        assert!(matches!(result, Err(ResolveError::PackageNotFound(_))));
+        assert!(matches!(result, Err(ResolveError::PackageNotFound { .. })));
     }
 
     #[test]

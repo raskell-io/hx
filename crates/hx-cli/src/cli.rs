@@ -144,6 +144,10 @@ pub enum Commands {
         /// Use cabal freeze instead of native solver
         #[arg(long)]
         cabal: bool,
+
+        /// Update specific packages (or all if none specified)
+        #[arg(long, num_args = 0..)]
+        update: Option<Vec<String>>,
     },
 
     /// Pre-fetch dependencies in parallel

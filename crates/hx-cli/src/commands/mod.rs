@@ -77,7 +77,7 @@ pub async fn run(cli: Cli) -> Result<i32> {
         Some(Commands::Fmt { check }) => fmt::run(check, &output).await,
         Some(Commands::Lint { fix }) => lint::run(fix, &output).await,
         Some(Commands::Doctor) => doctor::run(&output).await,
-        Some(Commands::Lock { cabal }) => lock::run(cabal, &output).await,
+        Some(Commands::Lock { cabal, update }) => lock::run(cabal, update, &output).await,
         Some(Commands::Fetch { jobs }) => fetch::run(jobs, &output).await,
         Some(Commands::Sync { force }) => lock::sync(force, &output).await,
         Some(Commands::Clean { global }) => clean::run(global, &output).await,

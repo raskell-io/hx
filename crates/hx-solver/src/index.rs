@@ -7,10 +7,12 @@ use crate::cabal::parse_cabal;
 use crate::package::{PackageIndex, PackageVersion};
 use crate::version::Version;
 use flate2::read::GzDecoder;
+use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
+use std::time::Duration;
 use tar::Archive;
 use tracing::{debug, info, trace, warn};
 
@@ -36,6 +38,8 @@ pub struct IndexOptions {
     pub filter_packages: Vec<String>,
     /// Skip packages with parse errors
     pub skip_errors: bool,
+    /// Show progress bar during loading
+    pub show_progress: bool,
 }
 
 impl Default for IndexOptions {
@@ -44,6 +48,7 @@ impl Default for IndexOptions {
             max_packages: 0,
             filter_packages: Vec::new(),
             skip_errors: true,
+            show_progress: false,
         }
     }
 }
@@ -81,10 +86,26 @@ fn load_from_tar<R: Read>(reader: R, options: &IndexOptions) -> Result<PackageIn
     // Track the latest revision for each package-version
     let mut revisions: HashMap<(String, String), (u32, String)> = HashMap::new();
 
+    // Phase 1: Read entries from tar archive (use spinner since count is unknown)
+    let read_pb = if options.show_progress {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .template("{spinner:.green} {msg}")
+                .unwrap(),
+        );
+        pb.set_message("Reading package index...");
+        pb.enable_steady_tick(Duration::from_millis(100));
+        Some(pb)
+    } else {
+        None
+    };
+
     let entries = archive
         .entries()
         .map_err(|e| IndexError::TarRead(e.to_string()))?;
 
+    let mut entry_count = 0;
     for entry in entries {
         let mut entry = match entry {
             Ok(e) => e,
@@ -141,6 +162,11 @@ fn load_from_tar<R: Read>(reader: R, options: &IndexOptions) -> Result<PackageIn
         let revision = revisions.get(&key).map(|(r, _)| r + 1).unwrap_or(0);
         revisions.insert(key, (revision, content));
 
+        entry_count += 1;
+        if let Some(ref pb) = read_pb {
+            pb.set_message(format!("Reading package index... {} entries", entry_count));
+        }
+
         // Check package limit
         if options.max_packages > 0 && revisions.len() >= options.max_packages {
             debug!("Reached package limit of {}", options.max_packages);
@@ -148,15 +174,35 @@ fn load_from_tar<R: Read>(reader: R, options: &IndexOptions) -> Result<PackageIn
         }
     }
 
-    // Now parse all the collected .cabal files
+    if let Some(pb) = read_pb {
+        pb.finish_with_message(format!("Read {} cabal entries", entry_count));
+    }
+
+    // Phase 2: Parse all the collected .cabal files (known count, use progress bar)
     let total = revisions.len();
     info!("Parsing {} package versions", total);
+
+    let parse_pb = if options.show_progress {
+        let pb = ProgressBar::new(total as u64);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} packages parsed")
+                .unwrap()
+                .progress_chars("#>-"),
+        );
+        Some(pb)
+    } else {
+        None
+    };
 
     for ((package_name, version_str), (revision, content)) in revisions {
         let version = match version_str.parse::<Version>() {
             Ok(v) => v,
             Err(e) => {
                 trace!("Skipping {}-{}: invalid version: {}", package_name, version_str, e);
+                if let Some(ref pb) = parse_pb {
+                    pb.inc(1);
+                }
                 continue;
             }
         };
@@ -172,6 +218,18 @@ fn load_from_tar<R: Read>(reader: R, options: &IndexOptions) -> Result<PackageIn
         }
 
         index.add_package_version(pv);
+
+        if let Some(ref pb) = parse_pb {
+            pb.inc(1);
+        }
+    }
+
+    if let Some(pb) = parse_pb {
+        pb.finish_with_message(format!(
+            "Parsed {} packages ({} versions)",
+            index.package_count(),
+            index.version_count()
+        ));
     }
 
     info!(
