@@ -5,7 +5,7 @@
 //! modules in the correct order with parallel compilation support.
 
 use hx_core::{CommandOutput, CommandRunner, Error, Result};
-use hx_solver::{build_module_graph, ModuleGraph, ModuleInfo};
+use hx_solver::{ModuleGraph, ModuleInfo, build_module_graph};
 use hx_ui::{Output, Progress, Spinner};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -132,17 +132,16 @@ impl BuildState {
     }
 
     /// Update state for a successfully compiled module.
-    pub fn mark_compiled(
-        &mut self,
-        module_name: &str,
-        source_path: &Path,
-        deps: &[String],
-    ) {
+    pub fn mark_compiled(&mut self, module_name: &str, source_path: &Path, deps: &[String]) {
         let source_hash = compute_file_hash(source_path).unwrap_or_default();
         let mtime = source_path
             .metadata()
             .and_then(|m| m.modified())
-            .map(|t| t.duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0))
+            .map(|t| {
+                t.duration_since(UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0)
+            })
             .unwrap_or(0);
         let deps_hash = compute_deps_hash(deps, &self.modules);
         let compiled_at = SystemTime::now()
@@ -511,14 +510,12 @@ impl NativeBuilder {
             .modules
             .iter()
             .filter(|(name, info)| {
-                let deps = graph.dependencies.get(*name).map(|d| d.as_slice()).unwrap_or(&[]);
-                build_state.needs_rebuild(
-                    name,
-                    &info.path,
-                    deps,
-                    &self.ghc.version,
-                    &flags_hash,
-                )
+                let deps = graph
+                    .dependencies
+                    .get(*name)
+                    .map(|d| d.as_slice())
+                    .unwrap_or(&[]);
+                build_state.needs_rebuild(name, &info.path, deps, &self.ghc.version, &flags_hash)
             })
             .map(|(name, _)| name.clone())
             .collect();
@@ -546,7 +543,10 @@ impl NativeBuilder {
             });
         }
 
-        info!("{} modules need recompilation, {} up to date", rebuild_count, skip_count);
+        info!(
+            "{} modules need recompilation, {} up to date",
+            rebuild_count, skip_count
+        );
 
         // Track compiled modules
         let mut compiled_modules = HashSet::new();
@@ -579,7 +579,13 @@ impl NativeBuilder {
 
             // Compile all modules in this group in parallel
             let group_results = self
-                .compile_group(&graph, &group_to_compile, project_root, options, &compiled_modules)
+                .compile_group(
+                    &graph,
+                    &group_to_compile,
+                    project_root,
+                    options,
+                    &compiled_modules,
+                )
                 .await?;
 
             for result in group_results {
@@ -638,15 +644,13 @@ impl NativeBuilder {
         }
 
         // Link if requested and compilation succeeded
-        let executable = if errors.is_empty()
-            && options.main_module.is_some()
-            && options.output_exe.is_some()
-        {
-            self.link(project_root, &graph, options, &output_dir, output)
-                .await?
-        } else {
-            None
-        };
+        let executable =
+            if errors.is_empty() && options.main_module.is_some() && options.output_exe.is_some() {
+                self.link(project_root, &graph, options, &output_dir, output)
+                    .await?
+            } else {
+                None
+            };
 
         Ok(NativeBuildResult {
             success: errors.is_empty(),
@@ -776,9 +780,7 @@ impl NativeBuilder {
 
         let runner = CommandRunner::new().with_working_dir(project_root);
         let ghc_path = self.ghc.ghc_path.display().to_string();
-        let cmd_output = runner
-            .run(&ghc_path, &args)
-            .await?;
+        let cmd_output = runner.run(&ghc_path, &args).await?;
 
         if let Some(spinner) = spinner {
             if cmd_output.success() {
@@ -819,8 +821,16 @@ async fn compile_module(
     let o_dir = output_dir.join("o");
 
     // Ensure directories exist
-    let module_hi_dir = hi_dir.join(std::path::Path::new(&module_subdir).parent().unwrap_or(std::path::Path::new("")));
-    let module_o_dir = o_dir.join(std::path::Path::new(&module_subdir).parent().unwrap_or(std::path::Path::new("")));
+    let module_hi_dir = hi_dir.join(
+        std::path::Path::new(&module_subdir)
+            .parent()
+            .unwrap_or(std::path::Path::new("")),
+    );
+    let module_o_dir = o_dir.join(
+        std::path::Path::new(&module_subdir)
+            .parent()
+            .unwrap_or(std::path::Path::new("")),
+    );
 
     if let Err(e) = std::fs::create_dir_all(&module_hi_dir) {
         return ModuleCompileResult {

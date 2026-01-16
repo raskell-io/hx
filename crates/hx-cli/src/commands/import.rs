@@ -9,11 +9,7 @@ use std::path::Path;
 use crate::cli::ImportSource;
 
 /// Run the import command.
-pub async fn run(
-    source: ImportSource,
-    path: Option<String>,
-    output: &Output,
-) -> Result<i32> {
+pub async fn run(source: ImportSource, path: Option<String>, output: &Output) -> Result<i32> {
     match source {
         ImportSource::Stack => import_from_stack(path, output).await,
         ImportSource::Cabal => import_from_cabal(path, output).await,
@@ -33,8 +29,8 @@ async fn import_from_stack(path: Option<String>, output: &Output) -> Result<i32>
 
     output.status("Importing", &format!("from {}", stack_yaml));
 
-    let content = fs::read_to_string(stack_path)
-        .with_context(|| format!("Failed to read {}", stack_yaml))?;
+    let content =
+        fs::read_to_string(stack_path).with_context(|| format!("Failed to read {}", stack_yaml))?;
 
     // Parse stack.yaml (basic YAML parsing)
     let stack_config = parse_stack_yaml(&content)?;
@@ -78,8 +74,7 @@ ghc = "{}"
     }
 
     // Write hx.toml
-    fs::write(hx_toml_path, &hx_toml)
-        .context("Failed to write hx.toml")?;
+    fs::write(hx_toml_path, &hx_toml).context("Failed to write hx.toml")?;
 
     output.status("Created", "hx.toml");
 
@@ -152,8 +147,7 @@ ghc = "{}"
         return Ok(0);
     }
 
-    fs::write(hx_toml_path, &hx_toml)
-        .context("Failed to write hx.toml")?;
+    fs::write(hx_toml_path, &hx_toml).context("Failed to write hx.toml")?;
 
     output.status("Created", "hx.toml");
     output.info("Run `hx lock` to generate the lockfile");

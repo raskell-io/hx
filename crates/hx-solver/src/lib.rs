@@ -27,8 +27,8 @@
 //! }
 //! ```
 
-pub mod cache;
 pub mod cabal;
+pub mod cache;
 pub mod fetch;
 pub mod index;
 pub mod mirror;
@@ -38,29 +38,29 @@ pub mod plan;
 pub mod resolver;
 pub mod version;
 
+pub use cabal::{CabalFile, parse_cabal};
 pub use cache::{
-    clear_index_cache, clear_resolution_cache, compute_deps_fingerprint, load_cached_index,
-    load_cached_resolution, save_index_cache, save_resolution_cache, CacheError,
+    CacheError, clear_index_cache, clear_resolution_cache, compute_deps_fingerprint,
+    load_cached_index, load_cached_resolution, save_index_cache, save_resolution_cache,
 };
-pub use cabal::{parse_cabal, CabalFile};
 pub use fetch::{
-    default_package_cache_dir, fetch_packages, FetchError, FetchOptions, FetchResult, FetchSummary,
+    FetchError, FetchOptions, FetchResult, FetchSummary, default_package_cache_dir, fetch_packages,
 };
-pub use index::{default_index_path, load_index, IndexError, IndexOptions};
+pub use index::{IndexError, IndexOptions, default_index_path, load_index};
 pub use mirror::{
-    best_index_path, clear_index, index_dir, index_is_current, index_path, index_state_path,
-    index_status, load_index_state, update_index, IndexState, IndexStatus, MirrorError,
-    MirrorOptions, UpdateResult,
+    IndexState, IndexStatus, MirrorError, MirrorOptions, UpdateResult, best_index_path,
+    clear_index, index_dir, index_is_current, index_path, index_state_path, index_status,
+    load_index_state, update_index,
 };
 pub use modules::{
-    build_module_graph, find_haskell_files, parse_imports, path_to_module_name, ModuleError,
-    ModuleGraph, ModuleInfo,
+    ModuleError, ModuleGraph, ModuleInfo, build_module_graph, find_haskell_files, parse_imports,
+    path_to_module_name,
 };
 pub use package::{
     Dependency, InstallPlan, Package, PackageIndex, PackageVersion, ResolvedPackage,
 };
 pub use plan::{
-    generate_build_plan, BuildPlan, BuildStyle, BuildUnit, PlanError, PlanOptions, PlanSummary,
+    BuildPlan, BuildStyle, BuildUnit, PlanError, PlanOptions, PlanSummary, generate_build_plan,
 };
 pub use resolver::{ResolveError, Resolver, ResolverConfig};
-pub use version::{parse_constraint, Version, VersionConstraint, VersionParseError};
+pub use version::{Version, VersionConstraint, VersionParseError, parse_constraint};

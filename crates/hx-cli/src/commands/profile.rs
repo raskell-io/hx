@@ -170,9 +170,7 @@ fn is_executable(path: &std::path::Path) -> bool {
     #[cfg(not(unix))]
     {
         // On Windows, check for .exe extension
-        path.extension()
-            .map(|e| e == "exe")
-            .unwrap_or(false)
+        path.extension().map(|e| e == "exe").unwrap_or(false)
     }
 
     false
@@ -207,12 +205,7 @@ fn display_profile_summary(prof_file: &std::path::Path, output: &Output) -> Resu
                 )
                 && (time > 0.1 || alloc > 0.1)
             {
-                top_entries.push((
-                    parts[0].to_string(),
-                    parts[1].to_string(),
-                    time,
-                    alloc,
-                ));
+                top_entries.push((parts[0].to_string(), parts[1].to_string(), time, alloc));
             }
         }
     }

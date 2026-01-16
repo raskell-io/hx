@@ -4,7 +4,7 @@
 //! It doesn't handle the full Cabal specification, just enough for dependency resolution.
 
 use crate::package::Dependency;
-use crate::version::{parse_constraint, VersionConstraint};
+use crate::version::{VersionConstraint, parse_constraint};
 
 /// Parsed information from a .cabal file.
 #[derive(Debug, Clone, Default)]
@@ -249,7 +249,11 @@ library
         assert_eq!(cabal.version, "2.1.1");
         assert_eq!(cabal.library_deps.len(), 3);
 
-        let base_dep = cabal.library_deps.iter().find(|d| d.name == "base").unwrap();
+        let base_dep = cabal
+            .library_deps
+            .iter()
+            .find(|d| d.name == "base")
+            .unwrap();
         assert!(matches!(base_dep.constraint, VersionConstraint::And(_, _)));
     }
 

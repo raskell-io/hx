@@ -17,8 +17,8 @@ pub async fn run(file: &str, args: Vec<String>, output: &Output) -> Result<i32> 
     }
 
     // Read and parse the script
-    let script_content = fs::read_to_string(script_path)
-        .with_context(|| format!("Failed to read {}", file))?;
+    let script_content =
+        fs::read_to_string(script_path).with_context(|| format!("Failed to read {}", file))?;
 
     // Parse script header for dependencies
     let script_info = parse_script_header(&script_content);

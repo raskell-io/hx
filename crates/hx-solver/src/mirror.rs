@@ -315,11 +315,7 @@ pub async fn update_index(options: &MirrorOptions) -> Result<UpdateResult, Mirro
     // Move temp file to final location
     fs::rename(&temp_path, &idx_path)?;
 
-    info!(
-        "Downloaded {} bytes to {}",
-        total_bytes,
-        idx_path.display()
-    );
+    info!("Downloaded {} bytes to {}", total_bytes, idx_path.display());
 
     // Save state
     let state = IndexState {

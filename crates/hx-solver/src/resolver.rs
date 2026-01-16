@@ -12,7 +12,9 @@ use tracing::{debug, trace};
 /// Error type for resolution failures.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ResolveError {
-    #[error("package not found: {name}\n\n  The package '{name}' was not found in the Hackage index.\n\n  Suggestions:\n    - Check the spelling of the package name\n    - Run `cabal update` to refresh the package index\n    - Verify the package exists on Hackage: https://hackage.haskell.org/package/{name}")]
+    #[error(
+        "package not found: {name}\n\n  The package '{name}' was not found in the Hackage index.\n\n  Suggestions:\n    - Check the spelling of the package name\n    - Run `cabal update` to refresh the package index\n    - Verify the package exists on Hackage: https://hackage.haskell.org/package/{name}"
+    )]
     PackageNotFound { name: String },
 
     #[error("no version of {package} satisfies {constraint}\n\n  Available versions: {}\n\n  Suggestions:\n    - Relax the version constraint in your .cabal file\n    - Check if a newer version exists that satisfies other constraints", .available.join(", "))]
@@ -33,7 +35,9 @@ pub enum ResolveError {
     #[error("dependency cycle detected\n\n  Cycle: {}\n\n  This usually indicates a problem with package metadata on Hackage.", .0.join(" -> "))]
     CycleDetected(Vec<String>),
 
-    #[error("resolution exhausted after {attempts} attempts\n\n  The solver tried {attempts} combinations without finding a valid solution.\n\n  Suggestions:\n    - Simplify your dependencies\n    - Try pinning specific versions\n    - Check for known incompatibilities between packages")]
+    #[error(
+        "resolution exhausted after {attempts} attempts\n\n  The solver tried {attempts} combinations without finding a valid solution.\n\n  Suggestions:\n    - Simplify your dependencies\n    - Try pinning specific versions\n    - Check for known incompatibilities between packages"
+    )]
     Exhausted { attempts: usize },
 }
 
@@ -146,7 +150,8 @@ impl<'a> Resolver<'a> {
 
                     // Try to backtrack
                     if !self.backtrack(state) {
-                        let required_by = req.parent
+                        let required_by = req
+                            .parent
                             .clone()
                             .map(|p| vec![p])
                             .unwrap_or_else(|| vec!["(root)".to_string()]);
@@ -164,10 +169,11 @@ impl<'a> Resolver<'a> {
             }
 
             // Find matching versions
-            let package = self
-                .index
-                .get_package(&req.package)
-                .ok_or_else(|| ResolveError::PackageNotFound { name: req.package.clone() })?;
+            let package = self.index.get_package(&req.package).ok_or_else(|| {
+                ResolveError::PackageNotFound {
+                    name: req.package.clone(),
+                }
+            })?;
 
             let mut candidates = package.matching_versions(&req.constraint);
 

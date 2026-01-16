@@ -28,7 +28,9 @@ mod search;
 mod toolchain;
 mod upgrade;
 
-use crate::cli::{ArtifactCommands, CacheCommands, Cli, Commands, GlobalArgs, IndexCommands, NixCommands};
+use crate::cli::{
+    ArtifactCommands, CacheCommands, Cli, Commands, GlobalArgs, IndexCommands, NixCommands,
+};
 use anyhow::Result;
 use hx_toolchain::AutoInstallPolicy;
 use hx_ui::{Output, Printer, Verbosity};
@@ -143,12 +145,14 @@ pub async fn run(cli: Cli) -> Result<i32> {
             },
         },
         Some(Commands::Nix { command }) => match command {
-            NixCommands::Flake { output: out_file, force } => {
-                nix::flake(out_file, force, &output).await
-            }
-            NixCommands::Shell { output: out_file, force } => {
-                nix::shell(out_file, force, &output).await
-            }
+            NixCommands::Flake {
+                output: out_file,
+                force,
+            } => nix::flake(out_file, force, &output).await,
+            NixCommands::Shell {
+                output: out_file,
+                force,
+            } => nix::shell(out_file, force, &output).await,
         },
         Some(Commands::Profile {
             heap,

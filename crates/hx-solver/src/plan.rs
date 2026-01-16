@@ -111,7 +111,10 @@ pub fn generate_build_plan(
 
         let (style, pre_installed) = if options.pre_installed.contains(&name) {
             (BuildStyle::PreInstalled, true)
-        } else if options.cached_hashes.contains_key(&format!("{}-{}", name, version)) {
+        } else if options
+            .cached_hashes
+            .contains_key(&format!("{}-{}", name, version))
+        {
             (BuildStyle::Cached, false)
         } else {
             (BuildStyle::Source, false)
@@ -186,7 +189,14 @@ fn topological_sort(graph: &HashMap<String, Vec<String>>) -> Result<Vec<String>,
 
     for node in graph.keys() {
         let mut path = Vec::new();
-        visit(node, graph, &mut visited, &mut in_progress, &mut result, &mut path)?;
+        visit(
+            node,
+            graph,
+            &mut visited,
+            &mut in_progress,
+            &mut result,
+            &mut path,
+        )?;
     }
 
     Ok(result)
@@ -452,11 +462,19 @@ mod tests {
         assert!(!build_plan.fingerprint.is_empty());
 
         // base should be pre-installed
-        let base_unit = build_plan.packages.iter().find(|p| p.name == "base").unwrap();
+        let base_unit = build_plan
+            .packages
+            .iter()
+            .find(|p| p.name == "base")
+            .unwrap();
         assert_eq!(base_unit.style, BuildStyle::PreInstalled);
 
         // aeson should be source
-        let aeson_unit = build_plan.packages.iter().find(|p| p.name == "aeson").unwrap();
+        let aeson_unit = build_plan
+            .packages
+            .iter()
+            .find(|p| p.name == "aeson")
+            .unwrap();
         assert_eq!(aeson_unit.style, BuildStyle::Source);
     }
 

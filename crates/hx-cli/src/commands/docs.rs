@@ -27,9 +27,7 @@ pub async fn run(open: bool, deps: bool, serve: bool, port: u16, output: &Output
     // Add hyperlinks
     haddock_args.push("--haddock-hyperlink-source");
 
-    let haddock_output = runner
-        .run("cabal", haddock_args.iter().copied())
-        .await?;
+    let haddock_output = runner.run("cabal", haddock_args.iter().copied()).await?;
 
     if !haddock_output.success() {
         spinner.finish_error("Documentation build failed");
@@ -43,7 +41,10 @@ pub async fn run(open: bool, deps: bool, serve: bool, port: u16, output: &Output
     let doc_path = find_doc_path(&project_root, project.name())?;
 
     if serve {
-        output.status("Serving", &format!("documentation at http://localhost:{}", port));
+        output.status(
+            "Serving",
+            &format!("documentation at http://localhost:{}", port),
+        );
         output.info(&format!("Documentation: {}", doc_path.display()));
         output.info("Press Ctrl+C to stop the server");
 
@@ -56,11 +57,17 @@ pub async fn run(open: bool, deps: bool, serve: bool, port: u16, output: &Output
             output.status("Opening", &index_path.display().to_string());
             open_in_browser(&index_path)?;
         } else {
-            output.warn(&format!("Documentation index not found at {}", index_path.display()));
+            output.warn(&format!(
+                "Documentation index not found at {}",
+                index_path.display()
+            ));
             output.info(&format!("Documentation directory: {}", doc_path.display()));
         }
     } else {
-        output.status("Generated", &format!("documentation in {}", doc_path.display()));
+        output.status(
+            "Generated",
+            &format!("documentation in {}", doc_path.display()),
+        );
         output.info("Use --open to view in browser, or --serve to start a local server");
     }
 
@@ -100,10 +107,7 @@ fn find_doc_path(project_root: &std::path::Path, package_name: &str) -> Result<P
     }
 
     // Try a more exhaustive search
-    let doc_base = project_root
-        .join(".hx")
-        .join("cabal")
-        .join("dist-newstyle");
+    let doc_base = project_root.join(".hx").join("cabal").join("dist-newstyle");
 
     if doc_base.exists() {
         // Search recursively for the package's doc directory
@@ -217,10 +221,7 @@ async fn serve_docs(doc_path: &std::path::Path, port: u16) -> Result<()> {
 
                     let (status, content_type, body) = if file_path.exists() {
                         let content = std::fs::read(&file_path).unwrap_or_default();
-                        let ext = file_path
-                            .extension()
-                            .and_then(|e| e.to_str())
-                            .unwrap_or("");
+                        let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("");
                         let mime = match ext {
                             "html" => "text/html",
                             "css" => "text/css",

@@ -18,6 +18,6 @@ pub use build::{BuildOptions, BuildResult};
 pub use edit::{CabalEditError, add_dependency, remove_dependency};
 pub use fetch::{FetchOptions, FetchResult};
 pub use native::{
-    BuildState, GhcConfig, ModuleCompileResult, ModuleState, NativeBuildOptions,
-    NativeBuildResult, NativeBuilder, compute_flags_hash, packages_from_lockfile,
+    BuildState, GhcConfig, ModuleCompileResult, ModuleState, NativeBuildOptions, NativeBuildResult,
+    NativeBuilder, compute_flags_hash, packages_from_lockfile,
 };

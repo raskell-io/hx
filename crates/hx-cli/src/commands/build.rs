@@ -301,11 +301,7 @@ async fn run_native_build(
     };
 
     // Get source directories from config
-    let src_dirs: Vec<PathBuf> = build_config
-        .src_dirs
-        .iter()
-        .map(PathBuf::from)
-        .collect();
+    let src_dirs: Vec<PathBuf> = build_config.src_dirs.iter().map(PathBuf::from).collect();
 
     // Combine extra flags from config
     let mut extra_flags = build_config.ghc_flags.clone();
@@ -351,9 +347,7 @@ async fn run_native_build(
                     let status = if result.modules_skipped > 0 {
                         format!(
                             "{} compiled, {} up-to-date in {}",
-                            result.modules_compiled,
-                            result.modules_skipped,
-                            duration_str
+                            result.modules_compiled, result.modules_skipped, duration_str
                         )
                     } else {
                         format!("{} modules in {}", result.modules_compiled, duration_str)
@@ -376,7 +370,10 @@ async fn run_native_build(
                 }
                 Ok(0)
             } else {
-                output.error(&format!("Build failed with {} error(s)", result.errors.len()));
+                output.error(&format!(
+                    "Build failed with {} error(s)",
+                    result.errors.len()
+                ));
                 for error in &result.errors {
                     eprintln!("{}", error);
                 }

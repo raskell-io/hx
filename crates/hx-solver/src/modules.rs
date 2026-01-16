@@ -204,7 +204,13 @@ fn extract_module_name(line: &str) -> Option<String> {
     // Get module name (stop at 'as', 'hiding', or '(')
     if let Some(name) = parts.get(idx) {
         let name = name.trim_end_matches('(');
-        if !name.is_empty() && name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
+        if !name.is_empty()
+            && name
+                .chars()
+                .next()
+                .map(|c| c.is_uppercase())
+                .unwrap_or(false)
+        {
             return Some(name.to_string());
         }
     }

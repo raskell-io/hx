@@ -216,11 +216,8 @@ fn version_in_range(version: &str, range: &str) -> bool {
 
 /// Simple version comparison (newer = higher).
 fn is_newer(a: &str, b: &str) -> bool {
-    let parse_version = |v: &str| -> Vec<u32> {
-        v.split('.')
-            .filter_map(|s| s.parse().ok())
-            .collect()
-    };
+    let parse_version =
+        |v: &str| -> Vec<u32> { v.split('.').filter_map(|s| s.parse().ok()).collect() };
 
     let va = parse_version(a);
     let vb = parse_version(b);

@@ -1,7 +1,7 @@
 //! Index management commands.
 
 use anyhow::Result;
-use hx_solver::{clear_index, index_is_current, index_status, update_index, MirrorOptions};
+use hx_solver::{MirrorOptions, clear_index, index_is_current, index_status, update_index};
 use hx_ui::{Output, Verbosity};
 use std::io::{self, Write};
 
@@ -29,7 +29,10 @@ pub async fn update(force: bool, staleness: Option<u64>, output: &Output) -> Res
             if result.downloaded {
                 output.status(
                     "Downloaded",
-                    &format!("index ({:.2} MB)", result.bytes_downloaded as f64 / 1_000_000.0),
+                    &format!(
+                        "index ({:.2} MB)",
+                        result.bytes_downloaded as f64 / 1_000_000.0
+                    ),
                 );
             } else {
                 output.info("Index is already up to date");

@@ -65,10 +65,7 @@ pub fn load_index(path: &Path, options: &IndexOptions) -> Result<PackageIndex, I
     let reader = BufReader::new(file);
 
     // Check if gzipped
-    let is_gzipped = path
-        .extension()
-        .map(|e| e == "gz")
-        .unwrap_or(false);
+    let is_gzipped = path.extension().map(|e| e == "gz").unwrap_or(false);
 
     if is_gzipped {
         let decoder = GzDecoder::new(reader);
@@ -199,7 +196,10 @@ fn load_from_tar<R: Read>(reader: R, options: &IndexOptions) -> Result<PackageIn
         let version = match version_str.parse::<Version>() {
             Ok(v) => v,
             Err(e) => {
-                trace!("Skipping {}-{}: invalid version: {}", package_name, version_str, e);
+                trace!(
+                    "Skipping {}-{}: invalid version: {}",
+                    package_name, version_str, e
+                );
                 if let Some(ref pb) = parse_pb {
                     pb.inc(1);
                 }
@@ -289,9 +289,7 @@ library
         header.set_mode(0o644);
         header.set_cksum();
 
-        builder
-            .append(&header, &cabal_content[..])
-            .unwrap();
+        builder.append(&header, &cabal_content[..]).unwrap();
 
         // Add another version
         let cabal_content2 = br#"name: test-pkg
@@ -307,9 +305,7 @@ library
         header2.set_mode(0o644);
         header2.set_cksum();
 
-        builder
-            .append(&header2, &cabal_content2[..])
-            .unwrap();
+        builder.append(&header2, &cabal_content2[..]).unwrap();
 
         builder.into_inner().unwrap()
     }

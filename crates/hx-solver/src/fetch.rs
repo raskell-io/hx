@@ -145,9 +145,14 @@ pub async fn fetch_packages(
             async move {
                 let _permit = semaphore.acquire().await.unwrap();
 
-                let result =
-                    fetch_single_package(&client, &pkg.name, &pkg.version, &options, &multi_progress)
-                        .await;
+                let result = fetch_single_package(
+                    &client,
+                    &pkg.name,
+                    &pkg.version,
+                    &options,
+                    &multi_progress,
+                )
+                .await;
 
                 overall_pb.inc(1);
                 result
@@ -360,9 +365,10 @@ impl FetchSummary {
             } else {
                 summary.downloaded += 1;
             }
-            summary
-                .hashes
-                .insert(format!("{}-{}", result.name, result.version), result.hash.clone());
+            summary.hashes.insert(
+                format!("{}-{}", result.name, result.version),
+                result.hash.clone(),
+            );
         }
 
         summary
@@ -437,8 +443,14 @@ mod tests {
         assert_eq!(summary.downloaded, 1);
         assert_eq!(summary.cached, 1);
         assert_eq!(summary.hashes.len(), 2);
-        assert_eq!(summary.hashes.get("pkg1-1.0.0"), Some(&"abc123".to_string()));
-        assert_eq!(summary.hashes.get("pkg2-2.0.0"), Some(&"def456".to_string()));
+        assert_eq!(
+            summary.hashes.get("pkg1-1.0.0"),
+            Some(&"abc123".to_string())
+        );
+        assert_eq!(
+            summary.hashes.get("pkg2-2.0.0"),
+            Some(&"def456".to_string())
+        );
     }
 
     #[test]

@@ -7,12 +7,7 @@ use hx_ui::Output;
 use std::path::PathBuf;
 
 /// Run the search command.
-pub async fn run(
-    query: &str,
-    limit: usize,
-    detailed: bool,
-    output: &Output,
-) -> Result<i32> {
+pub async fn run(query: &str, limit: usize, detailed: bool, output: &Output) -> Result<i32> {
     output.status("Searching", &format!("for '{}'", query));
 
     // Find and load the package index

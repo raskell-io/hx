@@ -2,8 +2,8 @@
 
 use anyhow::Result;
 use hx_cache::{
-    clear_artifacts, global_cache_dir, prune_artifacts, ArtifactIndex, StoreIndex,
-    clean_global_cache, store_disk_size,
+    ArtifactIndex, StoreIndex, clean_global_cache, clear_artifacts, global_cache_dir,
+    prune_artifacts, store_disk_size,
 };
 use hx_ui::Output;
 

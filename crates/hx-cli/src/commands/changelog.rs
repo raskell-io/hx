@@ -90,10 +90,7 @@ async fn get_last_tag(runner: &CommandRunner) -> Option<String> {
 }
 
 /// Get commits since a specific tag.
-async fn get_commits_since_tag(
-    runner: &CommandRunner,
-    tag: Option<&str>,
-) -> Result<Vec<Commit>> {
+async fn get_commits_since_tag(runner: &CommandRunner, tag: Option<&str>) -> Result<Vec<Commit>> {
     let range = match tag {
         Some(t) => format!("{}..HEAD", t),
         None => "HEAD".to_string(),
@@ -283,7 +280,9 @@ fn generate_changelog_conventional(
     // Header
     output.push_str("# Changelog\n\n");
     output.push_str("All notable changes to this project will be documented in this file.\n\n");
-    output.push_str("The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),\n");
+    output.push_str(
+        "The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),\n",
+    );
     output.push_str("and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).\n\n");
 
     // Version header
@@ -327,11 +326,7 @@ fn generate_changelog_conventional(
 }
 
 /// Generate changelog including all commits.
-fn generate_changelog_all(
-    commits: &[Commit],
-    unreleased: bool,
-    last_tag: Option<&str>,
-) -> String {
+fn generate_changelog_all(commits: &[Commit], unreleased: bool, last_tag: Option<&str>) -> String {
     let mut output = String::new();
 
     // Header

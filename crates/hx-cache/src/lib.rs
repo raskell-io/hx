@@ -20,15 +20,14 @@ use std::path::{Path, PathBuf};
 use tracing::debug;
 
 pub use artifacts::{
-    clear_artifacts, compute_artifact_hash, hash_file, prune_artifacts, retrieve_artifacts,
-    store_artifacts, ArtifactEntry, ArtifactIndex, ArtifactStats, PruneResult,
+    ArtifactEntry, ArtifactIndex, ArtifactStats, PruneResult, clear_artifacts,
+    compute_artifact_hash, hash_file, prune_artifacts, retrieve_artifacts, store_artifacts,
 };
 pub use build_state::{BuildState, PackageBuildInfo, PackageStatus};
 pub use source::{
-    compute_source_fingerprint, load_source_fingerprint, save_source_fingerprint,
-    SourceFingerprint,
+    SourceFingerprint, compute_source_fingerprint, load_source_fingerprint, save_source_fingerprint,
 };
-pub use store::{calculate_fingerprint, store_disk_size, BuildCacheEntry, StoreIndex, StoreStats};
+pub use store::{BuildCacheEntry, StoreIndex, StoreStats, calculate_fingerprint, store_disk_size};
 
 /// Get the global cache directory.
 ///

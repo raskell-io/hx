@@ -6,8 +6,8 @@
 //! Run with: cargo test -p hx-solver --test integration
 
 use hx_solver::{
-    default_index_path, generate_build_plan, load_index, IndexOptions, PlanOptions, Resolver,
-    ResolverConfig, VersionConstraint,
+    IndexOptions, PlanOptions, Resolver, ResolverConfig, VersionConstraint, default_index_path,
+    generate_build_plan, load_index,
 };
 
 /// Check if the Hackage index is available.
@@ -207,7 +207,10 @@ fn test_resolve_nonexistent_package() {
     let index = load_index(&index_path, &options).expect("Failed to load index");
 
     let resolver = Resolver::new(&index);
-    let result = resolver.resolve("this-package-definitely-does-not-exist-12345", &VersionConstraint::Any);
+    let result = resolver.resolve(
+        "this-package-definitely-does-not-exist-12345",
+        &VersionConstraint::Any,
+    );
 
     assert!(result.is_err());
 }

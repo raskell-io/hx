@@ -19,12 +19,19 @@ pub async fn run(command: NewCommands, output: &Output) -> Result<i32> {
         }
         NewCommands::Test { name } => create_test_module(&name, output),
         NewCommands::Benchmark { name } => create_benchmark_module(&name, output),
-        NewCommands::Webapp { name, dir } => create_project_from_template(&name, dir, "webapp", output),
-        NewCommands::Cli { name, dir } => create_project_from_template(&name, dir, "cli", output),
-        NewCommands::Library { name, dir } => create_project_from_template(&name, dir, "library", output),
-        NewCommands::Template { url, name, dir, branch } => {
-            create_project_from_git_template(&url, &name, dir, &branch, output).await
+        NewCommands::Webapp { name, dir } => {
+            create_project_from_template(&name, dir, "webapp", output)
         }
+        NewCommands::Cli { name, dir } => create_project_from_template(&name, dir, "cli", output),
+        NewCommands::Library { name, dir } => {
+            create_project_from_template(&name, dir, "library", output)
+        }
+        NewCommands::Template {
+            url,
+            name,
+            dir,
+            branch,
+        } => create_project_from_git_template(&url, &name, dir, &branch, output).await,
     }
 }
 
@@ -95,7 +102,10 @@ fn create_project_from_template(
         output.verbose(&format!("Note: git init failed: {}", e));
     }
 
-    output.status("Created", &format!("{} project in '{}'", template, target_dir));
+    output.status(
+        "Created",
+        &format!("{} project in '{}'", template, target_dir),
+    );
     output.info("");
     output.info("Next steps:");
     output.info(&format!("  cd {}", target_dir));
@@ -331,8 +341,7 @@ async fn create_project_from_git_template(
     // Remove .git directory to start fresh
     let git_dir = target_path.join(".git");
     if git_dir.exists() {
-        fs::remove_dir_all(&git_dir)
-            .with_context(|| "Failed to remove .git directory")?;
+        fs::remove_dir_all(&git_dir).with_context(|| "Failed to remove .git directory")?;
     }
 
     // Apply template variable substitution
@@ -352,7 +361,10 @@ async fn create_project_from_git_template(
         .current_dir(target_path)
         .status();
 
-    output.status("Created", &format!("project '{}' in '{}'", name, target_dir));
+    output.status(
+        "Created",
+        &format!("project '{}' in '{}'", name, target_dir),
+    );
     output.info("");
     output.info("Next steps:");
     output.info(&format!("  cd {}", target_dir));
@@ -436,12 +448,9 @@ fn rename_template_files(dir: &Path, ctx: &TemplateContext) -> Result<()> {
 /// Check if a file is likely binary.
 fn is_binary_file(path: &Path) -> bool {
     let binary_extensions = [
-        "png", "jpg", "jpeg", "gif", "ico", "bmp", "webp",
-        "pdf", "zip", "tar", "gz", "bz2", "xz", "7z",
-        "exe", "dll", "so", "dylib", "a", "o",
-        "woff", "woff2", "ttf", "otf", "eot",
-        "mp3", "mp4", "avi", "mov", "wav", "ogg",
-        "sqlite", "db",
+        "png", "jpg", "jpeg", "gif", "ico", "bmp", "webp", "pdf", "zip", "tar", "gz", "bz2", "xz",
+        "7z", "exe", "dll", "so", "dylib", "a", "o", "woff", "woff2", "ttf", "otf", "eot", "mp3",
+        "mp4", "avi", "mov", "wav", "ogg", "sqlite", "db",
     ];
 
     path.extension()

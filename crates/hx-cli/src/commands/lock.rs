@@ -5,9 +5,9 @@ use hx_cabal::freeze;
 use hx_config::{LOCKFILE_FILENAME, Project, find_project_root};
 use hx_lock::{LockedPackage, Lockfile, WorkspacePackageInfo, parse_freeze_file};
 use hx_solver::{
-    best_index_path, compute_deps_fingerprint, index_is_current, load_cached_index,
-    load_cached_resolution, load_index, parse_cabal, save_index_cache, save_resolution_cache,
-    update_index, Dependency, IndexOptions, MirrorOptions, Resolver, ResolverConfig,
+    Dependency, IndexOptions, MirrorOptions, Resolver, ResolverConfig, best_index_path,
+    compute_deps_fingerprint, index_is_current, load_cached_index, load_cached_resolution,
+    load_index, parse_cabal, save_index_cache, save_resolution_cache, update_index,
 };
 use hx_toolchain::Toolchain;
 use hx_ui::{Output, Spinner};
@@ -217,7 +217,10 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
                     if result.downloaded {
                         output.status(
                             "Updated",
-                            &format!("index ({:.2} MB)", result.bytes_downloaded as f64 / 1_000_000.0),
+                            &format!(
+                                "index ({:.2} MB)",
+                                result.bytes_downloaded as f64 / 1_000_000.0
+                            ),
                         );
                     }
                 }
@@ -273,7 +276,9 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
             if let Some(ref existing) = existing_lockfile {
                 for pkg in &existing.packages {
                     // Don't pin packages that are being updated
-                    if !update_packages.iter().any(|u| u.eq_ignore_ascii_case(&pkg.name))
+                    if !update_packages
+                        .iter()
+                        .any(|u| u.eq_ignore_ascii_case(&pkg.name))
                         && let Ok(version) = pkg.version.parse()
                     {
                         config.installed.insert(pkg.name.clone(), version);
@@ -281,7 +286,10 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
                 }
                 let pinned_count = config.installed.len();
                 if pinned_count > 0 {
-                    output.info(&format!("Pinning {} packages at their locked versions", pinned_count));
+                    output.info(&format!(
+                        "Pinning {} packages at their locked versions",
+                        pinned_count
+                    ));
                 }
             }
         }
@@ -335,11 +343,7 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
         {
             let new_version = pkg.version.to_string();
             if old_pkg.version != new_version {
-                updated_packages.push((
-                    pkg.name.clone(),
-                    old_pkg.version.clone(),
-                    new_version,
-                ));
+                updated_packages.push((pkg.name.clone(), old_pkg.version.clone(), new_version));
             }
         }
 
