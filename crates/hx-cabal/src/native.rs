@@ -6,7 +6,7 @@
 
 use hx_core::{CommandOutput, CommandRunner, Error, Result};
 use hx_solver::{build_module_graph, ModuleGraph, ModuleInfo};
-use hx_ui::{Output, Spinner};
+use hx_ui::{Output, Progress, Spinner};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -238,10 +238,13 @@ impl GhcConfig {
 
         let version = output.stdout.trim().to_string();
 
+        // Auto-detect package databases
+        let package_dbs = detect_package_dbs(&version).await;
+
         Ok(Self {
             ghc_path: PathBuf::from("ghc"),
             version,
-            package_dbs: Vec::new(),
+            package_dbs,
             packages: Vec::new(),
         })
     }
@@ -257,6 +260,91 @@ impl GhcConfig {
         self.packages.push(pkg.into());
         self
     }
+
+    /// Add multiple packages to expose.
+    pub fn with_packages(mut self, pkgs: impl IntoIterator<Item = String>) -> Self {
+        self.packages.extend(pkgs);
+        self
+    }
+}
+
+/// Detect available GHC package databases.
+async fn detect_package_dbs(ghc_version: &str) -> Vec<PathBuf> {
+    let mut dbs = Vec::new();
+
+    // Try to get package databases from ghc-pkg
+    let runner = CommandRunner::new();
+    if let Ok(output) = runner.run("ghc-pkg", ["list", "--global"]).await
+        && output.success()
+    {
+        // First line is usually the database path
+        if let Some(first_line) = output.stdout.lines().next() {
+            let db_path = first_line.trim().trim_end_matches(':');
+            if !db_path.is_empty() {
+                let path = PathBuf::from(db_path);
+                if path.exists() {
+                    debug!("Found global package db: {}", path.display());
+                    dbs.push(path);
+                }
+            }
+        }
+    }
+
+    // Add cabal store package database
+    if let Some(home) = dirs::home_dir() {
+        // Standard cabal store location
+        let cabal_store = home
+            .join(".cabal")
+            .join("store")
+            .join(format!("ghc-{}", ghc_version))
+            .join("package.db");
+        if cabal_store.exists() {
+            debug!("Found cabal store db: {}", cabal_store.display());
+            dbs.push(cabal_store);
+        }
+
+        // hx-managed store location
+        let hx_store = home
+            .join(".cache")
+            .join("hx")
+            .join("cabal")
+            .join("store")
+            .join(format!("ghc-{}", ghc_version))
+            .join("package.db");
+        if hx_store.exists() {
+            debug!("Found hx store db: {}", hx_store.display());
+            dbs.push(hx_store);
+        }
+    }
+
+    dbs
+}
+
+/// Get packages needed from a lockfile.
+pub fn packages_from_lockfile(lockfile_path: &Path) -> Vec<String> {
+    let content = match std::fs::read_to_string(lockfile_path) {
+        Ok(c) => c,
+        Err(_) => return vec!["base".to_string()],
+    };
+
+    // Parse the lockfile TOML to extract package names
+    let mut packages = vec!["base".to_string()];
+
+    // Simple parsing - look for [[packages]] sections
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("name = ") {
+            let name = trimmed
+                .trim_start_matches("name = ")
+                .trim_matches('"')
+                .to_string();
+            if !name.is_empty() && !packages.contains(&name) {
+                packages.push(name);
+            }
+        }
+    }
+
+    packages
 }
 
 /// Options for native GHC builds.
@@ -464,12 +552,9 @@ impl NativeBuilder {
         let mut compiled_modules = HashSet::new();
         let mut modules_compiled = 0;
 
-        // Compile in parallel groups
-        let spinner = if !options.verbose {
-            Some(Spinner::new(format!(
-                "Compiling {} of {} modules...",
-                rebuild_count, module_count
-            )))
+        // Use progress bar for compilation (determinate progress)
+        let progress = if !options.verbose && rebuild_count > 0 {
+            Some(Progress::new(rebuild_count as u64, "Compiling"))
         } else {
             None
         };
@@ -510,6 +595,11 @@ impl NativeBuilder {
                     }
                     compiled_modules.insert(result.module.clone());
                     modules_compiled += 1;
+
+                    // Update progress bar
+                    if let Some(ref p) = progress {
+                        p.inc(1);
+                    }
                 } else {
                     errors.extend(result.errors.clone());
                 }
@@ -523,16 +613,18 @@ impl NativeBuilder {
             }
         }
 
-        if let Some(spinner) = spinner {
+        // Finish progress bar
+        if let Some(p) = progress {
             if errors.is_empty() {
-                spinner.finish_success(format!(
+                p.finish(format!(
                     "Compiled {} modules in {} ({} skipped)",
                     modules_compiled,
                     format_duration(start.elapsed()),
                     skip_count
                 ));
             } else {
-                spinner.finish_error("Compilation failed");
+                // Progress bar will be dropped, but we show error separately
+                drop(p);
             }
         }
 

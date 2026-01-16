@@ -7,7 +7,7 @@
 //! - Arrays: merged with higher precedence items placed earlier
 //! - `Option<T>`: first `Some` value wins
 
-use crate::{FormatConfig, LintConfig, Manifest, ProjectConfig, ToolchainConfig};
+use crate::{BuildConfig, FormatConfig, LintConfig, Manifest, ProjectConfig, ToolchainConfig};
 
 /// Trait for combining configuration values.
 ///
@@ -42,6 +42,7 @@ impl Combine for Manifest {
         Self {
             project: self.project.combine(other.project),
             toolchain: self.toolchain.combine(other.toolchain),
+            build: self.build.combine(other.build),
             format: self.format.combine(other.format),
             lint: self.lint.combine(other.lint),
             dependencies: {
@@ -92,6 +93,23 @@ impl Combine for LintConfig {
     fn combine(self, _other: Self) -> Self {
         Self {
             hlint: self.hlint, // Prefer self
+        }
+    }
+}
+
+impl Combine for BuildConfig {
+    fn combine(self, other: Self) -> Self {
+        Self {
+            optimization: self.optimization, // Prefer self
+            warnings: self.warnings,
+            werror: self.werror,
+            ghc_flags: self.ghc_flags.combine(other.ghc_flags),
+            src_dirs: if self.src_dirs.is_empty() {
+                other.src_dirs
+            } else {
+                self.src_dirs
+            },
+            native: self.native,
         }
     }
 }

@@ -2,12 +2,13 @@
 
 use anyhow::Result;
 use hx_cabal::build::{self as cabal_build, BuildOptions};
-use hx_cabal::native::{GhcConfig, NativeBuildOptions, NativeBuilder};
+use hx_cabal::native::{GhcConfig, NativeBuildOptions, NativeBuilder, packages_from_lockfile};
 use hx_cache::{BuildState, StoreIndex, compute_source_fingerprint, save_source_fingerprint};
 use hx_config::{Project, find_project_root};
 use hx_lock::Lockfile;
 use hx_toolchain::{AutoInstallPolicy, Toolchain, ensure_toolchain};
 use hx_ui::Output;
+use std::path::PathBuf;
 use std::time::Instant;
 
 /// Run the build command.
@@ -273,22 +274,56 @@ async fn run_native_build(
         .map(|v| v.to_string())
         .unwrap_or_default();
 
-    // Configure GHC
-    let ghc_config = GhcConfig {
-        ghc_path: std::path::PathBuf::from("ghc"),
-        version: ghc_version,
-        package_dbs: vec![],
-        packages: vec!["base".to_string()], // Always need base
+    // Auto-detect GHC config with package databases
+    let mut ghc_config = match GhcConfig::detect().await {
+        Ok(config) => config,
+        Err(_) => GhcConfig {
+            ghc_path: PathBuf::from("ghc"),
+            version: ghc_version.clone(),
+            package_dbs: vec![],
+            packages: vec![],
+        },
     };
+
+    // Get packages from lockfile if it exists
+    let lockfile_path = project.lockfile_path();
+    let packages = packages_from_lockfile(&lockfile_path);
+    ghc_config = ghc_config.with_packages(packages);
+
+    // Get build config from manifest
+    let build_config = &project.manifest.build;
+
+    // Determine optimization level
+    let optimization = if release {
+        2
+    } else {
+        build_config.optimization
+    };
+
+    // Get source directories from config
+    let src_dirs: Vec<PathBuf> = build_config
+        .src_dirs
+        .iter()
+        .map(PathBuf::from)
+        .collect();
+
+    // Combine extra flags from config
+    let mut extra_flags = build_config.ghc_flags.clone();
+
+    // Add any language extensions commonly needed
+    // These can be overridden by the user's ghc_flags
+    if extra_flags.is_empty() {
+        extra_flags.push("-XOverloadedStrings".to_string());
+    }
 
     // Configure native build options
     let native_options = NativeBuildOptions {
-        src_dirs: vec![std::path::PathBuf::from("src")],
+        src_dirs,
         output_dir: project.root.join(".hx/native-build"),
-        optimization: if release { 2 } else { 1 },
-        warnings: true,
-        werror: false,
-        extra_flags: vec![],
+        optimization,
+        warnings: build_config.warnings,
+        werror: build_config.werror,
+        extra_flags,
         jobs: jobs.unwrap_or_else(num_cpus::get),
         verbose: output.is_verbose(),
         main_module: Some("Main".to_string()),
@@ -298,24 +333,52 @@ async fn run_native_build(
     // Create builder and run
     let builder = NativeBuilder::new(ghc_config);
 
+    // Show build info
     output.status("Building", &format!("{} (native)", project.name()));
+    if output.is_verbose() {
+        output.info(&format!("  GHC version: {}", ghc_version));
+        output.info(&format!("  Optimization: -O{}", optimization));
+        output.info(&format!("  Parallelism: {} jobs", native_options.jobs));
+    }
 
     match builder.build(&project.root, &native_options, output).await {
         Ok(result) => {
             if result.success {
-                if result.modules_skipped > 0 {
-                    output.info(&format!(
-                        "Compiled {} modules ({} skipped)",
-                        result.modules_compiled, result.modules_skipped
-                    ));
+                // Show detailed results
+                let duration_str = format_build_duration(result.duration);
+
+                if result.modules_compiled > 0 || result.modules_skipped > 0 {
+                    let status = if result.modules_skipped > 0 {
+                        format!(
+                            "{} compiled, {} up-to-date in {}",
+                            result.modules_compiled,
+                            result.modules_skipped,
+                            duration_str
+                        )
+                    } else {
+                        format!("{} modules in {}", result.modules_compiled, duration_str)
+                    };
+                    output.status("Finished", &status);
                 }
+
+                // Show warnings if any
+                if !result.warnings.is_empty() {
+                    output.warn(&format!("{} warning(s)", result.warnings.len()));
+                    if output.is_verbose() {
+                        for warning in &result.warnings {
+                            output.info(warning);
+                        }
+                    }
+                }
+
                 if let Some(exe) = result.executable {
                     output.info(&format!("Executable: {}", exe.display()));
                 }
                 Ok(0)
             } else {
+                output.error(&format!("Build failed with {} error(s)", result.errors.len()));
                 for error in &result.errors {
-                    output.error(error);
+                    eprintln!("{}", error);
                 }
                 Ok(5)
             }
@@ -324,5 +387,19 @@ async fn run_native_build(
             output.print_error(&e);
             Ok(5)
         }
+    }
+}
+
+/// Format build duration for display.
+fn format_build_duration(duration: std::time::Duration) -> String {
+    let secs = duration.as_secs_f64();
+    if secs < 1.0 {
+        format!("{:.0}ms", duration.as_millis())
+    } else if secs < 60.0 {
+        format!("{:.2}s", secs)
+    } else {
+        let mins = (secs / 60.0).floor();
+        let remaining_secs = secs - (mins * 60.0);
+        format!("{}m {:.1}s", mins as u64, remaining_secs)
     }
 }

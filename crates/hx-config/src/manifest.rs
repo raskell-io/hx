@@ -99,6 +99,55 @@ fn default_true() -> bool {
     true
 }
 
+/// Build configuration section.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BuildConfig {
+    /// GHC optimization level (0, 1, or 2)
+    #[serde(default = "default_optimization")]
+    pub optimization: u8,
+
+    /// Enable all warnings (-Wall)
+    #[serde(default = "default_true")]
+    pub warnings: bool,
+
+    /// Treat warnings as errors (-Werror)
+    #[serde(default)]
+    pub werror: bool,
+
+    /// Additional GHC flags
+    #[serde(default)]
+    pub ghc_flags: Vec<String>,
+
+    /// Source directories (defaults to ["src"])
+    #[serde(default = "default_src_dirs")]
+    pub src_dirs: Vec<String>,
+
+    /// Use native build (experimental)
+    #[serde(default)]
+    pub native: bool,
+}
+
+fn default_optimization() -> u8 {
+    1
+}
+
+fn default_src_dirs() -> Vec<String> {
+    vec!["src".to_string()]
+}
+
+impl Default for BuildConfig {
+    fn default() -> Self {
+        Self {
+            optimization: default_optimization(),
+            warnings: true,
+            werror: false,
+            ghc_flags: Vec::new(),
+            src_dirs: default_src_dirs(),
+            native: false,
+        }
+    }
+}
+
 /// The hx.toml manifest.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Manifest {
@@ -108,6 +157,10 @@ pub struct Manifest {
     /// Toolchain configuration
     #[serde(default)]
     pub toolchain: ToolchainConfig,
+
+    /// Build configuration
+    #[serde(default)]
+    pub build: BuildConfig,
 
     /// Format configuration
     #[serde(default)]
@@ -155,6 +208,7 @@ impl Manifest {
                 resolver: default_resolver(),
             },
             toolchain: ToolchainConfig::default(),
+            build: BuildConfig::default(),
             format: FormatConfig::default(),
             lint: LintConfig::default(),
             dependencies: HashMap::new(),
