@@ -260,8 +260,14 @@ fn check_hls(toolchain: &Toolchain, report: &mut DoctorReport) {
 
                 if let Some(rec_version) = recommended {
                     diag = diag.with_fix(Fix::with_command(
-                        format!("Install HLS {} (recommended for GHC {})", rec_version, ghc_str),
-                        format!("ghcup install hls {} && ghcup set hls {}", rec_version, rec_version),
+                        format!(
+                            "Install HLS {} (recommended for GHC {})",
+                            rec_version, ghc_str
+                        ),
+                        format!(
+                            "ghcup install hls {} && ghcup set hls {}",
+                            rec_version, rec_version
+                        ),
                     ));
                 }
 
@@ -287,10 +293,34 @@ fn check_native_deps_linux(report: &mut DoctorReport) {
     // Check for common native libraries needed by GHC
     // Format: (pkg-config name, debian pkg, fedora pkg, arch pkg, description)
     let libs = [
-        ("gmp", "libgmp-dev", "gmp-devel", "gmp", "GMP arithmetic library"),
-        ("zlib", "zlib1g-dev", "zlib-devel", "zlib", "zlib compression"),
-        ("ncurses", "libncurses-dev", "ncurses-devel", "ncurses", "ncurses terminal library"),
-        ("libffi", "libffi-dev", "libffi-devel", "libffi", "Foreign Function Interface"),
+        (
+            "gmp",
+            "libgmp-dev",
+            "gmp-devel",
+            "gmp",
+            "GMP arithmetic library",
+        ),
+        (
+            "zlib",
+            "zlib1g-dev",
+            "zlib-devel",
+            "zlib",
+            "zlib compression",
+        ),
+        (
+            "ncurses",
+            "libncurses-dev",
+            "ncurses-devel",
+            "ncurses",
+            "ncurses terminal library",
+        ),
+        (
+            "libffi",
+            "libffi-dev",
+            "libffi-devel",
+            "libffi",
+            "Foreign Function Interface",
+        ),
     ];
 
     let mut missing_libs = Vec::new();
@@ -330,10 +360,7 @@ fn check_native_deps_linux(report: &mut DoctorReport) {
 #[cfg(target_os = "linux")]
 fn check_library_linux(lib: &str) -> bool {
     // Try pkg-config first (most reliable)
-    if let Ok(output) = Command::new("pkg-config")
-        .args(["--exists", lib])
-        .output()
-    {
+    if let Ok(output) = Command::new("pkg-config").args(["--exists", lib]).output() {
         if output.status.success() {
             return true;
         }
@@ -470,11 +497,7 @@ fn check_native_lib_macos(lib: &str) -> bool {
 #[cfg(target_os = "windows")]
 fn check_native_deps_windows(report: &mut DoctorReport) {
     // Check for MSYS2/MinGW which provides native libs on Windows
-    let msys2_paths = [
-        "C:\\msys64",
-        "C:\\msys32",
-        "C:\\ghcup\\msys64",
-    ];
+    let msys2_paths = ["C:\\msys64", "C:\\msys32", "C:\\ghcup\\msys64"];
 
     let msys2_path = msys2_paths
         .iter()
@@ -501,7 +524,10 @@ fn check_native_deps_windows(report: &mut DoctorReport) {
                     ))
                     .with_fix(Fix::with_command(
                         format!("Install {} via MSYS2", lib),
-                        format!("pacman -S mingw-w64-x86_64-{}", lib.trim_start_matches("lib")),
+                        format!(
+                            "pacman -S mingw-w64-x86_64-{}",
+                            lib.trim_start_matches("lib")
+                        ),
                     )),
                 );
             }

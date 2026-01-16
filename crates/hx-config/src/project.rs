@@ -117,7 +117,10 @@ impl Project {
         if self.workspace_packages.is_empty() {
             vec![self.name()]
         } else {
-            self.workspace_packages.iter().map(|p| p.name.as_str()).collect()
+            self.workspace_packages
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect()
         }
     }
 }

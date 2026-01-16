@@ -43,10 +43,7 @@ async fn setup(force: bool, output: &Output) -> Result<i32> {
     if project.is_workspace() {
         output.status(
             "Generated",
-            &format!(
-                "hie.yaml for {} packages",
-                project.workspace_packages.len()
-            ),
+            &format!("hie.yaml for {} packages", project.workspace_packages.len()),
         );
 
         // List the packages
@@ -112,7 +109,10 @@ async fn status(output: &Output) -> Result<i32> {
             let ghc_str = ghc_ver.to_string();
 
             if hx_config::is_hls_compatible(&hls_str, &ghc_str) {
-                output.list_item("compatibility", &format!("HLS {} + GHC {} ✓", hls_str, ghc_str));
+                output.list_item(
+                    "compatibility",
+                    &format!("HLS {} + GHC {} ✓", hls_str, ghc_str),
+                );
             } else {
                 output.list_item(
                     "compatibility",
@@ -120,7 +120,10 @@ async fn status(output: &Output) -> Result<i32> {
                 );
 
                 if let Some(recommended) = hx_config::recommended_hls_for_ghc(&ghc_str) {
-                    output.info(&format!("Recommended HLS for GHC {}: {}", ghc_str, recommended));
+                    output.info(&format!(
+                        "Recommended HLS for GHC {}: {}",
+                        ghc_str, recommended
+                    ));
                 }
             }
         }

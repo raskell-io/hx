@@ -36,7 +36,8 @@ pub async fn run(args: Vec<String>, package: Option<String>, output: &Output) ->
 
     let build_dir = project.cabal_build_dir();
 
-    let exit_code = cabal_build::run(&project.root, &build_dir, &args, package.as_deref(), output).await?;
+    let exit_code =
+        cabal_build::run(&project.root, &build_dir, &args, package.as_deref(), output).await?;
     Ok(exit_code)
 }
 

@@ -44,7 +44,11 @@ pub async fn run(
             &format!(
                 "{} ({}/{} packages)",
                 build_target,
-                if package.is_some() { 1 } else { project.package_count() },
+                if package.is_some() {
+                    1
+                } else {
+                    project.package_count()
+                },
                 project.package_count()
             ),
         );
@@ -72,7 +76,11 @@ pub async fn run(
 }
 
 /// Run the test command.
-pub async fn test(pattern: Option<String>, package: Option<String>, output: &Output) -> Result<i32> {
+pub async fn test(
+    pattern: Option<String>,
+    package: Option<String>,
+    output: &Output,
+) -> Result<i32> {
     // Find project root
     let project_root = find_project_root(".")?;
     let project = Project::load(&project_root)?;
@@ -102,7 +110,15 @@ pub async fn test(pattern: Option<String>, package: Option<String>, output: &Out
 
     let build_dir = project.cabal_build_dir();
 
-    match cabal_build::test(&project.root, &build_dir, pattern.as_deref(), package.as_deref(), output).await {
+    match cabal_build::test(
+        &project.root,
+        &build_dir,
+        pattern.as_deref(),
+        package.as_deref(),
+        output,
+    )
+    .await
+    {
         Ok(_result) => Ok(0),
         Err(e) => {
             output.print_error(&e);

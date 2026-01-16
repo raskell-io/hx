@@ -220,10 +220,12 @@ library
 
 fn generate_ci_workflow(_name: &str, kind: ProjectKind) -> String {
     let run_target = match kind {
-        ProjectKind::Bin => r#"
+        ProjectKind::Bin => {
+            r#"
       - name: Run executable
         run: cabal run
-"#,
+"#
+        }
         ProjectKind::Lib => "",
     };
 
