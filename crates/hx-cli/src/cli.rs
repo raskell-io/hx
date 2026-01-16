@@ -40,6 +40,14 @@ pub struct GlobalArgs {
     /// Path to configuration file
     #[arg(long, global = true, env = EnvVars::HX_CONFIG_FILE)]
     pub config_file: Option<std::path::PathBuf>,
+
+    /// Disable automatic toolchain installation
+    #[arg(long, global = true, env = "HX_NO_AUTO_INSTALL")]
+    pub no_auto_install: bool,
+
+    /// Always install missing toolchain components without prompting
+    #[arg(long, global = true, env = "HX_AUTO_INSTALL")]
+    pub auto_install: bool,
 }
 
 #[derive(Subcommand, Debug)]
@@ -134,6 +142,13 @@ pub enum Commands {
     /// Create or update the lockfile
     Lock,
 
+    /// Pre-fetch dependencies in parallel
+    Fetch {
+        /// Number of parallel download jobs
+        #[arg(short, long)]
+        jobs: Option<usize>,
+    },
+
     /// Build with locked dependencies
     Sync {
         /// Force sync even if lock is outdated
@@ -146,6 +161,12 @@ pub enum Commands {
         /// Clean global cache instead of project cache
         #[arg(long)]
         global: bool,
+    },
+
+    /// Manage the build cache
+    Cache {
+        #[command(subcommand)]
+        command: CacheCommands,
     },
 
     /// Manage toolchain versions
@@ -250,6 +271,22 @@ pub enum IdeCommands {
 
     /// Check IDE/HLS configuration status
     Status,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CacheCommands {
+    /// Show cache status and statistics
+    Status,
+
+    /// Prune old cache entries
+    Prune {
+        /// Maximum age in days (default: 30)
+        #[arg(long, default_value = "30")]
+        days: u64,
+    },
+
+    /// Clean the entire cache
+    Clean,
 }
 
 #[derive(Subcommand, Debug)]

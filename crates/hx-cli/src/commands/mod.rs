@@ -2,10 +2,12 @@
 
 mod bench;
 mod build;
+mod cache;
 mod clean;
 mod completions;
 mod deps;
 mod doctor;
+mod fetch;
 mod fmt;
 mod ide;
 mod init;
@@ -17,9 +19,21 @@ mod run;
 mod toolchain;
 mod upgrade;
 
-use crate::cli::{Cli, Commands};
+use crate::cli::{CacheCommands, Cli, Commands, GlobalArgs};
 use anyhow::Result;
+use hx_toolchain::AutoInstallPolicy;
 use hx_ui::{Output, Printer, Verbosity};
+
+/// Determine auto-install policy from global args.
+fn auto_install_policy(global: &GlobalArgs) -> AutoInstallPolicy {
+    if global.no_auto_install {
+        AutoInstallPolicy::Never
+    } else if global.auto_install {
+        AutoInstallPolicy::Always
+    } else {
+        AutoInstallPolicy::Prompt
+    }
+}
 
 /// Run the CLI command.
 pub async fn run(cli: Cli) -> Result<i32> {
@@ -35,6 +49,8 @@ pub async fn run(cli: Cli) -> Result<i32> {
         Verbosity::Normal
     });
 
+    let policy = auto_install_policy(&cli.global);
+
     match cli.command {
         Some(Commands::Init {
             bin,
@@ -48,18 +64,21 @@ pub async fn run(cli: Cli) -> Result<i32> {
             jobs,
             target,
             package,
-        }) => build::run(release, jobs, target, package, &output).await,
-        Some(Commands::Test { pattern, package }) => build::test(pattern, package, &output).await,
-        Some(Commands::Run { args, package }) => run::run(args, package, &output).await,
-        Some(Commands::Repl) => run::repl(&output).await,
+        }) => build::run(release, jobs, target, package, policy, &output).await,
+        Some(Commands::Test { pattern, package }) => {
+            build::test(pattern, package, policy, &output).await
+        }
+        Some(Commands::Run { args, package }) => run::run(args, package, policy, &output).await,
+        Some(Commands::Repl) => run::repl(policy, &output).await,
         Some(Commands::Check) => {
             // Check is just a fast build
-            build::run(false, None, None, None, &output).await
+            build::run(false, None, None, None, policy, &output).await
         }
         Some(Commands::Fmt { check }) => fmt::run(check, &output).await,
         Some(Commands::Lint { fix }) => lint::run(fix, &output).await,
         Some(Commands::Doctor) => doctor::run(&output).await,
         Some(Commands::Lock) => lock::run(&output).await,
+        Some(Commands::Fetch { jobs }) => fetch::run(jobs, &output).await,
         Some(Commands::Sync { force }) => lock::sync(force, &output).await,
         Some(Commands::Clean { global }) => clean::run(global, &output).await,
         Some(Commands::Toolchain { command }) => toolchain::run(command, &output).await,
@@ -76,7 +95,7 @@ pub async fn run(cli: Cli) -> Result<i32> {
             save_baseline,
             baseline,
             package,
-        }) => bench::run(filter, save_baseline, baseline, package, &output).await,
+        }) => bench::run(filter, save_baseline, baseline, package, policy, &output).await,
         Some(Commands::Publish {
             dry_run,
             username,
@@ -84,6 +103,11 @@ pub async fn run(cli: Cli) -> Result<i32> {
             docs,
         }) => publish::run(dry_run, username, password, docs, &output).await,
         Some(Commands::Ide { command }) => ide::run(command, &output).await,
+        Some(Commands::Cache { command }) => match command {
+            CacheCommands::Status => cache::status(&output).await,
+            CacheCommands::Prune { days } => cache::prune(days, &output).await,
+            CacheCommands::Clean => cache::clean(&output).await,
+        },
         None => {
             // No command - show help
             use clap::CommandFactory;

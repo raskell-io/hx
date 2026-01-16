@@ -4,11 +4,24 @@
 //! - Global cache directories
 //! - Project-local cache (.hx/)
 //! - Cache keys and artifact storage
+//! - Shared build store with fingerprint tracking
+//! - Source fingerprinting for incremental builds
+//! - Build state tracking
+
+pub mod build_state;
+pub mod source;
+pub mod store;
 
 use directories::ProjectDirs;
 use hx_core::error::{Error, Result};
 use std::path::{Path, PathBuf};
 use tracing::debug;
+
+pub use build_state::{BuildState, PackageBuildInfo, PackageStatus};
+pub use source::{
+    SourceFingerprint, compute_source_fingerprint, load_source_fingerprint, save_source_fingerprint,
+};
+pub use store::{BuildCacheEntry, StoreIndex, StoreStats, calculate_fingerprint, store_disk_size};
 
 /// Get the global cache directory.
 ///

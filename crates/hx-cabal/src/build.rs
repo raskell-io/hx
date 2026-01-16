@@ -1,6 +1,6 @@
 //! Cabal build operations.
 
-use hx_cache::{cabal_store_dir, ensure_dir};
+use hx_cache::{StoreIndex, cabal_store_dir, ensure_dir};
 use hx_core::{CommandOutput, CommandRunner, Error, Result};
 use hx_ui::{Output, Spinner};
 use std::path::{Path, PathBuf};
@@ -20,6 +20,14 @@ pub struct BuildOptions {
     pub package: Option<String>,
     /// Verbose output
     pub verbose: bool,
+    /// Build fingerprint (for cache tracking)
+    pub fingerprint: Option<String>,
+    /// GHC version (for cache tracking)
+    pub ghc_version: Option<String>,
+    /// Number of packages (for cache tracking)
+    pub package_count: Option<usize>,
+    /// Project name (for cache tracking)
+    pub project_name: Option<String>,
 }
 
 /// Result of a build operation.
@@ -105,6 +113,23 @@ pub async fn build(
             errors: result.errors.clone(),
             fixes: vec![],
         });
+    }
+
+    // Record successful build to store
+    if let Some(ref fingerprint) = options.fingerprint
+        && let Ok(mut store) = StoreIndex::load()
+    {
+        let platform = format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS);
+        store.record_build(
+            fingerprint.clone(),
+            options.ghc_version.clone(),
+            platform,
+            options.package_count.unwrap_or(0),
+            options.project_name.clone(),
+        );
+        if let Err(e) = store.save() {
+            debug!("Failed to save store index: {}", e);
+        }
     }
 
     Ok(result)

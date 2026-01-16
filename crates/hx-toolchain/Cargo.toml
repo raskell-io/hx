@@ -18,3 +18,4 @@ serde.workspace = true
 tracing.workspace = true
 tokio.workspace = true
 which.workspace = true
+atty = "0.2"

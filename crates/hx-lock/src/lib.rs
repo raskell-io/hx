@@ -75,6 +75,28 @@ pub struct LockedPlan {
     pub hash: Option<String>,
 }
 
+/// A workspace package (local package in the workspace).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WorkspacePackageInfo {
+    /// Package name
+    pub name: String,
+    /// Package version
+    pub version: String,
+    /// Path relative to workspace root
+    pub path: String,
+}
+
+/// Workspace section of the lockfile.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LockedWorkspace {
+    /// Whether this lockfile represents a workspace
+    #[serde(default)]
+    pub is_workspace: bool,
+    /// Workspace packages (local packages)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub packages: Vec<WorkspacePackageInfo>,
+}
+
 /// The hx.lock lockfile.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Lockfile {
@@ -88,9 +110,16 @@ pub struct Lockfile {
     /// Build plan metadata
     #[serde(default)]
     pub plan: LockedPlan,
-    /// Locked packages
+    /// Workspace information (for multi-package projects)
+    #[serde(default, skip_serializing_if = "is_default_workspace")]
+    pub workspace: LockedWorkspace,
+    /// Locked packages (external dependencies)
     #[serde(default)]
     pub packages: Vec<LockedPackage>,
+}
+
+fn is_default_workspace(w: &LockedWorkspace) -> bool {
+    !w.is_workspace && w.packages.is_empty()
 }
 
 impl Default for Lockfile {
@@ -107,6 +136,7 @@ impl Lockfile {
             created_at: Utc::now(),
             toolchain: LockedToolchain::default(),
             plan: LockedPlan::default(),
+            workspace: LockedWorkspace::default(),
             packages: Vec::new(),
         }
     }
@@ -161,7 +191,17 @@ impl Lockfile {
             hasher.update(format!("index:{}", index_state));
         }
 
-        // Include packages (sorted for determinism)
+        // Include workspace packages (sorted for determinism)
+        if self.workspace.is_workspace {
+            hasher.update("workspace:true");
+            let mut workspace_pkgs: Vec<_> = self.workspace.packages.iter().collect();
+            workspace_pkgs.sort_by(|a, b| a.name.cmp(&b.name));
+            for pkg in workspace_pkgs {
+                hasher.update(format!("local:{}@{}:{}", pkg.name, pkg.version, pkg.path));
+            }
+        }
+
+        // Include external packages (sorted for determinism)
         let mut packages: Vec<_> = self.packages.iter().collect();
         packages.sort_by(|a, b| a.name.cmp(&b.name));
         for pkg in packages {
@@ -183,6 +223,26 @@ impl Lockfile {
     pub fn set_toolchain(&mut self, ghc: Option<String>, cabal: Option<String>) {
         self.toolchain.ghc = ghc;
         self.toolchain.cabal = cabal;
+    }
+
+    /// Set workspace information.
+    pub fn set_workspace(&mut self, packages: Vec<WorkspacePackageInfo>) {
+        self.workspace.is_workspace = !packages.is_empty();
+        self.workspace.packages = packages;
+    }
+
+    /// Check if this is a workspace lockfile.
+    pub fn is_workspace(&self) -> bool {
+        self.workspace.is_workspace
+    }
+
+    /// Get the workspace package names.
+    pub fn workspace_package_names(&self) -> Vec<&str> {
+        self.workspace
+            .packages
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect()
     }
 }
 
@@ -265,6 +325,65 @@ mod tests {
         assert_eq!(parsed.toolchain.ghc, Some("9.8.2".to_string()));
         assert_eq!(parsed.packages.len(), 1);
         assert_eq!(parsed.packages[0].name, "text");
+    }
+
+    #[test]
+    fn test_workspace_lockfile_roundtrip() {
+        let mut lock = Lockfile::new();
+        lock.set_toolchain(Some("9.8.2".to_string()), Some("3.12.1.0".to_string()));
+
+        // Set workspace packages
+        lock.set_workspace(vec![
+            WorkspacePackageInfo {
+                name: "mylib".to_string(),
+                version: "0.1.0".to_string(),
+                path: "packages/mylib".to_string(),
+            },
+            WorkspacePackageInfo {
+                name: "myapp".to_string(),
+                version: "0.1.0".to_string(),
+                path: "packages/myapp".to_string(),
+            },
+        ]);
+
+        // Add external dependencies
+        lock.add_package(LockedPackage {
+            name: "text".to_string(),
+            version: "2.1.1".to_string(),
+            source: "hackage".to_string(),
+            hash: None,
+        });
+
+        let toml = lock.to_string().unwrap();
+        let parsed = Lockfile::parse(&toml).unwrap();
+
+        assert!(parsed.is_workspace());
+        assert_eq!(parsed.workspace.packages.len(), 2);
+        assert_eq!(parsed.packages.len(), 1);
+
+        let names = parsed.workspace_package_names();
+        assert!(names.contains(&"mylib"));
+        assert!(names.contains(&"myapp"));
+    }
+
+    #[test]
+    fn test_workspace_fingerprint_includes_packages() {
+        let mut lock1 = Lockfile::new();
+        lock1.set_workspace(vec![WorkspacePackageInfo {
+            name: "pkg1".to_string(),
+            version: "0.1.0".to_string(),
+            path: "packages/pkg1".to_string(),
+        }]);
+
+        let mut lock2 = Lockfile::new();
+        lock2.set_workspace(vec![WorkspacePackageInfo {
+            name: "pkg2".to_string(),
+            version: "0.1.0".to_string(),
+            path: "packages/pkg2".to_string(),
+        }]);
+
+        // Different workspace packages should produce different fingerprints
+        assert_ne!(lock1.fingerprint(), lock2.fingerprint());
     }
 
     #[test]

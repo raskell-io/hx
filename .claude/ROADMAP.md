@@ -264,31 +264,58 @@ Applied patterns from the uv (Astral) codebase:
 
 ---
 
-## Future: v1.0
+## v0.2.0 - Performance & Caching ✅
 
 ### Performance & Caching
-- [ ] Shared build store keyed by fingerprints
-- [ ] Smarter incremental builds
-- [ ] Better parallel fetch
+- [x] Shared build store keyed by fingerprints
+  - `StoreIndex` tracks builds by SHA256 fingerprint
+  - `hx cache status` shows cache statistics
+  - `hx cache prune` removes old entries
+  - `hx cache clean` clears entire cache
+- [x] Smarter incremental builds
+  - Source fingerprinting (hashes all .hs, .cabal, hx.toml files)
+  - Build state tracking in `.hx/build-state.json`
+  - No-op detection skips `cabal build` when nothing changed
+  - Shows "Fresh" status for unchanged projects (~100ms)
+- [x] Better parallel fetch
+  - New `hx fetch` command for pre-downloading dependencies
+  - Uses `cabal fetch -j8` for parallel downloads
+  - Integrates with lockfile for exact version fetching
 
 ### Workspace Support
 - [x] Multi-package repos (cabal.project parsing)
-- [ ] Consistent `hx.lock` for workspaces
+- [x] Consistent `hx.lock` for workspaces
+  - Single lockfile at workspace root covers all packages
+  - Stores workspace package info (name, version, path)
+  - Filters local packages from external dependencies
+  - Validates workspace consistency on `hx sync`
 - [x] Workspace-aware commands (--package flag)
 
 ### Toolchain Management
 - [x] `hx toolchain install` via ghcup
 - [x] `hx toolchain use <profile>` for per-project pins
-- [ ] Automatic toolchain installation on mismatch
+- [x] Automatic toolchain installation on mismatch
+  - Checks toolchain requirements from hx.toml before build/test/run/bench
+  - Interactive prompt for installation (respects CI/non-TTY)
+  - `--auto-install` flag for unattended installation
+  - `--no-auto-install` flag to disable prompts
 
 ---
 
-## Future: v2.0
+## Future: v0.3.0 - Replace Selected Cabal Parts
 
-### Replace Selected Cabal Parts
-- [ ] Lock resolution layer
+### Lock Resolution Layer
+- [ ] Custom dependency resolver
+  - Parse package constraints from Hackage index
+  - Implement version resolution algorithm
+  - Generate solve plans without calling cabal freeze
 - [ ] Offline solver cache
+  - Cache resolution results for faster repeated solves
+  - Invalidate on index-state change
 - [ ] Controlled Hackage index mirroring
+  - Local package index management
+  - Faster index updates
+  - Offline-capable resolution
 
 ---
 
@@ -311,8 +338,10 @@ hx lint [--fix]
 hx doctor
 
 hx lock
+hx fetch [-j <jobs>]
 hx sync
 hx clean [--global]
+hx cache status|prune|clean
 
 hx add <package>
 hx rm <package>

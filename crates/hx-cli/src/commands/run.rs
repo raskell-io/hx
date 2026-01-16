@@ -3,13 +3,25 @@
 use anyhow::Result;
 use hx_cabal::build as cabal_build;
 use hx_config::{Project, find_project_root};
+use hx_toolchain::{AutoInstallPolicy, Toolchain, ensure_toolchain};
 use hx_ui::Output;
 
 /// Run the project.
-pub async fn run(args: Vec<String>, package: Option<String>, output: &Output) -> Result<i32> {
+pub async fn run(
+    args: Vec<String>,
+    package: Option<String>,
+    policy: AutoInstallPolicy,
+    output: &Output,
+) -> Result<i32> {
     // Find project root
     let project_root = find_project_root(".")?;
     let project = Project::load(&project_root)?;
+
+    // Check toolchain requirements
+    if let Err(e) = check_toolchain(&project, policy).await {
+        output.print_error(&e);
+        return Ok(4); // Toolchain error exit code
+    }
 
     // Validate package selection for workspaces
     if let Some(ref pkg_name) = package {
@@ -42,10 +54,16 @@ pub async fn run(args: Vec<String>, package: Option<String>, output: &Output) ->
 }
 
 /// Start a REPL.
-pub async fn repl(output: &Output) -> Result<i32> {
+pub async fn repl(policy: AutoInstallPolicy, output: &Output) -> Result<i32> {
     // Find project root
     let project_root = find_project_root(".")?;
     let project = Project::load(&project_root)?;
+
+    // Check toolchain requirements
+    if let Err(e) = check_toolchain(&project, policy).await {
+        output.print_error(&e);
+        return Ok(4); // Toolchain error exit code
+    }
 
     output.status("Starting", "REPL");
 
@@ -53,4 +71,17 @@ pub async fn repl(output: &Output) -> Result<i32> {
 
     let exit_code = cabal_build::repl(&project.root, &build_dir).await?;
     Ok(exit_code)
+}
+
+/// Check toolchain requirements and install if needed.
+async fn check_toolchain(project: &Project, policy: AutoInstallPolicy) -> hx_core::Result<()> {
+    let toolchain = Toolchain::detect().await;
+
+    ensure_toolchain(
+        &toolchain,
+        project.manifest.toolchain.ghc.as_deref(),
+        project.manifest.toolchain.cabal.as_deref(),
+        policy,
+    )
+    .await
 }

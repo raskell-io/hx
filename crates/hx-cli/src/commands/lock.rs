@@ -3,9 +3,10 @@
 use anyhow::Result;
 use hx_cabal::freeze;
 use hx_config::{LOCKFILE_FILENAME, Project, find_project_root};
-use hx_lock::{Lockfile, parse_freeze_file};
+use hx_lock::{Lockfile, WorkspacePackageInfo, parse_freeze_file};
 use hx_toolchain::Toolchain;
 use hx_ui::{Output, Spinner};
+use std::path::Path;
 
 /// Run the lock command.
 pub async fn run(output: &Output) -> Result<i32> {
@@ -13,7 +14,14 @@ pub async fn run(output: &Output) -> Result<i32> {
     let project_root = find_project_root(".")?;
     let project = Project::load(&project_root)?;
 
-    output.status("Locking", project.name());
+    if project.is_workspace() {
+        output.status(
+            "Locking",
+            &format!("{} ({} packages)", project.name(), project.package_count()),
+        );
+    } else {
+        output.status("Locking", project.name());
+    }
 
     // Update package index
     freeze::update(output.is_verbose()).await?;
@@ -34,10 +42,25 @@ pub async fn run(output: &Output) -> Result<i32> {
         toolchain.cabal.status.version().map(|v| v.to_string()),
     );
 
+    // Set workspace info if this is a workspace
+    if project.is_workspace() {
+        let workspace_packages = collect_workspace_packages(&project);
+        lockfile.set_workspace(workspace_packages);
+    }
+
     // Parse freeze file and add packages
+    // Filter out workspace packages from external dependencies
+    let workspace_names: Vec<_> = project
+        .package_names()
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
     let packages = parse_freeze_file(&freeze_content);
     for pkg in packages {
-        lockfile.add_package(pkg);
+        // Skip workspace packages - they're tracked separately
+        if !workspace_names.contains(&pkg.name) {
+            lockfile.add_package(pkg);
+        }
     }
 
     // Calculate fingerprint
@@ -51,15 +74,60 @@ pub async fn run(output: &Output) -> Result<i32> {
     let lockfile_path = project.lockfile_path();
     lockfile.to_file(&lockfile_path)?;
 
-    spinner.finish_success(format!(
-        "Created {} with {} packages",
-        LOCKFILE_FILENAME,
-        lockfile.packages.len()
-    ));
+    if project.is_workspace() {
+        spinner.finish_success(format!(
+            "Created {} with {} workspace packages and {} external dependencies",
+            LOCKFILE_FILENAME,
+            lockfile.workspace.packages.len(),
+            lockfile.packages.len()
+        ));
+    } else {
+        spinner.finish_success(format!(
+            "Created {} with {} packages",
+            LOCKFILE_FILENAME,
+            lockfile.packages.len()
+        ));
+    }
 
     output.info(&format!("Lockfile: {}", lockfile_path.display()));
 
     Ok(0)
+}
+
+/// Collect workspace package information from the project.
+fn collect_workspace_packages(project: &Project) -> Vec<WorkspacePackageInfo> {
+    let mut packages = Vec::new();
+
+    for pkg in &project.workspace_packages {
+        // Parse version from .cabal file
+        let version = parse_cabal_version(&pkg.cabal_file).unwrap_or_else(|| "0.0.0".to_string());
+
+        packages.push(WorkspacePackageInfo {
+            name: pkg.name.clone(),
+            version,
+            path: pkg.path.display().to_string(),
+        });
+    }
+
+    packages
+}
+
+/// Parse the version field from a .cabal file.
+fn parse_cabal_version(cabal_path: &Path) -> Option<String> {
+    let content = std::fs::read_to_string(cabal_path).ok()?;
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line.to_lowercase().starts_with("version:") {
+            let version = line
+                .strip_prefix("version:")
+                .or_else(|| line.strip_prefix("Version:"))
+                .map(|s| s.trim().to_string());
+            return version;
+        }
+    }
+
+    None
 }
 
 /// Run the sync command.
@@ -68,7 +136,14 @@ pub async fn sync(force: bool, output: &Output) -> Result<i32> {
     let project_root = find_project_root(".")?;
     let project = Project::load(&project_root)?;
 
-    output.status("Syncing", project.name());
+    if project.is_workspace() {
+        output.status(
+            "Syncing",
+            &format!("{} ({} packages)", project.name(), project.package_count()),
+        );
+    } else {
+        output.status("Syncing", project.name());
+    }
 
     // Check if lockfile exists
     let lockfile_path = project.lockfile_path();
@@ -96,6 +171,43 @@ pub async fn sync(force: bool, output: &Output) -> Result<i32> {
             output.info("Run `hx toolchain install` to install the correct version");
             output.info("Or run `hx sync --force` to override");
         }
+
+        // Verify workspace consistency
+        if project.is_workspace() != lockfile.is_workspace() {
+            output.warn("Workspace configuration changed since lock was created");
+            output.info("Run `hx lock` to regenerate the lockfile");
+            if !force {
+                return Ok(3);
+            }
+        }
+
+        // Check if workspace packages have changed
+        if lockfile.is_workspace() {
+            let current_packages: Vec<_> = project
+                .package_names()
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
+            let locked_packages = lockfile.workspace_package_names();
+
+            let mut packages_changed = current_packages.len() != locked_packages.len();
+            if !packages_changed {
+                for pkg in &current_packages {
+                    if !locked_packages.contains(&pkg.as_str()) {
+                        packages_changed = true;
+                        break;
+                    }
+                }
+            }
+
+            if packages_changed {
+                output.warn("Workspace packages changed since lock was created");
+                output.info("Run `hx lock` to regenerate the lockfile");
+                if !force {
+                    return Ok(3);
+                }
+            }
+        }
     }
 
     // Build with locked dependencies
@@ -108,14 +220,28 @@ pub async fn sync(force: bool, output: &Output) -> Result<i32> {
         target: None,
         package: None,
         verbose: output.is_verbose(),
+        fingerprint: None,
+        ghc_version: None,
+        package_count: None,
+        project_name: None,
     };
 
     match hx_cabal::build::build(&project.root, &build_dir, &options, output).await {
         Ok(_) => {
-            output.success_summary(
-                "Synced with locked dependencies",
-                std::time::Duration::from_secs(0),
-            );
+            if project.is_workspace() {
+                output.success_summary(
+                    &format!(
+                        "Synced {} packages with locked dependencies",
+                        project.package_count()
+                    ),
+                    std::time::Duration::from_secs(0),
+                );
+            } else {
+                output.success_summary(
+                    "Synced with locked dependencies",
+                    std::time::Duration::from_secs(0),
+                );
+            }
             Ok(0)
         }
         Err(e) => {

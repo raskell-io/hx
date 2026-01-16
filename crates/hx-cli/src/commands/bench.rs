@@ -4,6 +4,7 @@ use anyhow::Result;
 use hx_cache::cabal_store_dir;
 use hx_config::{Project, find_project_root};
 use hx_core::CommandRunner;
+use hx_toolchain::{AutoInstallPolicy, Toolchain, ensure_toolchain};
 use hx_ui::{Output, Spinner};
 
 /// Run benchmarks.
@@ -12,12 +13,19 @@ pub async fn run(
     save_baseline: Option<String>,
     baseline: Option<String>,
     package: Option<String>,
+    policy: AutoInstallPolicy,
     output: &Output,
 ) -> Result<i32> {
     let project_root = find_project_root(".")?;
     let project = Project::load(&project_root)?;
     let build_dir = project_root.join(".hx").join("dist");
     let store_dir = cabal_store_dir()?;
+
+    // Check toolchain requirements
+    if let Err(e) = check_toolchain(&project, policy).await {
+        output.print_error(&e);
+        return Ok(4); // Toolchain error exit code
+    }
 
     // Validate package selection for workspaces
     if let Some(ref pkg_name) = package {
@@ -100,4 +108,17 @@ pub async fn run(
         eprintln!("{}", cmd_output.stderr);
         Ok(1)
     }
+}
+
+/// Check toolchain requirements and install if needed.
+async fn check_toolchain(project: &Project, policy: AutoInstallPolicy) -> hx_core::Result<()> {
+    let toolchain = Toolchain::detect().await;
+
+    ensure_toolchain(
+        &toolchain,
+        project.manifest.toolchain.ghc.as_deref(),
+        project.manifest.toolchain.cabal.as_deref(),
+        policy,
+    )
+    .await
 }
