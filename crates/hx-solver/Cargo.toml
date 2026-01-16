@@ -1,0 +1,23 @@
+[package]
+name = "hx-solver"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Dependency resolver for Haskell packages"
+
+[dependencies]
+hx-core = { path = "../hx-core" }
+
+# Parsing
+tar = "0.4"
+flate2 = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Utilities
+thiserror = "2"
+tracing = "0.1"
+
+[dev-dependencies]
+tempfile = "3"

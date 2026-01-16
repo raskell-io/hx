@@ -12,6 +12,7 @@ members = [
     "crates/hx-ui",
     "crates/hx-telemetry",
     "crates/hx-warnings",
+    "crates/hx-solver",
 ]
 
 [workspace.package]
@@ -79,6 +80,7 @@ hx-doctor = { path = "crates/hx-doctor" }
 hx-ui = { path = "crates/hx-ui" }
 hx-telemetry = { path = "crates/hx-telemetry" }
 hx-warnings = { path = "crates/hx-warnings" }
+hx-solver = { path = "crates/hx-solver" }
 
 # Testing
 tempfile = "3"
