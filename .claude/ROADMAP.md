@@ -233,12 +233,17 @@ hx v0.1.0 is shippable when:
 - [x] `hx dist formula` - Generate Homebrew formula
 - [x] `hx dist install-script` - Generate shell installation script
 
-### Test Coverage
-- [ ] `hx coverage` command
-  - [ ] Integration with hpc
-  - [ ] HTML coverage reports
-  - [ ] Coverage thresholds
-  - [ ] CI integration
+### Test Coverage ✅
+- [x] `hx coverage` command
+  - [x] Integration with hpc (Haskell Program Coverage)
+  - [x] Build and test with `--enable-coverage`
+  - [x] Find and combine .tix/.mix files
+  - [x] Text report with `hpc report`
+  - [x] HTML coverage reports with `hpc markup`
+  - [x] Coverage thresholds (--threshold flag)
+  - [x] JSON output for CI integration (--json flag)
+  - [x] Module exclusion (--exclude flag)
+  - [x] Browser open support (--open flag)
 
 ---
 
@@ -306,6 +311,8 @@ hx plugins run <script> [args]
 hx dist [--target <triple>] [--output <dir>] [--strip] [--completions]
 hx dist formula [--version <ver>] [--output <file>]
 hx dist install-script [--version <ver>] [--output <file>]
+
+hx coverage [--html] [--open] [--output <dir>] [--threshold <pct>] [--json]
 
 hx completions <shell>
 hx upgrade [--check]

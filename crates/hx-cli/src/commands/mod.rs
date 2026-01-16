@@ -7,6 +7,7 @@ mod cache;
 mod changelog;
 mod clean;
 mod completions;
+mod coverage;
 mod deps;
 mod dist;
 mod docs;
@@ -206,6 +207,28 @@ pub async fn run(cli: Cli) -> Result<i32> {
             PluginsCommands::Status => plugins::status(&output).await,
             PluginsCommands::Run { script, args } => plugins::run_script(script, args, &output).await,
         },
+        Some(Commands::Coverage {
+            html,
+            open,
+            output: output_dir,
+            threshold,
+            package,
+            pattern,
+            json,
+            exclude,
+        }) => {
+            let config = coverage::CoverageConfig {
+                html,
+                open,
+                output_dir,
+                threshold,
+                package,
+                pattern,
+                json,
+                exclude,
+            };
+            coverage::run(config, policy, &output).await
+        }
         Some(Commands::Dist {
             command,
             target,

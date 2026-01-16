@@ -432,6 +432,41 @@ pub enum Commands {
         command: PluginsCommands,
     },
 
+    /// Run tests with coverage and generate reports
+    Coverage {
+        /// Generate HTML coverage report
+        #[arg(long)]
+        html: bool,
+
+        /// Open HTML report in browser after generation
+        #[arg(long)]
+        open: bool,
+
+        /// Output directory for coverage reports
+        #[arg(long, short, default_value = "coverage")]
+        output: std::path::PathBuf,
+
+        /// Minimum coverage threshold (percentage, 0-100)
+        #[arg(long)]
+        threshold: Option<u8>,
+
+        /// Run coverage for specific package (in workspace)
+        #[arg(long, short)]
+        package: Option<String>,
+
+        /// Filter tests by pattern
+        #[arg(long)]
+        pattern: Option<String>,
+
+        /// Output coverage summary as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Exclude modules from coverage (comma-separated)
+        #[arg(long)]
+        exclude: Option<String>,
+    },
+
     /// Create distributable release archives
     Dist {
         #[command(subcommand)]
