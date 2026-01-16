@@ -206,12 +206,6 @@ hx v0.1.0 is shippable when:
   - [x] Plugin API for project info, shell commands, file operations
   - [x] Thread-local context for implicit plugin state access
 
-### Cloud Builds
-- [ ] Remote build execution
-  - [ ] Build server protocol
-  - [ ] Distributed compilation
-  - [ ] Result caching and sharing
-
 ### GHC Version Manager ✅
 - [x] Replace ghcup dependency
   - [x] Direct GHC binary downloads from downloads.haskell.org
@@ -244,6 +238,16 @@ hx v0.1.0 is shippable when:
   - [x] JSON output for CI integration (--json flag)
   - [x] Module exclusion (--exclude flag)
   - [x] Browser open support (--open flag)
+
+---
+
+## v0.4.0 - Cloud & Enterprise
+
+### Cloud Builds
+- [ ] Remote build execution
+  - [ ] Build server protocol
+  - [ ] Distributed compilation
+  - [ ] Result caching and sharing
 
 ---
 
