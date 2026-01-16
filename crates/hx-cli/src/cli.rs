@@ -431,6 +431,32 @@ pub enum Commands {
         #[command(subcommand)]
         command: PluginsCommands,
     },
+
+    /// Create distributable release archives
+    Dist {
+        #[command(subcommand)]
+        command: Option<DistCommands>,
+
+        /// Target triple (e.g., x86_64-apple-darwin)
+        #[arg(long)]
+        target: Option<String>,
+
+        /// Output directory
+        #[arg(long, short, default_value = "dist")]
+        output: std::path::PathBuf,
+
+        /// Strip debug symbols
+        #[arg(long, default_value = "true")]
+        strip: bool,
+
+        /// Include shell completions
+        #[arg(long, default_value = "true")]
+        completions: bool,
+
+        /// Version for archive name (default: from Cargo.toml)
+        #[arg(long)]
+        version: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -760,5 +786,30 @@ pub enum PluginsCommands {
         /// Arguments to pass to the script
         #[arg(last = true)]
         args: Vec<String>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum DistCommands {
+    /// Generate Homebrew formula
+    Formula {
+        /// Version for the formula
+        #[arg(long)]
+        version: Option<String>,
+
+        /// Output file (default: stdout)
+        #[arg(long, short)]
+        output: Option<std::path::PathBuf>,
+    },
+
+    /// Generate installation script
+    InstallScript {
+        /// Version for the script
+        #[arg(long)]
+        version: Option<String>,
+
+        /// Output file (default: stdout)
+        #[arg(long, short)]
+        output: Option<std::path::PathBuf>,
     },
 }

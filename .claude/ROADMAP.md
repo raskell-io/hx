@@ -223,12 +223,15 @@ hx v0.1.0 is shippable when:
   - [x] PATH injection for builds using resolved GHC
   - [x] Graceful fallback to ghcup when direct download fails
 
-### Binary Distribution
-- [ ] `hx dist` command
-  - [ ] Create release tarballs
-  - [ ] Static linking options
-  - [ ] Cross-platform installers
-  - [ ] Homebrew/apt/chocolatey formulas
+### Binary Distribution ✅
+- [x] `hx dist` command
+  - [x] Build release binary for target platform
+  - [x] Strip debug symbols
+  - [x] Create tar.gz/zip archives with metadata
+  - [x] Bundle shell completions (bash, fish, zsh, powershell)
+  - [x] SHA256 checksum generation
+- [x] `hx dist formula` - Generate Homebrew formula
+- [x] `hx dist install-script` - Generate shell installation script
 
 ### Test Coverage
 - [ ] `hx coverage` command
@@ -299,6 +302,10 @@ hx lsp [--tcp <port>]
 hx plugins list
 hx plugins status
 hx plugins run <script> [args]
+
+hx dist [--target <triple>] [--output <dir>] [--strip] [--completions]
+hx dist formula [--version <ver>] [--output <file>]
+hx dist install-script [--version <ver>] [--output <file>]
 
 hx completions <shell>
 hx upgrade [--check]

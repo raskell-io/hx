@@ -8,6 +8,7 @@ mod changelog;
 mod clean;
 mod completions;
 mod deps;
+mod dist;
 mod docs;
 mod doctor;
 mod fetch;
@@ -32,8 +33,8 @@ mod upgrade;
 mod watch;
 
 use crate::cli::{
-    ArtifactCommands, CacheCommands, Cli, Commands, DepsCommands, GlobalArgs, GraphFormat,
-    IndexCommands, NixCommands, PluginsCommands,
+    ArtifactCommands, CacheCommands, Cli, Commands, DepsCommands, DistCommands, GlobalArgs,
+    GraphFormat, IndexCommands, NixCommands, PluginsCommands,
 };
 use anyhow::Result;
 use hx_toolchain::AutoInstallPolicy;
@@ -205,6 +206,33 @@ pub async fn run(cli: Cli) -> Result<i32> {
             PluginsCommands::Status => plugins::status(&output).await,
             PluginsCommands::Run { script, args } => plugins::run_script(script, args, &output).await,
         },
+        Some(Commands::Dist {
+            command,
+            target,
+            output: output_dir,
+            strip,
+            completions,
+            version,
+        }) => {
+            match command {
+                Some(DistCommands::Formula { version, output: out_file }) => {
+                    dist::generate_formula(version, out_file, &output)
+                }
+                Some(DistCommands::InstallScript { version, output: out_file }) => {
+                    dist::generate_install_script(version, out_file, &output)
+                }
+                None => {
+                    let config = dist::DistConfig {
+                        target,
+                        output_dir,
+                        strip,
+                        include_completions: completions,
+                        version,
+                    };
+                    dist::run(config, &output).await
+                }
+            }
+        }
         None => {
             // No command - show help
             use clap::CommandFactory;
