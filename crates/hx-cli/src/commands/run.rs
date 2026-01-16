@@ -3,8 +3,11 @@
 use anyhow::Result;
 use hx_cabal::build as cabal_build;
 use hx_config::{Project, find_project_root};
+use hx_plugins::HookEvent;
 use hx_toolchain::{AutoInstallPolicy, Toolchain, ensure_toolchain};
 use hx_ui::Output;
+
+use crate::plugins::PluginHooks;
 
 /// Run the project.
 pub async fn run(
@@ -18,7 +21,15 @@ pub async fn run(
     let project = Project::load(&project_root)?;
 
     // Check toolchain requirements
-    if let Err(e) = check_toolchain(&project, policy).await {
+    let toolchain = Toolchain::detect().await;
+    if let Err(e) = ensure_toolchain(
+        &toolchain,
+        project.manifest.toolchain.ghc.as_deref(),
+        project.manifest.toolchain.cabal.as_deref(),
+        policy,
+    )
+    .await
+    {
         output.print_error(&e);
         return Ok(4); // Toolchain error exit code
     }
@@ -44,12 +55,37 @@ pub async fn run(
         _ => project.name(),
     };
 
+    // Get GHC version for plugin context
+    let ghc_version = toolchain.ghc.status.version().map(|v| v.to_string());
+
+    // Initialize plugin hooks
+    let mut hooks = PluginHooks::from_project(&project, ghc_version);
+    if let Some(ref mut h) = hooks {
+        if let Err(e) = h.initialize() {
+            output.verbose(&format!("Plugin initialization warning: {}", e));
+        }
+    }
+
+    // Run pre-run hooks
+    if let Some(ref mut h) = hooks {
+        if !h.run_pre_hook(HookEvent::PreRun, output) {
+            output.error("Pre-run hook failed");
+            return Ok(6); // Hook failure exit code
+        }
+    }
+
     output.status("Running", run_target);
 
     let build_dir = project.cabal_build_dir();
 
     let exit_code =
         cabal_build::run(&project.root, &build_dir, &args, package.as_deref(), output).await?;
+
+    // Run post-run hooks
+    if let Some(ref mut h) = hooks {
+        h.run_post_hook(HookEvent::PostRun, output);
+    }
+
     Ok(exit_code)
 }
 

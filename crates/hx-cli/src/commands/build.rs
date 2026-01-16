@@ -6,10 +6,13 @@ use hx_cabal::native::{GhcConfig, NativeBuildOptions, NativeBuilder, packages_fr
 use hx_cache::{BuildState, StoreIndex, compute_source_fingerprint, save_source_fingerprint};
 use hx_config::{Project, find_project_root};
 use hx_lock::Lockfile;
+use hx_plugins::HookEvent;
 use hx_toolchain::{AutoInstallPolicy, Toolchain, ensure_toolchain};
 use hx_ui::Output;
 use std::path::PathBuf;
 use std::time::Instant;
+
+use crate::plugins::PluginHooks;
 
 /// Run the build command.
 pub async fn run(
@@ -65,6 +68,25 @@ pub async fn run(
         return run_native_build(&project, release, jobs, &toolchain, output).await;
     }
 
+    // Get GHC version early for plugin context
+    let ghc_version = toolchain.ghc.status.version().map(|v| v.to_string());
+
+    // Initialize plugin hooks
+    let mut hooks = PluginHooks::from_project(&project, ghc_version.clone());
+    if let Some(ref mut h) = hooks {
+        if let Err(e) = h.initialize() {
+            output.verbose(&format!("Plugin initialization warning: {}", e));
+        }
+    }
+
+    // Run pre-build hooks
+    if let Some(ref mut h) = hooks {
+        if !h.run_pre_hook(HookEvent::PreBuild, output) {
+            output.error("Pre-build hook failed");
+            return Ok(6); // Hook failure exit code
+        }
+    }
+
     // Check lockfile for fingerprint
     let (lock_fingerprint, package_count) = get_build_fingerprint(&project);
 
@@ -113,8 +135,6 @@ pub async fn run(
         output.status("Building", build_target);
     }
 
-    let ghc_version = toolchain.ghc.status.version().map(|v| v.to_string());
-
     let options = BuildOptions {
         release,
         jobs,
@@ -132,6 +152,8 @@ pub async fn run(
 
     match cabal_build::build(&project.root, &build_dir, &options, output).await {
         Ok(_result) => {
+            let build_duration = build_start.elapsed();
+
             // Update build state on success
             if let Some(ref source_fp) = source_fingerprint {
                 let mut build_state = BuildState::load(&project.root).unwrap_or_default();
@@ -143,7 +165,7 @@ pub async fn run(
                 build_state.mark_success(
                     build_target,
                     &source_fp.hash,
-                    build_start.elapsed().as_secs_f64(),
+                    build_duration.as_secs_f64(),
                 );
                 if let Err(e) = build_state.save(&project.root) {
                     output.verbose(&format!("Could not save build state: {}", e));
@@ -152,15 +174,29 @@ pub async fn run(
                     output.verbose(&format!("Could not save source fingerprint: {}", e));
                 }
             }
+
+            // Run post-build hooks (success)
+            if let Some(ref mut h) = hooks {
+                h.run_post_build_hook(true, build_duration, vec![], vec![], output);
+            }
+
             Ok(0)
         }
         Err(e) => {
+            let build_duration = build_start.elapsed();
+
             // Update build state on failure
             if source_fingerprint.is_some() {
                 let mut build_state = BuildState::load(&project.root).unwrap_or_default();
                 build_state.mark_failed(build_target, &e.to_string());
                 let _ = build_state.save(&project.root);
             }
+
+            // Run post-build hooks (failure)
+            if let Some(ref mut h) = hooks {
+                h.run_post_build_hook(false, build_duration, vec![], vec![e.to_string()], output);
+            }
+
             output.print_error(&e);
             Ok(5) // Build error exit code
         }
@@ -196,7 +232,15 @@ pub async fn test(
     let project = Project::load(&project_root)?;
 
     // Check toolchain requirements
-    if let Err(e) = check_toolchain(&project, policy).await {
+    let toolchain = Toolchain::detect().await;
+    if let Err(e) = ensure_toolchain(
+        &toolchain,
+        project.manifest.toolchain.ghc.as_deref(),
+        project.manifest.toolchain.cabal.as_deref(),
+        policy,
+    )
+    .await
+    {
         output.print_error(&e);
         return Ok(4); // Toolchain error exit code
     }
@@ -222,6 +266,25 @@ pub async fn test(
         _ => project.name(),
     };
 
+    // Get GHC version for plugin context
+    let ghc_version = toolchain.ghc.status.version().map(|v| v.to_string());
+
+    // Initialize plugin hooks
+    let mut hooks = PluginHooks::from_project(&project, ghc_version);
+    if let Some(ref mut h) = hooks {
+        if let Err(e) = h.initialize() {
+            output.verbose(&format!("Plugin initialization warning: {}", e));
+        }
+    }
+
+    // Run pre-test hooks
+    if let Some(ref mut h) = hooks {
+        if !h.run_pre_hook(HookEvent::PreTest, output) {
+            output.error("Pre-test hook failed");
+            return Ok(6); // Hook failure exit code
+        }
+    }
+
     output.status("Testing", test_target);
 
     let build_dir = project.cabal_build_dir();
@@ -235,8 +298,19 @@ pub async fn test(
     )
     .await
     {
-        Ok(_result) => Ok(0),
+        Ok(_result) => {
+            // Run post-test hooks (success)
+            // Note: We don't have detailed test counts from cabal output yet
+            if let Some(ref mut h) = hooks {
+                h.run_post_test_hook(true, 0, 0, 0, output);
+            }
+            Ok(0)
+        }
         Err(e) => {
+            // Run post-test hooks (failure)
+            if let Some(ref mut h) = hooks {
+                h.run_post_test_hook(false, 0, 0, 0, output);
+            }
             output.print_error(&e);
             Ok(5) // Test error exit code
         }
@@ -282,6 +356,7 @@ async fn run_native_build(
             version: ghc_version.clone(),
             package_dbs: vec![],
             packages: vec![],
+            resolved_packages: vec![],
         },
     };
 
@@ -324,6 +399,8 @@ async fn run_native_build(
         verbose: output.is_verbose(),
         main_module: Some("Main".to_string()),
         output_exe: Some(project.root.join(".hx/native-build").join(project.name())),
+        output_lib: None,     // Only set for library projects
+        native_linking: true, // Enable native linking with resolved packages
     };
 
     // Create builder and run

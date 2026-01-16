@@ -18,7 +18,8 @@ pub use ide::{
     write_hie_yaml,
 };
 pub use manifest::{
-    BuildConfig, FormatConfig, LintConfig, Manifest, ProjectConfig, ProjectKind, ToolchainConfig,
+    BuildConfig, FormatConfig, LintConfig, Manifest, PluginConfig, PluginHookConfig, ProjectConfig,
+    ProjectKind, ToolchainConfig,
 };
 pub use project::{Project, WorkspacePackage, find_project_root};
 

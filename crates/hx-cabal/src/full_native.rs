@@ -1,0 +1,455 @@
+//! Full native build orchestration.
+//!
+//! This module provides complete native builds from source, compiling all
+//! dependencies using direct GHC invocation instead of relying on cabal.
+
+use crate::native::{GhcConfig, NativeBuildOptions, NativeBuildResult, NativeBuilder};
+use crate::package_build::{build_package, PackageBuildConfig};
+use crate::package_db::PackageDb;
+use hx_core::{Error, Fix, Result};
+use hx_solver::{extract_package, BuildPlan, BuildStyle, BuildUnit, FetchResult};
+use hx_ui::Output;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
+use tracing::{debug, info, warn};
+
+/// Options for full native builds.
+#[derive(Debug, Clone)]
+pub struct FullNativeBuildOptions {
+    /// Number of parallel compilation jobs
+    pub jobs: usize,
+    /// Optimization level (0, 1, or 2)
+    pub optimization: u8,
+    /// Enable profiling
+    pub profiling: bool,
+    /// Verbose output
+    pub verbose: bool,
+    /// Force rebuild even if cached
+    pub force: bool,
+    /// Skip packages that can't be built natively
+    pub skip_unsupported: bool,
+}
+
+impl Default for FullNativeBuildOptions {
+    fn default() -> Self {
+        Self {
+            jobs: num_cpus::get(),
+            optimization: 1,
+            profiling: false,
+            verbose: false,
+            force: false,
+            skip_unsupported: true,
+        }
+    }
+}
+
+/// Result of a full native build.
+#[derive(Debug)]
+pub struct FullNativeBuildResult {
+    /// Whether the build succeeded
+    pub success: bool,
+    /// Total build duration
+    pub duration: Duration,
+    /// Number of packages built from source
+    pub packages_built: usize,
+    /// Number of packages skipped (pre-installed or cached)
+    pub packages_skipped: usize,
+    /// Number of packages that failed
+    pub packages_failed: usize,
+    /// Package IDs that were registered
+    pub registered_packages: Vec<String>,
+    /// Packages that were skipped due to build type
+    pub skipped_packages: Vec<(String, String)>,
+    /// The local project build result
+    pub project_result: Option<NativeBuildResult>,
+    /// Errors encountered
+    pub errors: Vec<String>,
+    /// Warnings encountered
+    pub warnings: Vec<String>,
+}
+
+/// Full native builder that handles complete builds from source.
+pub struct FullNativeBuilder {
+    ghc: GhcConfig,
+    package_db: PackageDb,
+    cache_dir: PathBuf,
+    /// Map of package name -> registered package ID
+    built_packages: HashMap<String, String>,
+}
+
+impl FullNativeBuilder {
+    /// Create a new full native builder.
+    pub async fn new(ghc: GhcConfig, cache_dir: PathBuf) -> Result<Self> {
+        let package_db = PackageDb::open(&ghc.version, &cache_dir).await?;
+
+        Ok(Self {
+            ghc,
+            package_db,
+            cache_dir,
+            built_packages: HashMap::new(),
+        })
+    }
+
+    /// Build a project with all its dependencies from source.
+    pub async fn build_project(
+        &mut self,
+        project_root: &Path,
+        build_plan: &BuildPlan,
+        fetched_packages: &[FetchResult],
+        options: &FullNativeBuildOptions,
+        output: &Output,
+    ) -> Result<FullNativeBuildResult> {
+        let start = Instant::now();
+        let mut result = FullNativeBuildResult {
+            success: true,
+            duration: Duration::ZERO,
+            packages_built: 0,
+            packages_skipped: 0,
+            packages_failed: 0,
+            registered_packages: Vec::new(),
+            skipped_packages: Vec::new(),
+            project_result: None,
+            errors: Vec::new(),
+            warnings: Vec::new(),
+        };
+
+        output.status("Building", "dependencies from source");
+
+        // Create fetch result lookup
+        let fetch_map: HashMap<String, &FetchResult> = fetched_packages
+            .iter()
+            .map(|f| (format!("{}-{}", f.name, f.version), f))
+            .collect();
+
+        // Build dependencies in topological order
+        for unit in &build_plan.packages {
+            match unit.style {
+                BuildStyle::PreInstalled => {
+                    debug!("Skipping pre-installed package: {}", unit.name);
+                    result.packages_skipped += 1;
+                    // Track that this package is available
+                    self.built_packages
+                        .insert(unit.name.clone(), format!("{}-{}", unit.name, unit.version));
+                }
+                BuildStyle::Cached => {
+                    // Check if we have a cached version
+                    let pkg_key = format!("{}-{}", unit.name, unit.version);
+                    if self.package_db.has_package(&unit.name, &unit.version.to_string()) {
+                        debug!("Skipping cached package: {}", pkg_key);
+                        result.packages_skipped += 1;
+                        self.built_packages
+                            .insert(unit.name.clone(), pkg_key);
+                    } else {
+                        // Need to rebuild
+                        if let Err(e) = self
+                            .build_dependency(unit, &fetch_map, options, output, &mut result)
+                            .await
+                        {
+                            result.errors.push(format!("{}: {}", unit.name, e));
+                            result.packages_failed += 1;
+                            if !options.skip_unsupported {
+                                result.success = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+                BuildStyle::Source => {
+                    if let Err(e) = self
+                        .build_dependency(unit, &fetch_map, options, output, &mut result)
+                        .await
+                    {
+                        result.errors.push(format!("{}: {}", unit.name, e));
+                        result.packages_failed += 1;
+                        if !options.skip_unsupported {
+                            result.success = false;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Build the local project if dependencies succeeded
+        if result.success {
+            output.status("Building", "local project");
+
+            // Build extra flags for package database and dependencies
+            let mut extra_flags = vec![
+                "-package-db".to_string(),
+                self.package_db.db_path().to_string_lossy().to_string(),
+            ];
+
+            // Add package-id flags for all built dependencies
+            for pkg_id in self.built_packages.values() {
+                extra_flags.push("-package-id".to_string());
+                extra_flags.push(pkg_id.clone());
+            }
+
+            let native_options = NativeBuildOptions {
+                jobs: options.jobs,
+                optimization: options.optimization,
+                verbose: options.verbose,
+                extra_flags,
+                ..Default::default()
+            };
+
+            let builder = NativeBuilder::new(self.ghc.clone());
+
+            match builder.build(project_root, &native_options, output).await {
+                Ok(project_result) => {
+                    result.project_result = Some(project_result);
+                }
+                Err(e) => {
+                    result.success = false;
+                    result.errors.push(format!("Project build failed: {}", e));
+                }
+            }
+        }
+
+        result.duration = start.elapsed();
+        Ok(result)
+    }
+
+    /// Build a single dependency package.
+    async fn build_dependency(
+        &mut self,
+        unit: &BuildUnit,
+        fetch_map: &HashMap<String, &FetchResult>,
+        options: &FullNativeBuildOptions,
+        output: &Output,
+        result: &mut FullNativeBuildResult,
+    ) -> Result<()> {
+        let pkg_key = format!("{}-{}", unit.name, unit.version);
+
+        output.status("Building", &format!("{} {}", unit.name, unit.version));
+
+        // Get the tarball path
+        let fetch_result = fetch_map.get(&pkg_key).ok_or_else(|| Error::Config {
+            message: format!("package not fetched: {}", pkg_key),
+            path: None,
+            source: None,
+            fixes: vec![Fix::with_command("Fetch packages first", "hx lock && hx fetch")],
+        })?;
+
+        // Extract the package
+        let extracted = extract_package(&fetch_result.path, &self.cache_dir, options.force)
+            .map_err(|e| Error::Config {
+                message: format!("failed to extract {}: {}", pkg_key, e),
+                path: Some(fetch_result.path.clone()),
+                source: None,
+                fixes: vec![Fix::with_command("Try re-fetching", "hx fetch --force")],
+            })?;
+
+        // Check if this package can be built natively
+        if !extracted.can_build_native() {
+            let reason = extracted.skip_reason().unwrap_or_else(|| "unknown".to_string());
+            warn!(
+                "Skipping {} {}: {}",
+                unit.name, unit.version, reason
+            );
+            result
+                .skipped_packages
+                .push((pkg_key.clone(), reason.clone()));
+            result.warnings.push(format!(
+                "Skipped {} {}: {}",
+                unit.name, unit.version, reason
+            ));
+            result.packages_skipped += 1;
+
+            if !options.skip_unsupported {
+                return Err(Error::BuildFailed {
+                    errors: vec![format!(
+                        "Package {} cannot be built natively: {}",
+                        pkg_key, reason
+                    )],
+                    fixes: vec![Fix::new("Use cabal to build this package instead")],
+                });
+            }
+
+            return Ok(());
+        }
+
+        // Collect dependency package IDs
+        let dep_ids: Vec<String> = unit
+            .depends
+            .iter()
+            .filter_map(|dep| self.built_packages.get(dep).cloned())
+            .collect();
+
+        // Configure the build
+        let build_config = PackageBuildConfig {
+            ghc: self.ghc.clone(),
+            build_dir: self
+                .cache_dir
+                .join("builds")
+                .join(&pkg_key),
+            install_dir: self
+                .cache_dir
+                .join(format!("ghc-{}", self.ghc.version))
+                .join("lib"),
+            dependency_ids: dep_ids,
+            jobs: options.jobs,
+            optimization: options.optimization,
+            verbose: options.verbose,
+        };
+
+        // Build the package
+        let build_result = build_package(&extracted, &build_config, output).await?;
+
+        if !build_result.success {
+            return Err(Error::BuildFailed {
+                errors: build_result.errors.clone(),
+                fixes: vec![Fix::with_command(
+                    "See full output",
+                    "hx build --verbose",
+                )],
+            });
+        }
+
+        // Register the package
+        let package_id = self
+            .package_db
+            .register(&build_result.registration_file)
+            .await?;
+
+        result.registered_packages.push(package_id.clone());
+        result.packages_built += 1;
+        self.built_packages.insert(unit.name.clone(), package_id);
+
+        // Collect warnings
+        result.warnings.extend(build_result.warnings.clone());
+
+        info!(
+            "Built {} {} ({} modules in {:?})",
+            unit.name,
+            unit.version,
+            build_result.modules_compiled,
+            build_result.duration
+        );
+
+        Ok(())
+    }
+
+    /// Get the package database.
+    pub fn package_db(&self) -> &PackageDb {
+        &self.package_db
+    }
+
+    /// Get mutable access to the package database.
+    pub fn package_db_mut(&mut self) -> &mut PackageDb {
+        &mut self.package_db
+    }
+
+    /// Get the GHC configuration.
+    pub fn ghc_config(&self) -> &GhcConfig {
+        &self.ghc
+    }
+
+    /// Get the cache directory.
+    pub fn cache_dir(&self) -> &Path {
+        &self.cache_dir
+    }
+
+    /// Check if a package is already built.
+    pub fn is_built(&self, name: &str) -> bool {
+        self.built_packages.contains_key(name)
+    }
+
+    /// Get the package ID for a built package.
+    pub fn package_id(&self, name: &str) -> Option<&str> {
+        self.built_packages.get(name).map(|s| s.as_str())
+    }
+
+    /// Clear all built package state.
+    pub async fn clear(&mut self) -> Result<()> {
+        self.built_packages.clear();
+
+        // Clear the builds directory
+        let builds_dir = self.cache_dir.join("builds");
+        if builds_dir.exists() {
+            std::fs::remove_dir_all(&builds_dir).map_err(|e| Error::Io {
+                message: "failed to clear builds directory".to_string(),
+                path: Some(builds_dir),
+                source: e,
+            })?;
+        }
+
+        Ok(())
+    }
+}
+
+/// Pre-installed packages that come with GHC and don't need to be built.
+pub fn pre_installed_packages() -> HashSet<&'static str> {
+    [
+        "base",
+        "ghc-prim",
+        "ghc-bignum",
+        "integer-gmp",
+        "integer-simple",
+        "template-haskell",
+        "ghc",
+        "array",
+        "binary",
+        "bytestring",
+        "containers",
+        "deepseq",
+        "directory",
+        "exceptions",
+        "filepath",
+        "mtl",
+        "parsec",
+        "pretty",
+        "process",
+        "stm",
+        "text",
+        "time",
+        "transformers",
+        "unix",
+        "Win32",
+        "xhtml",
+        "Cabal",
+        "Cabal-syntax",
+        "ghc-boot",
+        "ghc-boot-th",
+        "ghc-compact",
+        "ghc-heap",
+        "haskeline",
+        "hpc",
+        "terminfo",
+        "rts",
+    ]
+    .into_iter()
+    .collect()
+}
+
+/// Check if a package is pre-installed with GHC.
+pub fn is_pre_installed(name: &str) -> bool {
+    pre_installed_packages().contains(name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pre_installed_packages() {
+        assert!(is_pre_installed("base"));
+        assert!(is_pre_installed("ghc-prim"));
+        assert!(is_pre_installed("bytestring"));
+        assert!(!is_pre_installed("aeson"));
+        assert!(!is_pre_installed("lens"));
+    }
+
+    #[test]
+    fn test_full_native_build_options_default() {
+        let opts = FullNativeBuildOptions::default();
+        assert!(opts.jobs > 0);
+        assert_eq!(opts.optimization, 1);
+        assert!(!opts.profiling);
+        assert!(!opts.verbose);
+        assert!(!opts.force);
+        assert!(opts.skip_unsupported);
+    }
+}

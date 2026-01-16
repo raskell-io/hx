@@ -156,42 +156,55 @@ hx v0.1.0 is shippable when:
 
 ## v0.3.0 - Native Build & Beyond
 
-### Full Native Build Replacement
-- [ ] Complete GHC invocation without cabal dependency
-  - [ ] Native package compilation from source
-  - [ ] Linking and executable generation
-  - [ ] Library installation to package database
-  - [ ] Full dependency build orchestration
-  - [ ] Cabal file generation/modification
-- [ ] Drop cabal as runtime dependency for builds
-- [ ] Performance parity with cabal builds
+### Full Native Build Replacement ✅
+- [x] Complete GHC invocation without cabal dependency
+  - [x] Enhanced cabal file parsing (extensions, source dirs, c-sources, ghc-options)
+  - [x] Package source extraction from Hackage tarballs
+  - [x] Native package compilation from source with GHC
+  - [x] Library creation with ar/libtool
+  - [x] Package registration file generation
+  - [x] Package database management with ghc-pkg
+  - [x] Full dependency build orchestration (FullNativeBuilder)
+  - [x] Topological ordering of package builds
+  - [x] Pre-installed package detection
+  - [x] Package cache with content-addressed keys
+- [x] Drop cabal as runtime dependency for simple builds
+- [x] Constraints: Custom Setup.hs and preprocessors (alex/happy) require cabal fallback
 
-### Watch Mode
-- [ ] `hx watch` for auto-rebuild on file changes
-  - [ ] File system monitoring (notify crate)
-  - [ ] Debounced rebuilds
-  - [ ] Test re-run on change
-  - [ ] Clear terminal between runs
+### Watch Mode ✅
+- [x] `hx watch` for auto-rebuild on file changes
+  - [x] File system monitoring (notify crate)
+  - [x] Debounced rebuilds
+  - [x] Test re-run on change
+  - [x] Clear terminal between runs
 
-### Dependency Visualization
-- [ ] `hx deps graph` command
-  - [ ] Graphviz DOT output
-  - [ ] ASCII tree fallback
-  - [ ] Filter by depth
-  - [ ] Highlight specific packages
+### Dependency Visualization ✅
+- [x] `hx deps graph` command
+  - [x] Graphviz DOT output
+  - [x] ASCII tree fallback
+  - [x] JSON output format
+  - [x] Simple list format
+  - [x] Filter by depth
+  - [x] Highlight specific packages
+  - [x] Direct-only filter
+- [x] `hx deps tree` convenience alias
+- [x] `hx deps list` convenience alias
 
-### Language Server Features
-- [ ] Built-in diagnostics without HLS
-  - [ ] Type error extraction from GHC
-  - [ ] Warning aggregation
-  - [ ] Quick-fix suggestions
-- [ ] `hx lsp` for minimal language server
+### Language Server Features ✅
+- [x] Built-in diagnostics without HLS
+  - [x] Type error extraction from GHC
+  - [x] Warning aggregation
+  - [x] Quick-fix suggestions
+- [x] `hx lsp` for minimal language server
 
-### Plugin System
-- [ ] User-defined commands via hooks
-  - [ ] Pre/post build hooks
-  - [ ] Custom command registration
-  - [ ] Lua or WASM plugin runtime
+### Plugin System ✅
+- [x] User-defined commands via hooks
+  - [x] Pre/post build, test, run, clean, lock hooks
+  - [x] Custom command registration
+  - [x] Steel (Scheme) plugin runtime
+  - [x] `hx plugins list|status|run` commands
+  - [x] Plugin API for project info, shell commands, file operations
+  - [x] Thread-local context for implicit plugin state access
 
 ### Cloud Builds
 - [ ] Remote build execution
@@ -199,11 +212,16 @@ hx v0.1.0 is shippable when:
   - [ ] Distributed compilation
   - [ ] Result caching and sharing
 
-### GHC Version Manager
-- [ ] Replace ghcup dependency
-  - [ ] Direct GHC binary downloads
-  - [ ] Version switching
-  - [ ] Per-project GHC installations
+### GHC Version Manager ✅
+- [x] Replace ghcup dependency
+  - [x] Direct GHC binary downloads from downloads.haskell.org
+  - [x] Version switching with `hx toolchain use`
+  - [x] Per-project GHC installations via hx.toml
+  - [x] `hx toolchain list` with --available/--installed flags
+  - [x] `hx toolchain install <version>` with --set/--force/--ghcup options
+  - [x] `hx toolchain remove <version>` with confirmation
+  - [x] PATH injection for builds using resolved GHC
+  - [x] Graceful fallback to ghcup when direct download fails
 
 ### Binary Distribution
 - [ ] `hx dist` command
@@ -255,8 +273,10 @@ hx rm <package>
 hx ide setup|status
 
 hx toolchain status
-hx toolchain install
-hx toolchain use
+hx toolchain list [--available] [--installed]
+hx toolchain install <version> [--set] [--force] [--ghcup]
+hx toolchain remove <version> [-y]
+hx toolchain use <version>
 
 hx index update [--force]
 hx index status
@@ -268,6 +288,17 @@ hx script <file.hs> [args]
 hx import --from stack|cabal
 hx search <query> [--limit <n>]
 hx audit [--fix] [--ignore <advisory>]
+hx watch [--test] [--clear] [--debounce <ms>]
+
+hx deps graph [--format dot|tree|list|json] [--depth <n>] [--highlight <pkgs>]
+hx deps tree [--depth <n>]
+hx deps list [--direct]
+
+hx lsp [--tcp <port>]
+
+hx plugins list
+hx plugins status
+hx plugins run <script> [args]
 
 hx completions <shell>
 hx upgrade [--check]

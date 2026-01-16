@@ -393,6 +393,44 @@ pub enum Commands {
         #[arg(long)]
         licenses: bool,
     },
+
+    /// Watch for file changes and auto-rebuild
+    Watch {
+        /// Run tests instead of build on change
+        #[arg(long, short)]
+        test: bool,
+
+        /// Clear terminal before each build
+        #[arg(long, short)]
+        clear: bool,
+
+        /// Debounce delay in milliseconds (default: 500)
+        #[arg(long, default_value = "500")]
+        debounce: u64,
+
+        /// Watch specific package (in workspace)
+        #[arg(short, long)]
+        package: Option<String>,
+    },
+
+    /// Dependency management and visualization
+    Deps {
+        #[command(subcommand)]
+        command: DepsCommands,
+    },
+
+    /// Start the language server (for IDE integration)
+    Lsp {
+        /// Run on TCP port instead of stdio (for debugging)
+        #[arg(long)]
+        tcp: Option<u16>,
+    },
+
+    /// Manage plugins
+    Plugins {
+        #[command(subcommand)]
+        command: PluginsCommands,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -581,12 +619,26 @@ pub enum IndexCommands {
 
 #[derive(Subcommand, Debug)]
 pub enum ToolchainCommands {
-    /// Show installed toolchain versions
+    /// Show installed toolchain versions and status
     Status,
 
-    /// Install toolchain components
+    /// List available and installed GHC versions
+    List {
+        /// Show available versions from known list
+        #[arg(long)]
+        available: bool,
+
+        /// Show only installed versions
+        #[arg(long)]
+        installed: bool,
+    },
+
+    /// Install a GHC version
     Install {
-        /// GHC version to install
+        /// GHC version to install (e.g., 9.8.2)
+        version: Option<String>,
+
+        /// GHC version (alternative to positional)
         #[arg(long)]
         ghc: Option<String>,
 
@@ -597,11 +649,116 @@ pub enum ToolchainCommands {
         /// HLS version to install
         #[arg(long)]
         hls: Option<String>,
+
+        /// Set as active version after installation
+        #[arg(long)]
+        set: bool,
+
+        /// Force reinstall even if already installed
+        #[arg(long)]
+        force: bool,
+
+        /// Use ghcup for installation instead of direct download
+        #[arg(long)]
+        ghcup: bool,
     },
 
-    /// Set the active toolchain version
+    /// Remove an installed GHC version
+    Remove {
+        /// GHC version to remove
+        version: String,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
+
+    /// Set the active GHC version
     Use {
-        /// Profile name or version
-        profile: String,
+        /// GHC version to activate
+        version: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum DepsCommands {
+    /// Show dependency graph
+    Graph {
+        /// Output format: dot, tree, or list
+        #[arg(long, short, default_value = "tree")]
+        format: GraphFormat,
+
+        /// Maximum depth to display (0 = unlimited)
+        #[arg(long, short, default_value = "0")]
+        depth: usize,
+
+        /// Highlight specific packages (comma-separated)
+        #[arg(long)]
+        highlight: Option<String>,
+
+        /// Output file (stdout if not specified)
+        #[arg(long, short)]
+        output: Option<String>,
+
+        /// Include dev dependencies
+        #[arg(long)]
+        dev: bool,
+
+        /// Show only direct dependencies
+        #[arg(long)]
+        direct: bool,
+    },
+
+    /// Show dependency tree (alias for graph --format tree)
+    Tree {
+        /// Maximum depth to display (0 = unlimited)
+        #[arg(long, short, default_value = "0")]
+        depth: usize,
+
+        /// Include dev dependencies
+        #[arg(long)]
+        dev: bool,
+    },
+
+    /// List all dependencies
+    List {
+        /// Include dev dependencies
+        #[arg(long)]
+        dev: bool,
+
+        /// Show only direct dependencies
+        #[arg(long)]
+        direct: bool,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum GraphFormat {
+    /// Graphviz DOT format
+    Dot,
+    /// ASCII tree format
+    Tree,
+    /// Simple list format
+    List,
+    /// JSON format
+    Json,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum PluginsCommands {
+    /// List available and loaded plugins
+    List,
+
+    /// Show plugin system status
+    Status,
+
+    /// Run a plugin script directly
+    Run {
+        /// Path to the script file
+        script: String,
+
+        /// Arguments to pass to the script
+        #[arg(last = true)]
+        args: Vec<String>,
     },
 }

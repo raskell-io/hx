@@ -18,8 +18,10 @@ mod index;
 mod init;
 mod lint;
 mod lock;
+mod lsp;
 mod new;
 mod nix;
+mod plugins;
 mod profile;
 mod publish;
 mod run;
@@ -27,9 +29,11 @@ mod script;
 mod search;
 mod toolchain;
 mod upgrade;
+mod watch;
 
 use crate::cli::{
-    ArtifactCommands, CacheCommands, Cli, Commands, GlobalArgs, IndexCommands, NixCommands,
+    ArtifactCommands, CacheCommands, Cli, Commands, DepsCommands, GlobalArgs, GraphFormat,
+    IndexCommands, NixCommands, PluginsCommands,
 };
 use anyhow::Result;
 use hx_toolchain::AutoInstallPolicy;
@@ -173,6 +177,34 @@ pub async fn run(cli: Cli) -> Result<i32> {
             outdated,
             licenses,
         }) => audit::run(fix, ignore, outdated, licenses, &output).await,
+        Some(Commands::Watch {
+            test,
+            clear,
+            debounce,
+            package,
+        }) => watch::run(test, clear, Some(debounce), package, policy, &output).await,
+        Some(Commands::Deps { command }) => match command {
+            DepsCommands::Graph {
+                format,
+                depth,
+                highlight,
+                output: output_file,
+                dev,
+                direct,
+            } => deps::graph(format, depth, highlight, output_file, dev, direct, &output).await,
+            DepsCommands::Tree { depth, dev } => {
+                deps::graph(GraphFormat::Tree, depth, None, None, dev, false, &output).await
+            }
+            DepsCommands::List { dev, direct } => {
+                deps::graph(GraphFormat::List, 0, None, None, dev, direct, &output).await
+            }
+        },
+        Some(Commands::Lsp { tcp }) => lsp::run(tcp, &output).await,
+        Some(Commands::Plugins { command }) => match command {
+            PluginsCommands::List => plugins::list(&output).await,
+            PluginsCommands::Status => plugins::status(&output).await,
+            PluginsCommands::Run { script, args } => plugins::run_script(script, args, &output).await,
+        },
         None => {
             // No command - show help
             use clap::CommandFactory;

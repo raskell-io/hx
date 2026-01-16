@@ -1,0 +1,638 @@
+//! Native package compilation from source.
+//!
+//! This module handles building a single Haskell dependency package from source
+//! using direct GHC invocation, without relying on Cabal.
+
+use crate::native::GhcConfig;
+use hx_core::{CommandRunner, Error, Fix, Result};
+use hx_solver::{ExtractedPackage, LibraryConfig};
+use hx_ui::Output;
+use sha2::{Digest, Sha256};
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
+use tracing::{debug, info};
+
+/// Configuration for building a single package.
+#[derive(Debug, Clone)]
+pub struct PackageBuildConfig {
+    /// GHC configuration
+    pub ghc: GhcConfig,
+    /// Build output directory
+    pub build_dir: PathBuf,
+    /// Installation directory (for final artifacts)
+    pub install_dir: PathBuf,
+    /// Already-built dependencies (package IDs)
+    pub dependency_ids: Vec<String>,
+    /// Number of parallel jobs
+    pub jobs: usize,
+    /// Optimization level (0, 1, or 2)
+    pub optimization: u8,
+    /// Enable verbose output
+    pub verbose: bool,
+}
+
+impl Default for PackageBuildConfig {
+    fn default() -> Self {
+        Self {
+            ghc: GhcConfig::default(),
+            build_dir: PathBuf::from(".hx/pkg-build"),
+            install_dir: PathBuf::from(".hx/pkg-install"),
+            dependency_ids: Vec::new(),
+            jobs: num_cpus::get(),
+            optimization: 1,
+            verbose: false,
+        }
+    }
+}
+
+/// Result of building a package.
+#[derive(Debug, Clone)]
+pub struct PackageBuildResult {
+    /// Package name
+    pub name: String,
+    /// Package version
+    pub version: String,
+    /// Generated package ID (e.g., "text-2.1.1-abc123")
+    pub package_id: String,
+    /// Path to the installed library archive
+    pub library_path: Option<PathBuf>,
+    /// Path to the package registration file
+    pub registration_file: PathBuf,
+    /// Whether the build succeeded
+    pub success: bool,
+    /// Build duration
+    pub duration: Duration,
+    /// Number of modules compiled
+    pub modules_compiled: usize,
+    /// Warnings during build
+    pub warnings: Vec<String>,
+    /// Errors during build
+    pub errors: Vec<String>,
+}
+
+/// Build a single package from source.
+pub async fn build_package(
+    package: &ExtractedPackage,
+    config: &PackageBuildConfig,
+    output: &Output,
+) -> Result<PackageBuildResult> {
+    let start = Instant::now();
+    let name = &package.name;
+    let version = &package.version.to_string();
+
+    info!("Building package: {}-{}", name, version);
+
+    // Check if this package can be built natively
+    if !package.can_build_native() {
+        let reason = package.skip_reason().unwrap_or_else(|| "unknown".to_string());
+        return Err(Error::BuildFailed {
+            errors: vec![format!("Cannot build {} natively: {}", name, reason)],
+            fixes: vec![Fix::new("Use cabal to build this package instead")],
+        });
+    }
+
+    let Some(lib_config) = &package.build_info.library else {
+        return Err(Error::BuildFailed {
+            errors: vec![format!("Package {} has no library component", name)],
+            fixes: vec![],
+        });
+    };
+
+    // Generate package ID
+    let package_id = compute_package_id(name, version, &config.ghc.version, &config.dependency_ids);
+
+    // Set up build directories
+    let pkg_build_dir = config.build_dir.join(format!("{}-{}", name, version));
+    let hi_dir = pkg_build_dir.join("hi");
+    let o_dir = pkg_build_dir.join("o");
+
+    std::fs::create_dir_all(&hi_dir).map_err(|e| Error::Io {
+        message: "Failed to create build directory".to_string(),
+        path: Some(hi_dir.clone()),
+        source: e,
+    })?;
+    std::fs::create_dir_all(&o_dir).map_err(|e| Error::Io {
+        message: "Failed to create build directory".to_string(),
+        path: Some(o_dir.clone()),
+        source: e,
+    })?;
+
+    // Set up install directories
+    let pkg_install_dir = config.install_dir.join(&package_id);
+    let lib_install_dir = pkg_install_dir.join("lib");
+    let hi_install_dir = pkg_install_dir.join("hi");
+
+    std::fs::create_dir_all(&lib_install_dir).map_err(|e| Error::Io {
+        message: "Failed to create install directory".to_string(),
+        path: Some(lib_install_dir.clone()),
+        source: e,
+    })?;
+    std::fs::create_dir_all(&hi_install_dir).map_err(|e| Error::Io {
+        message: "Failed to create install directory".to_string(),
+        path: Some(hi_install_dir.clone()),
+        source: e,
+    })?;
+
+    // Get all modules to compile
+    let modules = collect_modules(lib_config);
+    let module_count = modules.len();
+
+    if config.verbose {
+        output.info(&format!("Compiling {} modules for {}", module_count, name));
+    }
+
+    // Compile each module
+    let mut all_warnings = Vec::new();
+    let mut all_errors = Vec::new();
+    let mut object_files = Vec::new();
+
+    for module in &modules {
+        let result = compile_package_module(
+            module,
+            package,
+            lib_config,
+            config,
+            &hi_dir,
+            &o_dir,
+        )
+        .await;
+
+        all_warnings.extend(result.warnings);
+
+        if !result.success {
+            all_errors.extend(result.errors);
+            return Ok(PackageBuildResult {
+                name: name.clone(),
+                version: version.clone(),
+                package_id,
+                library_path: None,
+                registration_file: PathBuf::new(),
+                success: false,
+                duration: start.elapsed(),
+                modules_compiled: object_files.len(),
+                warnings: all_warnings,
+                errors: all_errors,
+            });
+        }
+
+        if let Some(obj) = result.object_file {
+            object_files.push(obj);
+        }
+    }
+
+    // Create static library
+    let lib_name = format!("libHS{}-{}.a", name, version);
+    let lib_path = lib_install_dir.join(&lib_name);
+
+    if !object_files.is_empty() {
+        create_library(&lib_path, &object_files, config.verbose).await?;
+    }
+
+    // Copy interface files to install directory
+    copy_interface_files(&hi_dir, &hi_install_dir)?;
+
+    // Generate package registration file
+    let reg_file = pkg_install_dir.join(format!("{}.conf", package_id));
+    generate_registration_file(
+        &reg_file,
+        name,
+        version,
+        &package_id,
+        lib_config,
+        &lib_install_dir,
+        &hi_install_dir,
+        &config.dependency_ids,
+    )?;
+
+    output.status("Built", &format!("{}-{}", name, version));
+
+    Ok(PackageBuildResult {
+        name: name.clone(),
+        version: version.clone(),
+        package_id,
+        library_path: Some(lib_path),
+        registration_file: reg_file,
+        success: true,
+        duration: start.elapsed(),
+        modules_compiled: module_count,
+        warnings: all_warnings,
+        errors: all_errors,
+    })
+}
+
+/// Compute a unique package ID based on inputs.
+fn compute_package_id(
+    name: &str,
+    version: &str,
+    ghc_version: &str,
+    dependency_ids: &[String],
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(format!("name:{}", name));
+    hasher.update(format!("version:{}", version));
+    hasher.update(format!("ghc:{}", ghc_version));
+
+    let mut sorted_deps = dependency_ids.to_vec();
+    sorted_deps.sort();
+    for dep in &sorted_deps {
+        hasher.update(format!("dep:{}", dep));
+    }
+
+    let hash = hasher.finalize();
+    let hash_prefix = &format!("{:x}", hash)[..12];
+
+    format!("{}-{}-{}", name, version, hash_prefix)
+}
+
+/// Collect all modules to compile from library config.
+fn collect_modules(lib: &LibraryConfig) -> Vec<String> {
+    let mut modules = Vec::new();
+    modules.extend(lib.exposed_modules.clone());
+    modules.extend(lib.other_modules.clone());
+    modules
+}
+
+/// Result of compiling a single module.
+struct ModuleCompileResult {
+    success: bool,
+    object_file: Option<PathBuf>,
+    warnings: Vec<String>,
+    errors: Vec<String>,
+}
+
+/// Compile a single module in a package.
+async fn compile_package_module(
+    module_name: &str,
+    package: &ExtractedPackage,
+    lib_config: &LibraryConfig,
+    config: &PackageBuildConfig,
+    hi_dir: &Path,
+    o_dir: &Path,
+) -> ModuleCompileResult {
+    debug!("Compiling module: {} in {}", module_name, package.name);
+
+    // Convert module name to path
+    let module_path = module_name.replace('.', "/");
+    let source_file = find_module_source(package, lib_config, &module_path);
+
+    let Some(source_file) = source_file else {
+        return ModuleCompileResult {
+            success: false,
+            object_file: None,
+            warnings: vec![],
+            errors: vec![format!("Cannot find source for module: {}", module_name)],
+        };
+    };
+
+    // Build GHC args
+    let mut args: Vec<String> = vec![
+        "-c".to_string(), // Compile only
+        format!("-hidir={}", hi_dir.display()),
+        format!("-odir={}", o_dir.display()),
+    ];
+
+    // Add source directories
+    let src_dirs = if lib_config.hs_source_dirs.is_empty() {
+        vec![".".to_string()]
+    } else {
+        lib_config.hs_source_dirs.clone()
+    };
+
+    for src_dir in &src_dirs {
+        let full_path = package.source_dir.join(src_dir);
+        args.push(format!("-i{}", full_path.display()));
+    }
+
+    // Add package databases
+    for db in &config.ghc.package_dbs {
+        args.push(format!("-package-db={}", db.display()));
+    }
+
+    // Add dependency packages
+    for dep_id in &config.dependency_ids {
+        args.push("-package-id".to_string());
+        args.push(dep_id.clone());
+    }
+
+    // Add extensions
+    for ext in &lib_config.default_extensions {
+        args.push(format!("-X{}", ext));
+    }
+    for ext in &lib_config.other_extensions {
+        args.push(format!("-X{}", ext));
+    }
+
+    // Add default language
+    if let Some(lang) = &lib_config.default_language {
+        args.push(format!("-X{}", lang));
+    }
+
+    // Add include directories
+    for inc_dir in &lib_config.include_dirs {
+        let full_path = package.source_dir.join(inc_dir);
+        args.push(format!("-I{}", full_path.display()));
+    }
+
+    // Add CPP options
+    args.extend(lib_config.cpp_options.clone());
+
+    // Add GHC options from cabal file
+    args.extend(lib_config.ghc_options.clone());
+
+    // Add optimization
+    if config.optimization > 0 {
+        args.push(format!("-O{}", config.optimization));
+    }
+
+    // Add source file
+    args.push(source_file.display().to_string());
+
+    // Run GHC
+    let runner = CommandRunner::new().with_working_dir(&package.source_dir);
+    let ghc_path = config.ghc.ghc_path.display().to_string();
+
+    let output = match runner.run(&ghc_path, &args).await {
+        Ok(o) => o,
+        Err(e) => {
+            return ModuleCompileResult {
+                success: false,
+                object_file: None,
+                warnings: vec![],
+                errors: vec![format!("Failed to run GHC: {}", e)],
+            };
+        }
+    };
+
+    // Parse output
+    let (warnings, errors) = parse_ghc_output(&output.stdout, &output.stderr);
+
+    let success = output.success();
+    let object_file = if success {
+        Some(o_dir.join(format!("{}.o", module_path)))
+    } else {
+        None
+    };
+
+    ModuleCompileResult {
+        success,
+        object_file,
+        warnings,
+        errors,
+    }
+}
+
+/// Find the source file for a module.
+fn find_module_source(
+    package: &ExtractedPackage,
+    lib_config: &LibraryConfig,
+    module_path: &str,
+) -> Option<PathBuf> {
+    let src_dirs = if lib_config.hs_source_dirs.is_empty() {
+        vec![".".to_string()]
+    } else {
+        lib_config.hs_source_dirs.clone()
+    };
+
+    let extensions = ["hs", "lhs"];
+
+    for src_dir in &src_dirs {
+        for ext in &extensions {
+            let path = package
+                .source_dir
+                .join(src_dir)
+                .join(format!("{}.{}", module_path, ext));
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+
+    None
+}
+
+/// Parse GHC output into warnings and errors.
+fn parse_ghc_output(stdout: &str, stderr: &str) -> (Vec<String>, Vec<String>) {
+    let mut warnings = Vec::new();
+    let mut errors = Vec::new();
+
+    let combined = format!("{}\n{}", stdout, stderr);
+
+    for line in combined.lines() {
+        let trimmed = line.trim();
+        if trimmed.contains(": error:") || trimmed.contains(": Error:") {
+            errors.push(line.to_string());
+        } else if trimmed.contains(": warning:") || trimmed.contains(": Warning:") {
+            warnings.push(line.to_string());
+        }
+    }
+
+    (warnings, errors)
+}
+
+/// Create a static library from object files.
+async fn create_library(
+    lib_path: &Path,
+    object_files: &[PathBuf],
+    verbose: bool,
+) -> Result<()> {
+    if object_files.is_empty() {
+        return Ok(());
+    }
+
+    // Use libtool on macOS, ar on Linux
+    let (archiver, args) = if cfg!(target_os = "macos") {
+        (
+            "libtool",
+            vec![
+                "-static".to_string(),
+                "-o".to_string(),
+                lib_path.display().to_string(),
+            ],
+        )
+    } else {
+        (
+            "ar",
+            vec!["rcs".to_string(), lib_path.display().to_string()],
+        )
+    };
+
+    let mut full_args = args;
+    for obj in object_files {
+        full_args.push(obj.display().to_string());
+    }
+
+    if verbose {
+        info!("Archive command: {} {}", archiver, full_args.join(" "));
+    }
+
+    let runner = CommandRunner::new();
+    let output = runner
+        .run(archiver, full_args.iter().map(|s| s.as_str()))
+        .await?;
+
+    if !output.success() {
+        return Err(Error::BuildFailed {
+            errors: vec!["Failed to create library archive".to_string()],
+            fixes: vec![],
+        });
+    }
+
+    Ok(())
+}
+
+/// Copy interface files to install directory.
+fn copy_interface_files(from: &Path, to: &Path) -> Result<()> {
+    copy_dir_recursive(from, to).map_err(|e| Error::Io {
+        message: "Failed to copy interface files".to_string(),
+        path: Some(from.to_path_buf()),
+        source: e,
+    })?;
+    Ok(())
+}
+
+/// Recursively copy a directory.
+fn copy_dir_recursive(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let dest = to.join(entry.file_name());
+
+        if file_type.is_dir() {
+            copy_dir_recursive(&entry.path(), &dest)?;
+        } else {
+            std::fs::copy(entry.path(), dest)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Generate a package registration file for ghc-pkg.
+fn generate_registration_file(
+    path: &Path,
+    name: &str,
+    version: &str,
+    package_id: &str,
+    lib_config: &LibraryConfig,
+    lib_dir: &Path,
+    import_dir: &Path,
+    dependency_ids: &[String],
+) -> Result<()> {
+    let hs_lib = format!("HS{}-{}", name, version);
+
+    let mut content = String::new();
+
+    content.push_str(&format!("name: {}\n", name));
+    content.push_str(&format!("version: {}\n", version));
+    content.push_str(&format!("id: {}\n", package_id));
+    content.push_str(&format!("key: {}\n", package_id));
+
+    // Exposed modules
+    if !lib_config.exposed_modules.is_empty() {
+        content.push_str(&format!(
+            "exposed-modules: {}\n",
+            lib_config.exposed_modules.join(" ")
+        ));
+    }
+
+    // Hidden modules
+    if !lib_config.other_modules.is_empty() {
+        content.push_str(&format!(
+            "hidden-modules: {}\n",
+            lib_config.other_modules.join(" ")
+        ));
+    }
+
+    content.push_str("exposed: True\n");
+
+    // Library directories and libraries
+    content.push_str(&format!("library-dirs: {}\n", lib_dir.display()));
+    content.push_str(&format!("hs-libraries: {}\n", hs_lib));
+
+    // Import directories
+    content.push_str(&format!("import-dirs: {}\n", import_dir.display()));
+
+    // Dependencies
+    if !dependency_ids.is_empty() {
+        content.push_str(&format!("depends: {}\n", dependency_ids.join(" ")));
+    }
+
+    // Extra libraries
+    if !lib_config.extra_libraries.is_empty() {
+        content.push_str(&format!(
+            "extra-libraries: {}\n",
+            lib_config.extra_libraries.join(" ")
+        ));
+    }
+
+    // Extra library dirs
+    if !lib_config.extra_lib_dirs.is_empty() {
+        content.push_str(&format!(
+            "extra-lib-dirs: {}\n",
+            lib_config.extra_lib_dirs.join(" ")
+        ));
+    }
+
+    // Include dirs
+    if !lib_config.include_dirs.is_empty() {
+        content.push_str(&format!(
+            "include-dirs: {}\n",
+            lib_config.include_dirs.join(" ")
+        ));
+    }
+
+    std::fs::write(path, content).map_err(|e| Error::Io {
+        message: "Failed to write package registration file".to_string(),
+        path: Some(path.to_path_buf()),
+        source: e,
+    })?;
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_package_id() {
+        let id = compute_package_id("text", "2.1.1", "9.8.2", &["base-4.18.0".to_string()]);
+        assert!(id.starts_with("text-2.1.1-"));
+        assert_eq!(id.len(), "text-2.1.1-".len() + 12);
+    }
+
+    #[test]
+    fn test_package_id_stable() {
+        let id1 = compute_package_id("text", "2.1.1", "9.8.2", &["base-4.18.0".to_string()]);
+        let id2 = compute_package_id("text", "2.1.1", "9.8.2", &["base-4.18.0".to_string()]);
+        assert_eq!(id1, id2);
+    }
+
+    #[test]
+    fn test_package_id_changes_with_deps() {
+        let id1 = compute_package_id("text", "2.1.1", "9.8.2", &["base-4.18.0".to_string()]);
+        let id2 = compute_package_id(
+            "text",
+            "2.1.1",
+            "9.8.2",
+            &["base-4.18.0".to_string(), "bytestring-0.11.5".to_string()],
+        );
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn test_collect_modules() {
+        let lib = LibraryConfig {
+            exposed_modules: vec!["Data.Text".to_string(), "Data.Text.Lazy".to_string()],
+            other_modules: vec!["Data.Text.Internal".to_string()],
+            ..Default::default()
+        };
+
+        let modules = collect_modules(&lib);
+        assert_eq!(modules.len(), 3);
+        assert!(modules.contains(&"Data.Text".to_string()));
+        assert!(modules.contains(&"Data.Text.Internal".to_string()));
+    }
+}

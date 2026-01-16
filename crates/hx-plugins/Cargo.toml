@@ -1,0 +1,45 @@
+[package]
+name = "hx-plugins"
+description = "Plugin system for hx using Steel Scheme"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+
+[dependencies]
+# Steel Scheme interpreter
+steel-core = "0.7"
+
+# Workspace dependencies
+hx-core = { workspace = true }
+hx-config = { workspace = true }
+hx-ui = { workspace = true }
+hx-cache = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Async
+tokio = { workspace = true }
+
+# Utilities
+once_cell = { workspace = true }
+chrono = { workspace = true }
+directories = { workspace = true }
+
+# Filesystem
+glob = "0.3"
+
+[dev-dependencies]
+tempfile = { workspace = true }

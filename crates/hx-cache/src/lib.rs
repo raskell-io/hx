@@ -27,7 +27,10 @@ pub use build_state::{BuildState, PackageBuildInfo, PackageStatus};
 pub use source::{
     SourceFingerprint, compute_source_fingerprint, load_source_fingerprint, save_source_fingerprint,
 };
-pub use store::{BuildCacheEntry, StoreIndex, StoreStats, calculate_fingerprint, store_disk_size};
+pub use store::{
+    BuildCacheEntry, PackageCacheEntry, PackageCacheIndex, PackageCacheStats, StoreIndex,
+    StoreStats, calculate_fingerprint, calculate_package_cache_key, store_disk_size,
+};
 
 /// Get the global cache directory.
 ///
@@ -54,6 +57,39 @@ pub fn global_config_dir() -> Result<PathBuf> {
     let dirs = ProjectDirs::from("io", "raskell", "hx")
         .ok_or_else(|| Error::config("could not determine home directory for config"))?;
     Ok(dirs.config_dir().to_path_buf())
+}
+
+/// Get the toolchain directory for hx-managed installations.
+///
+/// - Linux: `~/.local/share/hx/toolchains`
+/// - macOS: `~/Library/Application Support/hx/toolchains`
+/// - Windows: `%APPDATA%\hx\data\toolchains`
+///
+/// Structure:
+/// ```text
+/// toolchains/
+///   ghc/
+///     9.8.2/bin/ghc, ghc-pkg, ...
+///     9.6.4/...
+///   manifest.json
+/// ```
+pub fn toolchain_dir() -> Result<PathBuf> {
+    let dirs = ProjectDirs::from("io", "raskell", "hx")
+        .ok_or_else(|| Error::config("could not determine home directory for toolchains"))?;
+    Ok(dirs.data_dir().join("toolchains"))
+}
+
+/// Get the bin directory for hx-managed tool symlinks.
+///
+/// - Linux: `~/.local/share/hx/bin`
+/// - macOS: `~/Library/Application Support/hx/bin`
+/// - Windows: `%APPDATA%\hx\data\bin`
+///
+/// This directory can be added to PATH for direct access to hx-managed tools.
+pub fn toolchain_bin_dir() -> Result<PathBuf> {
+    let dirs = ProjectDirs::from("io", "raskell", "hx")
+        .ok_or_else(|| Error::config("could not determine home directory for toolchain bin"))?;
+    Ok(dirs.data_dir().join("bin"))
 }
 
 /// Ensure a directory exists.

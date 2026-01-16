@@ -7,6 +7,7 @@ use clap::Parser;
 
 mod cli;
 mod commands;
+mod plugins;
 mod styles;
 mod templates;
 

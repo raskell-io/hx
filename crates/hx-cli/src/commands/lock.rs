@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use hx_cabal::freeze;
 use hx_config::{LOCKFILE_FILENAME, Project, find_project_root};
 use hx_lock::{LockedPackage, Lockfile, WorkspacePackageInfo, parse_freeze_file};
+use hx_plugins::HookEvent;
 use hx_solver::{
     Dependency, IndexOptions, MirrorOptions, Resolver, ResolverConfig, best_index_path,
     compute_deps_fingerprint, index_is_current, load_cached_index, load_cached_resolution,
@@ -12,6 +13,8 @@ use hx_solver::{
 use hx_toolchain::Toolchain;
 use hx_ui::{Output, Spinner};
 use std::path::Path;
+
+use crate::plugins::PluginHooks;
 
 /// Run the lock command.
 pub async fn run(use_cabal: bool, update: Option<Vec<String>>, output: &Output) -> Result<i32> {
@@ -28,6 +31,22 @@ pub async fn run(use_cabal: bool, update: Option<Vec<String>>, output: &Output) 
     // Find project root
     let project_root = find_project_root(".")?;
     let project = Project::load(&project_root)?;
+
+    // Initialize plugin hooks
+    let mut hooks = PluginHooks::from_project(&project, None);
+    if let Some(ref mut h) = hooks {
+        if let Err(e) = h.initialize() {
+            output.verbose(&format!("Plugin initialization warning: {}", e));
+        }
+    }
+
+    // Run pre-lock hooks
+    if let Some(ref mut h) = hooks {
+        if !h.run_pre_hook(HookEvent::PreLock, output) {
+            output.error("Pre-lock hook failed");
+            return Ok(6); // Hook failure exit code
+        }
+    }
 
     if project.is_workspace() {
         output.status(
@@ -106,6 +125,11 @@ pub async fn run(use_cabal: bool, update: Option<Vec<String>>, output: &Output) 
 
     output.info(&format!("Lockfile: {}", lockfile_path.display()));
 
+    // Run post-lock hooks
+    if let Some(ref mut h) = hooks {
+        h.run_post_hook(HookEvent::PostLock, output);
+    }
+
     Ok(0)
 }
 
@@ -114,6 +138,22 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
     // Find project root
     let project_root = find_project_root(".")?;
     let project = Project::load(&project_root)?;
+
+    // Initialize plugin hooks
+    let mut hooks = PluginHooks::from_project(&project, None);
+    if let Some(ref mut h) = hooks {
+        if let Err(e) = h.initialize() {
+            output.verbose(&format!("Plugin initialization warning: {}", e));
+        }
+    }
+
+    // Run pre-lock hooks
+    if let Some(ref mut h) = hooks {
+        if !h.run_pre_hook(HookEvent::PreLock, output) {
+            output.error("Pre-lock hook failed");
+            return Ok(6); // Hook failure exit code
+        }
+    }
 
     let is_update_mode = update.is_some();
     let update_packages = update.unwrap_or_default();
@@ -392,6 +432,11 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
     }
 
     output.info(&format!("Lockfile: {}", lockfile_path.display()));
+
+    // Run post-lock hooks
+    if let Some(ref mut h) = hooks {
+        h.run_post_hook(HookEvent::PostLock, output);
+    }
 
     Ok(0)
 }

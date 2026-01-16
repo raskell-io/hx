@@ -1,12 +1,13 @@
-//! Simple .cabal file parser for extracting dependencies.
+//! Cabal file parser for extracting build information.
 //!
-//! This is a minimal parser that extracts build-depends from .cabal files.
-//! It doesn't handle the full Cabal specification, just enough for dependency resolution.
+//! This module parses .cabal files to extract both dependencies and full build
+//! configuration needed for native compilation.
 
 use crate::package::Dependency;
 use crate::version::{VersionConstraint, parse_constraint};
+use serde::{Deserialize, Serialize};
 
-/// Parsed information from a .cabal file.
+/// Parsed information from a .cabal file (minimal, for dependency resolution).
 #[derive(Debug, Clone, Default)]
 pub struct CabalFile {
     /// Package name
@@ -32,7 +33,403 @@ impl CabalFile {
     }
 }
 
-/// Parse a .cabal file and extract dependencies.
+/// Full build information extracted from a .cabal file.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PackageBuildInfo {
+    /// Package name
+    pub name: String,
+    /// Package version
+    pub version: String,
+    /// Build type (Simple, Custom, Configure, Make)
+    pub build_type: BuildType,
+    /// Library configuration (if package has a library)
+    pub library: Option<LibraryConfig>,
+    /// Executable configurations
+    pub executables: Vec<ExecutableConfig>,
+    /// Cabal version specification
+    pub cabal_version: Option<String>,
+}
+
+impl PackageBuildInfo {
+    /// Check if this package can be built natively (without custom Setup.hs).
+    pub fn is_simple_build(&self) -> bool {
+        matches!(self.build_type, BuildType::Simple)
+    }
+
+    /// Check if this package requires preprocessors we don't support.
+    pub fn needs_unsupported_preprocessors(&self) -> bool {
+        let check_tools = |tools: &[String]| {
+            tools.iter().any(|t| {
+                let t = t.to_lowercase();
+                t.contains("alex")
+                    || t.contains("happy")
+                    || t.contains("hsc2hs")
+                    || t.contains("c2hs")
+                    || t.contains("cpphs")
+            })
+        };
+
+        if let Some(lib) = &self.library {
+            if check_tools(&lib.build_tools) {
+                return true;
+            }
+        }
+
+        for exe in &self.executables {
+            if check_tools(&exe.build_tools) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Get all dependencies for building the library.
+    pub fn library_dependencies(&self) -> Vec<Dependency> {
+        self.library
+            .as_ref()
+            .map(|lib| lib.build_depends.clone())
+            .unwrap_or_default()
+    }
+}
+
+/// Build type for a package.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BuildType {
+    /// Simple build (no custom Setup.hs)
+    #[default]
+    Simple,
+    /// Custom Setup.hs required
+    Custom,
+    /// Configure script required
+    Configure,
+    /// Makefile-based build
+    Make,
+}
+
+impl BuildType {
+    fn from_str(s: &str) -> Self {
+        match s.trim().to_lowercase().as_str() {
+            "simple" => BuildType::Simple,
+            "custom" => BuildType::Custom,
+            "configure" => BuildType::Configure,
+            "make" => BuildType::Make,
+            _ => BuildType::Simple,
+        }
+    }
+}
+
+/// Library configuration from a .cabal file.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct LibraryConfig {
+    /// Source directories (hs-source-dirs)
+    pub hs_source_dirs: Vec<String>,
+    /// Exposed modules
+    pub exposed_modules: Vec<String>,
+    /// Other (internal) modules
+    pub other_modules: Vec<String>,
+    /// Build dependencies
+    pub build_depends: Vec<Dependency>,
+    /// Default language extensions
+    pub default_extensions: Vec<String>,
+    /// Other extensions
+    pub other_extensions: Vec<String>,
+    /// GHC options
+    pub ghc_options: Vec<String>,
+    /// CPP options
+    pub cpp_options: Vec<String>,
+    /// C source files
+    pub c_sources: Vec<String>,
+    /// Include directories for C headers
+    pub include_dirs: Vec<String>,
+    /// Header files to include
+    pub includes: Vec<String>,
+    /// Extra C libraries to link
+    pub extra_libraries: Vec<String>,
+    /// Extra library directories
+    pub extra_lib_dirs: Vec<String>,
+    /// pkg-config dependencies
+    pub pkgconfig_depends: Vec<String>,
+    /// Build tools required
+    pub build_tools: Vec<String>,
+    /// Default language (Haskell98, Haskell2010, GHC2021)
+    pub default_language: Option<String>,
+}
+
+/// Executable configuration from a .cabal file.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ExecutableConfig {
+    /// Executable name
+    pub name: String,
+    /// Main module file
+    pub main_is: Option<String>,
+    /// Source directories
+    pub hs_source_dirs: Vec<String>,
+    /// Other modules
+    pub other_modules: Vec<String>,
+    /// Build dependencies
+    pub build_depends: Vec<Dependency>,
+    /// Default language extensions
+    pub default_extensions: Vec<String>,
+    /// GHC options
+    pub ghc_options: Vec<String>,
+    /// C source files
+    pub c_sources: Vec<String>,
+    /// Extra libraries
+    pub extra_libraries: Vec<String>,
+    /// Build tools required
+    pub build_tools: Vec<String>,
+    /// Default language
+    pub default_language: Option<String>,
+}
+
+/// Parse a .cabal file and extract full build information.
+pub fn parse_cabal_full(content: &str) -> PackageBuildInfo {
+    let mut info = PackageBuildInfo::default();
+    let mut current_section = Section::TopLevel;
+    let mut current_library = LibraryConfig::default();
+    let mut current_executable: Option<ExecutableConfig> = None;
+    let mut field_buffer = FieldBuffer::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        // Skip comments and empty lines
+        if trimmed.starts_with("--") || trimmed.is_empty() {
+            continue;
+        }
+
+        // Check for section headers
+        if let Some(section) = parse_section_header(trimmed) {
+            // Flush any buffered field
+            flush_field(&mut field_buffer, &current_section, &mut info, &mut current_library, &mut current_executable);
+
+            // Save current section data
+            match current_section {
+                Section::Library => {
+                    info.library = Some(std::mem::take(&mut current_library));
+                }
+                Section::Executable(_) => {
+                    if let Some(exe) = current_executable.take() {
+                        info.executables.push(exe);
+                    }
+                }
+                _ => {}
+            }
+
+            // Start new section
+            current_section = section.clone();
+            if let Section::Executable(name) = &section {
+                current_executable = Some(ExecutableConfig {
+                    name: name.clone(),
+                    ..Default::default()
+                });
+            }
+            continue;
+        }
+
+        // Check if this is a new field or continuation
+        if let Some((key, value)) = parse_field(line) {
+            // Flush previous field
+            flush_field(&mut field_buffer, &current_section, &mut info, &mut current_library, &mut current_executable);
+            // Start new field
+            field_buffer.start(key, value);
+        } else if line.starts_with(' ') || line.starts_with('\t') {
+            // Continuation line
+            field_buffer.append(trimmed);
+        }
+    }
+
+    // Flush final field
+    flush_field(&mut field_buffer, &current_section, &mut info, &mut current_library, &mut current_executable);
+
+    // Save final section
+    match current_section {
+        Section::Library => {
+            info.library = Some(current_library);
+        }
+        Section::Executable(_) => {
+            if let Some(exe) = current_executable {
+                info.executables.push(exe);
+            }
+        }
+        _ => {}
+    }
+
+    info
+}
+
+/// Buffer for accumulating multi-line field values.
+struct FieldBuffer {
+    key: String,
+    value: String,
+    active: bool,
+}
+
+impl FieldBuffer {
+    fn new() -> Self {
+        Self {
+            key: String::new(),
+            value: String::new(),
+            active: false,
+        }
+    }
+
+    fn start(&mut self, key: &str, value: &str) {
+        self.key = key.to_lowercase();
+        self.value = value.to_string();
+        self.active = true;
+    }
+
+    fn append(&mut self, line: &str) {
+        if self.active {
+            if !self.value.is_empty() {
+                self.value.push(' ');
+            }
+            self.value.push_str(line);
+        }
+    }
+
+    fn take(&mut self) -> Option<(String, String)> {
+        if self.active {
+            self.active = false;
+            Some((std::mem::take(&mut self.key), std::mem::take(&mut self.value)))
+        } else {
+            None
+        }
+    }
+}
+
+/// Flush accumulated field value to appropriate structure.
+fn flush_field(
+    buffer: &mut FieldBuffer,
+    section: &Section,
+    info: &mut PackageBuildInfo,
+    library: &mut LibraryConfig,
+    executable: &mut Option<ExecutableConfig>,
+) {
+    let Some((key, value)) = buffer.take() else {
+        return;
+    };
+
+    match section {
+        Section::TopLevel => {
+            apply_top_level_field(info, &key, &value);
+        }
+        Section::Library => {
+            apply_library_field(library, &key, &value);
+        }
+        Section::Executable(_) => {
+            if let Some(exe) = executable {
+                apply_executable_field(exe, &key, &value);
+            }
+        }
+        Section::Other => {}
+    }
+}
+
+/// Apply a top-level field to PackageBuildInfo.
+fn apply_top_level_field(info: &mut PackageBuildInfo, key: &str, value: &str) {
+    match key {
+        "name" => info.name = value.to_string(),
+        "version" => info.version = value.to_string(),
+        "build-type" => info.build_type = BuildType::from_str(value),
+        "cabal-version" => info.cabal_version = Some(value.to_string()),
+        _ => {}
+    }
+}
+
+/// Apply a library section field to LibraryConfig.
+fn apply_library_field(lib: &mut LibraryConfig, key: &str, value: &str) {
+    match key {
+        "hs-source-dirs" => lib.hs_source_dirs = parse_list(value),
+        "exposed-modules" => lib.exposed_modules = parse_module_list(value),
+        "other-modules" => lib.other_modules = parse_module_list(value),
+        "build-depends" => lib.build_depends = parse_build_depends(value),
+        "default-extensions" => lib.default_extensions = parse_list(value),
+        "other-extensions" => lib.other_extensions = parse_list(value),
+        "ghc-options" => lib.ghc_options = parse_ghc_options(value),
+        "cpp-options" => lib.cpp_options = parse_ghc_options(value),
+        "c-sources" => lib.c_sources = parse_list(value),
+        "include-dirs" => lib.include_dirs = parse_list(value),
+        "includes" => lib.includes = parse_list(value),
+        "extra-libraries" => lib.extra_libraries = parse_list(value),
+        "extra-lib-dirs" => lib.extra_lib_dirs = parse_list(value),
+        "pkgconfig-depends" => lib.pkgconfig_depends = parse_list(value),
+        "build-tools" | "build-tool-depends" => lib.build_tools.extend(parse_list(value)),
+        "default-language" => lib.default_language = Some(value.to_string()),
+        _ => {}
+    }
+}
+
+/// Apply an executable section field to ExecutableConfig.
+fn apply_executable_field(exe: &mut ExecutableConfig, key: &str, value: &str) {
+    match key {
+        "main-is" => exe.main_is = Some(value.to_string()),
+        "hs-source-dirs" => exe.hs_source_dirs = parse_list(value),
+        "other-modules" => exe.other_modules = parse_module_list(value),
+        "build-depends" => exe.build_depends = parse_build_depends(value),
+        "default-extensions" => exe.default_extensions = parse_list(value),
+        "ghc-options" => exe.ghc_options = parse_ghc_options(value),
+        "c-sources" => exe.c_sources = parse_list(value),
+        "extra-libraries" => exe.extra_libraries = parse_list(value),
+        "build-tools" | "build-tool-depends" => exe.build_tools.extend(parse_list(value)),
+        "default-language" => exe.default_language = Some(value.to_string()),
+        _ => {}
+    }
+}
+
+/// Parse a comma or space separated list.
+fn parse_list(value: &str) -> Vec<String> {
+    value
+        .split([',', ' '])
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect()
+}
+
+/// Parse a module list (comma or newline separated).
+fn parse_module_list(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .flat_map(|s| s.split_whitespace())
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect()
+}
+
+/// Parse GHC options (preserving structure like -Wall -Werror).
+fn parse_ghc_options(value: &str) -> Vec<String> {
+    // Split on spaces but handle quoted strings
+    let mut options = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+
+    for c in value.chars() {
+        match c {
+            '"' => in_quotes = !in_quotes,
+            ' ' if !in_quotes => {
+                let trimmed = current.trim().to_string();
+                if !trimmed.is_empty() {
+                    options.push(trimmed);
+                }
+                current.clear();
+            }
+            _ => current.push(c),
+        }
+    }
+
+    let trimmed = current.trim().to_string();
+    if !trimmed.is_empty() {
+        options.push(trimmed);
+    }
+
+    options
+}
+
+/// Parse a .cabal file and extract dependencies (original minimal parser).
 pub fn parse_cabal(content: &str) -> CabalFile {
     let mut result = CabalFile::default();
     let lines = content.lines();
@@ -132,7 +529,7 @@ pub fn parse_cabal(content: &str) -> CabalFile {
 enum Section {
     TopLevel,
     Library,
-    #[allow(dead_code)] // Name stored for future use (e.g., filtering deps by executable)
+    #[allow(dead_code)] // Name stored for future use
     Executable(String),
     Other,
 }
@@ -258,6 +655,102 @@ library
     }
 
     #[test]
+    fn test_parse_full_cabal() {
+        let content = r#"
+cabal-version:  2.4
+name:           mylib
+version:        1.0.0
+build-type:     Simple
+
+library
+  hs-source-dirs:   src
+  exposed-modules:  MyLib, MyLib.Internal
+  other-modules:    MyLib.Utils
+  build-depends:    base >= 4.14 && < 5,
+                    text >= 2.0
+  default-extensions: OverloadedStrings, DeriveFunctor
+  ghc-options:      -Wall -Werror
+  default-language: GHC2021
+
+executable myapp
+  main-is:          Main.hs
+  hs-source-dirs:   app
+  build-depends:    base, mylib
+  ghc-options:      -threaded -rtsopts
+"#;
+
+        let info = parse_cabal_full(content);
+        assert_eq!(info.name, "mylib");
+        assert_eq!(info.version, "1.0.0");
+        assert_eq!(info.build_type, BuildType::Simple);
+        assert!(info.is_simple_build());
+
+        let lib = info.library.as_ref().unwrap();
+        assert_eq!(lib.hs_source_dirs, vec!["src"]);
+        assert_eq!(lib.exposed_modules, vec!["MyLib", "MyLib.Internal"]);
+        assert_eq!(lib.other_modules, vec!["MyLib.Utils"]);
+        assert_eq!(lib.build_depends.len(), 2);
+        assert_eq!(lib.default_extensions, vec!["OverloadedStrings", "DeriveFunctor"]);
+        assert_eq!(lib.ghc_options, vec!["-Wall", "-Werror"]);
+        assert_eq!(lib.default_language, Some("GHC2021".to_string()));
+
+        assert_eq!(info.executables.len(), 1);
+        let exe = &info.executables[0];
+        assert_eq!(exe.name, "myapp");
+        assert_eq!(exe.main_is, Some("Main.hs".to_string()));
+        assert_eq!(exe.hs_source_dirs, vec!["app"]);
+        assert_eq!(exe.ghc_options, vec!["-threaded", "-rtsopts"]);
+    }
+
+    #[test]
+    fn test_parse_custom_build_type() {
+        let content = r#"
+name:       custom-pkg
+version:    1.0
+build-type: Custom
+"#;
+
+        let info = parse_cabal_full(content);
+        assert_eq!(info.build_type, BuildType::Custom);
+        assert!(!info.is_simple_build());
+    }
+
+    #[test]
+    fn test_detect_preprocessors() {
+        let content = r#"
+name:       alex-pkg
+version:    1.0
+build-type: Simple
+
+library
+  build-tools: alex, happy
+"#;
+
+        let info = parse_cabal_full(content);
+        assert!(info.needs_unsupported_preprocessors());
+    }
+
+    #[test]
+    fn test_parse_c_sources() {
+        let content = r#"
+name:       ffi-pkg
+version:    1.0
+build-type: Simple
+
+library
+  c-sources:        cbits/foo.c, cbits/bar.c
+  include-dirs:     include
+  extra-libraries:  pthread, m
+"#;
+
+        let info = parse_cabal_full(content);
+        let lib = info.library.as_ref().unwrap();
+        assert_eq!(lib.c_sources, vec!["cbits/foo.c", "cbits/bar.c"]);
+        assert_eq!(lib.include_dirs, vec!["include"]);
+        assert_eq!(lib.extra_libraries, vec!["pthread", "m"]);
+    }
+
+    #[test]
     fn test_parse_dependency_with_constraint() {
         let dep = parse_single_dependency("base >= 4.7 && < 5").unwrap();
         assert_eq!(dep.name, "base");
@@ -290,5 +783,17 @@ library
         let value = "base >= 4.9, text >= 2.0, bytestring";
         let deps = parse_build_depends(value);
         assert_eq!(deps.len(), 3);
+    }
+
+    #[test]
+    fn test_parse_ghc_options() {
+        let options = parse_ghc_options("-Wall -Werror -O2");
+        assert_eq!(options, vec!["-Wall", "-Werror", "-O2"]);
+    }
+
+    #[test]
+    fn test_parse_module_list() {
+        let modules = parse_module_list("Data.Text, Data.Text.Lazy,\n                    Data.Text.Internal");
+        assert_eq!(modules, vec!["Data.Text", "Data.Text.Lazy", "Data.Text.Internal"]);
     }
 }

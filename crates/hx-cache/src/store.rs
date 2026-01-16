@@ -190,6 +190,222 @@ pub struct StoreStats {
     pub ghc_versions: HashMap<String, usize>,
 }
 
+// =============================================================================
+// Native Package Cache
+// =============================================================================
+
+/// A cached native package entry.
+///
+/// This tracks individual packages that have been compiled natively,
+/// enabling cache hits when rebuilding projects with similar dependencies.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PackageCacheEntry {
+    /// The package ID (e.g., "text-2.1.1-abc123")
+    pub package_id: String,
+    /// Package name
+    pub name: String,
+    /// Package version
+    pub version: String,
+    /// GHC version used to compile
+    pub ghc_version: String,
+    /// Platform
+    pub platform: String,
+    /// Sorted dependency package IDs
+    pub dependency_ids: Vec<String>,
+    /// Path to the compiled library
+    pub library_path: PathBuf,
+    /// Path to the registration file
+    pub registration_file: PathBuf,
+    /// When this package was built
+    pub built_at: u64,
+    /// Last time this entry was accessed
+    pub last_accessed: u64,
+}
+
+/// Index for native package caches.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PackageCacheIndex {
+    /// Version of the index format
+    pub version: u32,
+    /// Cached packages, keyed by cache key (sha256 of name, version, ghc, deps)
+    pub entries: HashMap<String, PackageCacheEntry>,
+}
+
+impl PackageCacheIndex {
+    /// Current index version.
+    pub const VERSION: u32 = 1;
+
+    /// Create a new empty index.
+    pub fn new() -> Self {
+        Self {
+            version: Self::VERSION,
+            entries: HashMap::new(),
+        }
+    }
+
+    /// Load the package cache index from disk.
+    pub fn load() -> Result<Self> {
+        let path = package_cache_index_path()?;
+        if !path.exists() {
+            return Ok(Self::new());
+        }
+
+        let content = std::fs::read_to_string(&path).map_err(|e| Error::Io {
+            message: "failed to read package cache index".to_string(),
+            path: Some(path),
+            source: e,
+        })?;
+
+        let index: PackageCacheIndex = serde_json::from_str(&content)
+            .map_err(|e| Error::config(format!("invalid package cache index: {}", e)))?;
+
+        Ok(index)
+    }
+
+    /// Save the package cache index to disk.
+    pub fn save(&self) -> Result<()> {
+        let path = package_cache_index_path()?;
+
+        // Ensure parent directory exists
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| Error::Io {
+                message: "failed to create package cache directory".to_string(),
+                path: Some(parent.to_path_buf()),
+                source: e,
+            })?;
+        }
+
+        let content = serde_json::to_string_pretty(self)
+            .map_err(|e| Error::config(format!("failed to serialize package cache index: {}", e)))?;
+
+        std::fs::write(&path, content).map_err(|e| Error::Io {
+            message: "failed to write package cache index".to_string(),
+            path: Some(path),
+            source: e,
+        })?;
+
+        Ok(())
+    }
+
+    /// Check if a package is cached.
+    pub fn has_cached(&self, cache_key: &str) -> bool {
+        self.entries.contains_key(cache_key)
+    }
+
+    /// Get a cached package entry.
+    pub fn get(&self, cache_key: &str) -> Option<&PackageCacheEntry> {
+        self.entries.get(cache_key)
+    }
+
+    /// Get a cached package by name and version for a specific GHC version.
+    pub fn get_package(&self, name: &str, version: &str, ghc_version: &str) -> Option<&PackageCacheEntry> {
+        self.entries.values().find(|e| {
+            e.name == name && e.version == version && e.ghc_version == ghc_version
+        })
+    }
+
+    /// Record a successful package build.
+    pub fn record_package(
+        &mut self,
+        cache_key: String,
+        entry: PackageCacheEntry,
+    ) {
+        self.entries.insert(cache_key, entry);
+    }
+
+    /// Mark a package as accessed (updates last_accessed time).
+    pub fn touch(&mut self, cache_key: &str) {
+        if let Some(entry) = self.entries.get_mut(cache_key) {
+            entry.last_accessed = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+        }
+    }
+
+    /// Remove entries older than the given age (in seconds).
+    pub fn prune_older_than(&mut self, max_age_secs: u64) -> usize {
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        let cutoff = now.saturating_sub(max_age_secs);
+        let before = self.entries.len();
+
+        self.entries
+            .retain(|_, entry| entry.last_accessed >= cutoff);
+
+        before - self.entries.len()
+    }
+
+    /// Get all cached packages for a specific GHC version.
+    pub fn packages_for_ghc(&self, ghc_version: &str) -> Vec<&PackageCacheEntry> {
+        self.entries
+            .values()
+            .filter(|e| e.ghc_version == ghc_version)
+            .collect()
+    }
+
+    /// Get statistics about the package cache.
+    pub fn stats(&self) -> PackageCacheStats {
+        let mut ghc_versions = HashMap::new();
+
+        for entry in self.entries.values() {
+            *ghc_versions.entry(entry.ghc_version.clone()).or_insert(0) += 1;
+        }
+
+        PackageCacheStats {
+            package_count: self.entries.len(),
+            ghc_versions,
+        }
+    }
+}
+
+/// Statistics about the package cache.
+#[derive(Debug, Clone, Default)]
+pub struct PackageCacheStats {
+    /// Number of cached packages
+    pub package_count: usize,
+    /// Breakdown by GHC version
+    pub ghc_versions: HashMap<String, usize>,
+}
+
+/// Get the path to the package cache index file.
+fn package_cache_index_path() -> Result<PathBuf> {
+    Ok(global_cache_dir()?.join("package-cache-index.json"))
+}
+
+/// Calculate a cache key for a native package build.
+///
+/// The cache key is a SHA256 hash of:
+/// - Package name
+/// - Package version
+/// - GHC version
+/// - Sorted dependency package IDs
+pub fn calculate_package_cache_key(
+    name: &str,
+    version: &str,
+    ghc_version: &str,
+    dependency_ids: &[String],
+) -> String {
+    let mut hasher = Sha256::new();
+
+    hasher.update(format!("name:{}", name));
+    hasher.update(format!("version:{}", version));
+    hasher.update(format!("ghc:{}", ghc_version));
+
+    // Sort dependencies for determinism
+    let mut sorted_deps = dependency_ids.to_vec();
+    sorted_deps.sort();
+    for dep_id in sorted_deps {
+        hasher.update(format!("dep:{}", dep_id));
+    }
+
+    let result = hasher.finalize();
+    format!("sha256:{}", hex::encode(result))
+}
+
 /// Get the path to the store index file.
 fn store_index_path() -> Result<PathBuf> {
     Ok(global_cache_dir()?.join("store-index.json"))
@@ -369,5 +585,129 @@ mod tests {
         assert_eq!(pruned, 1);
         assert!(!index.has_cached_build("sha256:old"));
         assert!(index.has_cached_build("sha256:new"));
+    }
+
+    // Package cache tests
+
+    #[test]
+    fn test_package_cache_key() {
+        let key1 = calculate_package_cache_key(
+            "text",
+            "2.1.1",
+            "9.8.2",
+            &["base-4.18.0".to_string(), "bytestring-0.12.0".to_string()],
+        );
+
+        let key2 = calculate_package_cache_key(
+            "text",
+            "2.1.1",
+            "9.8.2",
+            &["bytestring-0.12.0".to_string(), "base-4.18.0".to_string()],
+        );
+
+        // Order shouldn't matter
+        assert_eq!(key1, key2);
+
+        // Different deps should produce different keys
+        let key3 = calculate_package_cache_key(
+            "text",
+            "2.1.1",
+            "9.8.2",
+            &["base-4.18.0".to_string()],
+        );
+        assert_ne!(key1, key3);
+
+        // Different GHC version should produce different keys
+        let key4 = calculate_package_cache_key(
+            "text",
+            "2.1.1",
+            "9.6.4",
+            &["base-4.18.0".to_string(), "bytestring-0.12.0".to_string()],
+        );
+        assert_ne!(key1, key4);
+    }
+
+    #[test]
+    fn test_package_cache_index_operations() {
+        let mut index = PackageCacheIndex::new();
+
+        let cache_key = "sha256:abc123".to_string();
+
+        assert!(!index.has_cached(&cache_key));
+
+        let entry = PackageCacheEntry {
+            package_id: "text-2.1.1-xyz789".to_string(),
+            name: "text".to_string(),
+            version: "2.1.1".to_string(),
+            ghc_version: "9.8.2".to_string(),
+            platform: "x86_64-linux".to_string(),
+            dependency_ids: vec!["base-4.18.0".to_string()],
+            library_path: PathBuf::from("/lib/text.a"),
+            registration_file: PathBuf::from("/pkg/text.conf"),
+            built_at: 1000,
+            last_accessed: 1000,
+        };
+
+        index.record_package(cache_key.clone(), entry);
+
+        assert!(index.has_cached(&cache_key));
+
+        let retrieved = index.get(&cache_key).unwrap();
+        assert_eq!(retrieved.name, "text");
+        assert_eq!(retrieved.ghc_version, "9.8.2");
+
+        let by_pkg = index.get_package("text", "2.1.1", "9.8.2").unwrap();
+        assert_eq!(by_pkg.package_id, "text-2.1.1-xyz789");
+
+        let stats = index.stats();
+        assert_eq!(stats.package_count, 1);
+        assert_eq!(stats.ghc_versions.get("9.8.2"), Some(&1));
+    }
+
+    #[test]
+    fn test_package_cache_prune() {
+        let mut index = PackageCacheIndex::new();
+
+        // Add an old entry
+        let old_entry = PackageCacheEntry {
+            package_id: "old-1.0.0-abc".to_string(),
+            name: "old".to_string(),
+            version: "1.0.0".to_string(),
+            ghc_version: "9.8.2".to_string(),
+            platform: "x86_64-linux".to_string(),
+            dependency_ids: vec![],
+            library_path: PathBuf::from("/lib/old.a"),
+            registration_file: PathBuf::from("/pkg/old.conf"),
+            built_at: 0,
+            last_accessed: 0, // Very old
+        };
+        index.record_package("sha256:old".to_string(), old_entry);
+
+        // Add a recent entry
+        let new_entry = PackageCacheEntry {
+            package_id: "new-1.0.0-def".to_string(),
+            name: "new".to_string(),
+            version: "1.0.0".to_string(),
+            ghc_version: "9.8.2".to_string(),
+            platform: "x86_64-linux".to_string(),
+            dependency_ids: vec![],
+            library_path: PathBuf::from("/lib/new.a"),
+            registration_file: PathBuf::from("/pkg/new.conf"),
+            built_at: std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            last_accessed: std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        };
+        index.record_package("sha256:new".to_string(), new_entry);
+
+        // Prune entries older than 1 day
+        let pruned = index.prune_older_than(86400);
+        assert_eq!(pruned, 1);
+        assert!(!index.has_cached("sha256:old"));
+        assert!(index.has_cached("sha256:new"));
     }
 }

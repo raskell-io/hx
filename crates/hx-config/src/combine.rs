@@ -7,7 +7,7 @@
 //! - Arrays: merged with higher precedence items placed earlier
 //! - `Option<T>`: first `Some` value wins
 
-use crate::{BuildConfig, FormatConfig, LintConfig, Manifest, ProjectConfig, ToolchainConfig};
+use crate::{BuildConfig, FormatConfig, LintConfig, Manifest, PluginConfig, PluginHookConfig, ProjectConfig, ToolchainConfig};
 
 /// Trait for combining configuration values.
 ///
@@ -45,6 +45,7 @@ impl Combine for Manifest {
             build: self.build.combine(other.build),
             format: self.format.combine(other.format),
             lint: self.lint.combine(other.lint),
+            plugins: self.plugins.combine(other.plugins),
             dependencies: {
                 let mut deps = self.dependencies;
                 for (k, v) in other.dependencies {
@@ -110,6 +111,36 @@ impl Combine for BuildConfig {
                 self.src_dirs
             },
             native: self.native,
+        }
+    }
+}
+
+impl Combine for PluginConfig {
+    fn combine(self, other: Self) -> Self {
+        Self {
+            enabled: self.enabled, // Prefer self
+            hook_timeout_ms: self.hook_timeout_ms,
+            paths: self.paths.combine(other.paths),
+            continue_on_error: self.continue_on_error,
+            hooks: self.hooks.combine(other.hooks),
+        }
+    }
+}
+
+impl Combine for PluginHookConfig {
+    fn combine(self, other: Self) -> Self {
+        Self {
+            pre_build: self.pre_build.combine(other.pre_build),
+            post_build: self.post_build.combine(other.post_build),
+            pre_test: self.pre_test.combine(other.pre_test),
+            post_test: self.post_test.combine(other.post_test),
+            pre_run: self.pre_run.combine(other.pre_run),
+            post_run: self.post_run.combine(other.post_run),
+            pre_clean: self.pre_clean.combine(other.pre_clean),
+            post_clean: self.post_clean.combine(other.post_clean),
+            pre_lock: self.pre_lock.combine(other.pre_lock),
+            post_lock: self.post_lock.combine(other.post_lock),
+            init: self.init.combine(other.init),
         }
     }
 }

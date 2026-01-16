@@ -1,5 +1,6 @@
 //! Tool detection utilities.
 
+use crate::ghc::{GhcSource, ResolutionConfig, resolve_ghc};
 use hx_core::{CommandRunner, Version};
 use std::path::PathBuf;
 use tracing::{debug, instrument};
@@ -48,6 +49,8 @@ pub struct DetectedTool {
     pub name: String,
     /// Detection status
     pub status: ToolStatus,
+    /// Source of the tool (hx-managed, ghcup, system)
+    pub source: Option<GhcSource>,
 }
 
 /// Detected toolchain state.
@@ -97,6 +100,32 @@ impl Toolchain {
 }
 
 async fn detect_ghc(runner: &CommandRunner) -> DetectedTool {
+    // First, check hx-managed installations
+    let config = ResolutionConfig::default();
+    if let Ok(Some(resolved)) = resolve_ghc(&config) {
+        debug!(
+            "Found hx-managed GHC {} at {}",
+            resolved.version,
+            resolved.bin_dir.display()
+        );
+
+        // Verify the binary works
+        let ghc_path = resolved.ghc_path();
+        if ghc_path.exists() {
+            if let Ok(version) = resolved.version.parse() {
+                return DetectedTool {
+                    name: "ghc".to_string(),
+                    status: ToolStatus::Found {
+                        version,
+                        path: ghc_path,
+                    },
+                    source: Some(resolved.source),
+                };
+            }
+        }
+    }
+
+    // Fall back to PATH detection
     detect_tool(runner, "ghc", &["--version"]).await
 }
 
@@ -123,8 +152,16 @@ async fn detect_tool(runner: &CommandRunner, name: &str, args: &[&str]) -> Detec
             return DetectedTool {
                 name: name.to_string(),
                 status: ToolStatus::NotFound,
+                source: None,
             };
         }
+    };
+
+    // Determine source based on path
+    let source = if path.to_string_lossy().contains(".ghcup") {
+        Some(GhcSource::Ghcup)
+    } else {
+        Some(GhcSource::System)
     };
 
     // Try to get version
@@ -136,6 +173,7 @@ async fn detect_tool(runner: &CommandRunner, name: &str, args: &[&str]) -> Detec
                 DetectedTool {
                     name: name.to_string(),
                     status: ToolStatus::Found { version, path },
+                    source,
                 }
             } else {
                 debug!(
@@ -146,6 +184,7 @@ async fn detect_tool(runner: &CommandRunner, name: &str, args: &[&str]) -> Detec
                 DetectedTool {
                     name: name.to_string(),
                     status: ToolStatus::VersionUnknown { path },
+                    source,
                 }
             }
         }
@@ -154,6 +193,7 @@ async fn detect_tool(runner: &CommandRunner, name: &str, args: &[&str]) -> Detec
             DetectedTool {
                 name: name.to_string(),
                 status: ToolStatus::VersionUnknown { path },
+                source,
             }
         }
         Err(e) => {
@@ -161,6 +201,7 @@ async fn detect_tool(runner: &CommandRunner, name: &str, args: &[&str]) -> Detec
             DetectedTool {
                 name: name.to_string(),
                 status: ToolStatus::NotFound,
+                source: None,
             }
         }
     }

@@ -12,10 +12,18 @@ categories.workspace = true
 [dependencies]
 hx-core.workspace = true
 hx-ui.workspace = true
+hx-cache.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 tracing.workspace = true
 tokio.workspace = true
 which.workspace = true
+chrono.workspace = true
+reqwest = { workspace = true, features = ["stream"] }
 atty = "0.2"
+xz2 = "0.1"
+tar = "0.4"
+futures-util = "0.3"
+tempfile.workspace = true

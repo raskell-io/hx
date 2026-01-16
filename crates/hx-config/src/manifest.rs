@@ -99,6 +99,84 @@ fn default_true() -> bool {
     true
 }
 
+/// Plugin hook configuration section.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PluginHookConfig {
+    /// Scripts to run before build.
+    pub pre_build: Vec<String>,
+
+    /// Scripts to run after build.
+    pub post_build: Vec<String>,
+
+    /// Scripts to run before tests.
+    pub pre_test: Vec<String>,
+
+    /// Scripts to run after tests.
+    pub post_test: Vec<String>,
+
+    /// Scripts to run before run command.
+    pub pre_run: Vec<String>,
+
+    /// Scripts to run after run completes.
+    pub post_run: Vec<String>,
+
+    /// Scripts to run before clean.
+    pub pre_clean: Vec<String>,
+
+    /// Scripts to run after clean.
+    pub post_clean: Vec<String>,
+
+    /// Scripts to run before lock generation.
+    pub pre_lock: Vec<String>,
+
+    /// Scripts to run after lock completes.
+    pub post_lock: Vec<String>,
+
+    /// Scripts to run on project initialization.
+    pub init: Vec<String>,
+}
+
+/// Plugin configuration section.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginConfig {
+    /// Whether plugins are enabled.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Timeout for hook execution in milliseconds.
+    #[serde(default = "default_hook_timeout")]
+    pub hook_timeout_ms: u64,
+
+    /// Additional paths to search for plugins.
+    #[serde(default)]
+    pub paths: Vec<String>,
+
+    /// Whether to continue on hook failure.
+    #[serde(default)]
+    pub continue_on_error: bool,
+
+    /// Hook configuration.
+    #[serde(default)]
+    pub hooks: PluginHookConfig,
+}
+
+fn default_hook_timeout() -> u64 {
+    5000
+}
+
+impl Default for PluginConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            hook_timeout_ms: default_hook_timeout(),
+            paths: Vec::new(),
+            continue_on_error: false,
+            hooks: PluginHookConfig::default(),
+        }
+    }
+}
+
 /// Build configuration section.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BuildConfig {
@@ -170,6 +248,10 @@ pub struct Manifest {
     #[serde(default)]
     pub lint: LintConfig,
 
+    /// Plugin configuration
+    #[serde(default)]
+    pub plugins: PluginConfig,
+
     /// Dependencies (optional, can rely on .cabal)
     #[serde(default)]
     pub dependencies: HashMap<String, String>,
@@ -211,6 +293,7 @@ impl Manifest {
             build: BuildConfig::default(),
             format: FormatConfig::default(),
             lint: LintConfig::default(),
+            plugins: PluginConfig::default(),
             dependencies: HashMap::new(),
         }
     }

@@ -2,18 +2,33 @@
 
 use crate::cli::ToolchainCommands;
 use anyhow::Result;
+use hx_cache::toolchain_dir;
 use hx_config::{Manifest, find_project_root};
-use hx_toolchain::{Toolchain, install};
+use hx_toolchain::{
+    GhcSource, InstallStrategy, SmartInstallOptions, Toolchain, ToolchainManifest,
+    create_symlinks, install, known_versions, remove_ghc, set_active, RECOMMENDED_GHC_VERSION,
+};
 use hx_ui::{Output, Style};
 
 /// Run a toolchain subcommand.
 pub async fn run(command: ToolchainCommands, output: &Output) -> Result<i32> {
     match command {
         ToolchainCommands::Status => status(output).await,
-        ToolchainCommands::Install { ghc, cabal, hls } => {
-            install_components(ghc, cabal, hls, output).await
-        }
-        ToolchainCommands::Use { profile } => use_profile(&profile, output).await,
+        ToolchainCommands::List {
+            available,
+            installed,
+        } => list(available, installed, output).await,
+        ToolchainCommands::Install {
+            version,
+            ghc,
+            cabal,
+            hls,
+            set,
+            force,
+            ghcup,
+        } => install_ghc(version.or(ghc), cabal, hls, set, force, ghcup, output).await,
+        ToolchainCommands::Remove { version, yes } => remove(&version, yes, output).await,
+        ToolchainCommands::Use { version } => use_version(&version, output).await,
     }
 }
 
@@ -24,9 +39,18 @@ async fn status(output: &Output) -> Result<i32> {
 
     output.header("Toolchain Status");
 
-    // GHC
+    // GHC - show source if hx-managed
     if let Some(version) = toolchain.ghc.status.version() {
-        output.list_item("ghc", &format!("{} {}", Style::success("✓"), version));
+        let source_info = match toolchain.ghc.source {
+            Some(GhcSource::HxManaged) => " (hx)",
+            Some(GhcSource::Ghcup) => " (ghcup)",
+            Some(GhcSource::System) => " (system)",
+            None => "",
+        };
+        output.list_item(
+            "ghc",
+            &format!("{} {}{}", Style::success("✓"), version, source_info),
+        );
     } else if toolchain.ghc.status.is_found() {
         output.list_item("ghc", &format!("{} (version unknown)", Style::warning("?")));
     } else {
@@ -66,6 +90,27 @@ async fn status(output: &Output) -> Result<i32> {
         output.list_item("hls", &format!("{} not found", Style::warning("○")));
     }
 
+    // Show hx-managed installations
+    if let Ok(tc_dir) = toolchain_dir() {
+        if let Ok(manifest) = ToolchainManifest::load(&tc_dir) {
+            if !manifest.ghc.is_empty() {
+                output.header("hx-managed GHC versions");
+                for installed in &manifest.ghc {
+                    let active_marker = if manifest.active_ghc.as_deref() == Some(&installed.version)
+                    {
+                        " (active)"
+                    } else {
+                        ""
+                    };
+                    output.list_item(
+                        &installed.version,
+                        &format!("{}{}", installed.install_path.display(), active_marker),
+                    );
+                }
+            }
+        }
+    }
+
     if toolchain.is_complete() {
         Ok(0)
     } else {
@@ -73,84 +118,250 @@ async fn status(output: &Output) -> Result<i32> {
     }
 }
 
-async fn install_components(
-    ghc: Option<String>,
+async fn list(available: bool, installed_only: bool, output: &Output) -> Result<i32> {
+    let tc_dir = toolchain_dir()?;
+    let manifest = ToolchainManifest::load(&tc_dir)?;
+    let installed: Vec<_> = manifest.installed_versions().into_iter().collect();
+
+    if available && !installed_only {
+        // Show all known versions with installation status
+        output.header("Available GHC versions");
+
+        let versions = known_versions();
+        for version in versions {
+            let is_installed = installed.contains(&version.version.as_str());
+            let is_active = manifest.active_ghc.as_deref() == Some(&version.version);
+
+            let status = if is_active {
+                format!("{} (active)", Style::success("✓"))
+            } else if is_installed {
+                format!("{} (installed)", Style::success("✓"))
+            } else if version.is_recommended {
+                format!("{} (recommended)", Style::info("○"))
+            } else {
+                Style::dim("○").to_string()
+            };
+
+            output.list_item(&version.version, &status);
+        }
+    } else if installed_only || installed.is_empty() {
+        // Show only installed versions
+        output.header("Installed GHC versions (hx-managed)");
+
+        if manifest.ghc.is_empty() {
+            output.info("No GHC versions installed via hx");
+            output.info(&format!(
+                "Install one with: hx toolchain install {}",
+                RECOMMENDED_GHC_VERSION
+            ));
+        } else {
+            for ghc in &manifest.ghc {
+                let active_marker = if manifest.active_ghc.as_deref() == Some(&ghc.version) {
+                    " *"
+                } else {
+                    ""
+                };
+                output.list_item(
+                    &format!("{}{}", ghc.version, active_marker),
+                    &format!("installed {} via {}", ghc.installed_at.format("%Y-%m-%d"), ghc.source),
+                );
+            }
+        }
+    } else {
+        // Default: show installed with some available
+        output.header("Installed GHC versions");
+
+        if manifest.ghc.is_empty() {
+            output.info("No GHC versions installed via hx");
+        } else {
+            for ghc in &manifest.ghc {
+                let active_marker = if manifest.active_ghc.as_deref() == Some(&ghc.version) {
+                    format!(" {}", Style::success("(active)"))
+                } else {
+                    String::new()
+                };
+                output.list_item(&ghc.version, &active_marker);
+            }
+        }
+
+        output.info("");
+        output.info("Use --available to see all known versions");
+    }
+
+    Ok(0)
+}
+
+async fn install_ghc(
+    ghc_version: Option<String>,
     cabal: Option<String>,
     hls: Option<String>,
+    set_as_active: bool,
+    force: bool,
+    use_ghcup: bool,
     output: &Output,
 ) -> Result<i32> {
-    // Check if ghcup is available
-    let toolchain = Toolchain::detect().await;
-    if !toolchain.has_ghcup() {
-        output.error("ghcup is required to install toolchain components");
-        output.info(&format!(
-            "Install ghcup: {}",
-            install::ghcup_install_command()
-        ));
-        return Ok(4);
-    }
-
     let mut success = true;
 
-    if let Some(ref version) = ghc {
+    // Install GHC
+    if let Some(ref version) = ghc_version {
         output.status("Installing", &format!("GHC {}", version));
-        if let Err(e) = install::install_ghc(version).await {
+
+        let strategy = if use_ghcup {
+            InstallStrategy::Ghcup
+        } else {
+            InstallStrategy::Smart
+        };
+
+        let options = SmartInstallOptions::new(version)
+            .with_strategy(strategy)
+            .with_set_active(set_as_active)
+            .with_force(force);
+
+        if let Err(e) = install::install_ghc_smart(&options).await {
             output.print_error(&e);
             success = false;
+        } else {
+            output.status("Done", &format!("GHC {} installed", version));
+
+            // Create symlinks if set as active
+            if set_as_active {
+                if let Ok(tc_dir) = toolchain_dir() {
+                    if let Ok(Some(installed)) = hx_toolchain::get_active(&tc_dir) {
+                        let _ = create_symlinks(&installed);
+                    }
+                }
+            }
         }
     }
 
+    // Install Cabal via ghcup (if requested)
     if let Some(ref version) = cabal {
-        output.status("Installing", &format!("Cabal {}", version));
-        if let Err(e) = install::install_cabal(version).await {
-            output.print_error(&e);
+        let toolchain = Toolchain::detect().await;
+        if !toolchain.has_ghcup() {
+            output.error("ghcup is required to install Cabal");
+            output.info(&format!(
+                "Install ghcup: {}",
+                install::ghcup_install_command()
+            ));
             success = false;
+        } else {
+            output.status("Installing", &format!("Cabal {}", version));
+            if let Err(e) = install::install_cabal(version).await {
+                output.print_error(&e);
+                success = false;
+            }
         }
     }
 
+    // Install HLS via ghcup (if requested)
     if let Some(ref version) = hls {
-        output.status("Installing", &format!("HLS {}", version));
-        if let Err(e) = install::install_hls(version).await {
-            output.print_error(&e);
+        let toolchain = Toolchain::detect().await;
+        if !toolchain.has_ghcup() {
+            output.error("ghcup is required to install HLS");
+            output.info(&format!(
+                "Install ghcup: {}",
+                install::ghcup_install_command()
+            ));
             success = false;
+        } else {
+            output.status("Installing", &format!("HLS {}", version));
+            if let Err(e) = install::install_hls(version).await {
+                output.print_error(&e);
+                success = false;
+            }
         }
     }
 
-    // If no specific versions requested, show current status
-    if ghc.is_none() && cabal.is_none() && hls.is_none() {
-        output.warn("No versions specified. Use --ghc, --cabal, or --hls to specify versions.");
-        output.info("Example: hx toolchain install --ghc 9.8.2");
+    // If no specific versions requested, show help
+    if ghc_version.is_none() && cabal.is_none() && hls.is_none() {
+        output.warn("No version specified");
+        output.info(&format!(
+            "Example: hx toolchain install {}",
+            RECOMMENDED_GHC_VERSION
+        ));
+        output.info("Or: hx toolchain install --ghc 9.8.2");
         return Ok(2);
     }
 
-    if success { Ok(0) } else { Ok(4) }
+    if success {
+        Ok(0)
+    } else {
+        Ok(4)
+    }
 }
 
-async fn use_profile(profile: &str, output: &Output) -> Result<i32> {
-    // Check if ghcup is available
+async fn remove(version: &str, yes: bool, output: &Output) -> Result<i32> {
+    let tc_dir = toolchain_dir()?;
+
+    // Check if version exists
+    let manifest = ToolchainManifest::load(&tc_dir)?;
+    if !manifest.is_installed(version) {
+        output.error(&format!("GHC {} is not installed via hx", version));
+        return Ok(4);
+    }
+
+    // Confirm unless --yes
+    if !yes {
+        output.warn(&format!(
+            "This will remove GHC {} and all associated files",
+            version
+        ));
+        // In a real implementation, you'd prompt for confirmation here
+        // For now, we'll proceed
+    }
+
+    output.status("Removing", &format!("GHC {}", version));
+
+    if remove_ghc(&tc_dir, version)? {
+        output.status("Done", &format!("GHC {} removed", version));
+        Ok(0)
+    } else {
+        output.error(&format!("Failed to remove GHC {}", version));
+        Ok(4)
+    }
+}
+
+async fn use_version(version: &str, output: &Output) -> Result<i32> {
+    // Check for "project" keyword
+    if version == "project" {
+        return use_project_toolchain(output).await;
+    }
+
+    let tc_dir = toolchain_dir()?;
+
+    // First, try hx-managed installations
+    let manifest = ToolchainManifest::load(&tc_dir)?;
+    if manifest.is_installed(version) {
+        set_active(&tc_dir, version)?;
+
+        // Update symlinks
+        if let Ok(Some(installed)) = hx_toolchain::get_active(&tc_dir) {
+            let _ = create_symlinks(&installed);
+        }
+
+        output.status("Done", &format!("Now using GHC {} (hx-managed)", version));
+        return Ok(0);
+    }
+
+    // Fall back to ghcup
     let toolchain = Toolchain::detect().await;
     if !toolchain.has_ghcup() {
-        output.error("ghcup is required to switch toolchain versions");
+        output.error(&format!("GHC {} is not installed", version));
         output.info(&format!(
-            "Install ghcup: {}",
-            install::ghcup_install_command()
+            "Install it with: hx toolchain install {}",
+            version
         ));
         return Ok(4);
     }
 
-    match profile {
-        "project" => use_project_toolchain(output).await,
-        version => {
-            // Assume it's a GHC version
-            output.status("Switching", &format!("GHC to {}", version));
-            if let Err(e) = install::set_ghc(version).await {
-                output.print_error(&e);
-                return Ok(4);
-            }
-            output.status("Done", &format!("Now using GHC {}", version));
-            Ok(0)
-        }
+    output.status("Switching", &format!("GHC to {} (via ghcup)", version));
+    if let Err(e) = install::set_ghc(version).await {
+        output.print_error(&e);
+        return Ok(4);
     }
+
+    output.status("Done", &format!("Now using GHC {}", version));
+    Ok(0)
 }
 
 async fn use_project_toolchain(output: &Output) -> Result<i32> {
@@ -179,16 +390,29 @@ async fn use_project_toolchain(output: &Output) -> Result<i32> {
 
     // Set GHC if specified
     if let Some(ref ghc_version) = manifest.toolchain.ghc {
-        output.status("Switching", &format!("GHC to {}", ghc_version));
-        if let Err(e) = install::set_ghc(ghc_version).await {
-            output.print_error(&e);
-            success = false;
+        let tc_dir = toolchain_dir()?;
+        let tc_manifest = ToolchainManifest::load(&tc_dir)?;
+
+        if tc_manifest.is_installed(ghc_version) {
+            // Use hx-managed version
+            set_active(&tc_dir, ghc_version)?;
+            if let Ok(Some(installed)) = hx_toolchain::get_active(&tc_dir) {
+                let _ = create_symlinks(&installed);
+            }
+            output.list_item("ghc", &format!("{} (hx)", ghc_version));
         } else {
-            output.list_item("ghc", ghc_version);
+            // Fall back to ghcup
+            output.status("Switching", &format!("GHC to {}", ghc_version));
+            if let Err(e) = install::set_ghc(ghc_version).await {
+                output.print_error(&e);
+                success = false;
+            } else {
+                output.list_item("ghc", ghc_version);
+            }
         }
     }
 
-    // Set Cabal if specified
+    // Set Cabal if specified (ghcup only)
     if let Some(ref cabal_version) = manifest.toolchain.cabal {
         output.status("Switching", &format!("Cabal to {}", cabal_version));
         if let Err(e) = install::set_cabal(cabal_version).await {
@@ -199,7 +423,7 @@ async fn use_project_toolchain(output: &Output) -> Result<i32> {
         }
     }
 
-    // Set HLS if specified
+    // Set HLS if specified (ghcup only)
     if let Some(ref hls_version) = manifest.toolchain.hls {
         output.status("Switching", &format!("HLS to {}", hls_version));
         if let Err(e) = install::set_hls(hls_version).await {

@@ -250,6 +250,7 @@ mod tests {
         DetectedTool {
             name: name.to_string(),
             status,
+            source: None,
         }
     }
 

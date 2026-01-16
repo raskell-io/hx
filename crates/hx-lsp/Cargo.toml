@@ -1,0 +1,32 @@
+[package]
+name = "hx-lsp"
+description = "Language Server Protocol implementation for hx"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+hx-core.workspace = true
+hx-config.workspace = true
+hx-cabal.workspace = true
+hx-toolchain.workspace = true
+hx-ui.workspace = true
+
+thiserror.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+
+tower-lsp = "0.20"
+dashmap = "6"
+notify = "6.1"
+notify-debouncer-mini = "0.4"
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -17,6 +17,332 @@ use tokio::sync::Semaphore;
 use tracing::{debug, info};
 
 // ============================================================================
+// Package Information from ghc-pkg
+// ============================================================================
+
+/// Information about an installed package from ghc-pkg.
+#[derive(Debug, Clone, Default)]
+pub struct PackageInfo {
+    /// Package name
+    pub name: String,
+    /// Package version
+    pub version: String,
+    /// Package unique ID (e.g., text-2.0.1-abc123)
+    pub id: String,
+    /// Library directories containing object files
+    pub library_dirs: Vec<PathBuf>,
+    /// Haskell library file (e.g., libHStext-2.0.1.a)
+    pub hs_libraries: Vec<String>,
+    /// Extra C libraries needed
+    pub extra_libraries: Vec<String>,
+    /// Extra library directories for C libs
+    pub extra_lib_dirs: Vec<PathBuf>,
+    /// Include directories
+    pub include_dirs: Vec<PathBuf>,
+    /// Dependencies (package IDs)
+    pub depends: Vec<String>,
+    /// Whether this is exposed
+    pub exposed: bool,
+}
+
+/// Query ghc-pkg for detailed package information.
+pub async fn query_package_info(
+    package_name: &str,
+    package_dbs: &[PathBuf],
+) -> Option<PackageInfo> {
+    let runner = CommandRunner::new();
+
+    // Build args with package databases
+    let mut args = Vec::new();
+    for db in package_dbs {
+        args.push(format!("--package-db={}", db.display()));
+    }
+    args.push("describe".to_string());
+    args.push(package_name.to_string());
+
+    let output = runner
+        .run("ghc-pkg", args.iter().map(|s| s.as_str()))
+        .await
+        .ok()?;
+
+    if !output.success() {
+        debug!(
+            "ghc-pkg describe {} failed: {}",
+            package_name, output.stderr
+        );
+        return None;
+    }
+
+    Some(parse_package_info(&output.stdout))
+}
+
+/// Query all installed packages from ghc-pkg.
+pub async fn query_all_packages(package_dbs: &[PathBuf]) -> Vec<PackageInfo> {
+    let runner = CommandRunner::new();
+
+    // Build args with package databases
+    let mut args = Vec::new();
+    for db in package_dbs {
+        args.push(format!("--package-db={}", db.display()));
+    }
+    args.push("dump".to_string());
+
+    let output = match runner.run("ghc-pkg", args.iter().map(|s| s.as_str())).await {
+        Ok(o) => o,
+        Err(_) => return Vec::new(),
+    };
+
+    if !output.success() {
+        return Vec::new();
+    }
+
+    parse_package_dump(&output.stdout)
+}
+
+/// Parse ghc-pkg describe output into PackageInfo.
+fn parse_package_info(output: &str) -> PackageInfo {
+    let mut info = PackageInfo::default();
+
+    for line in output.lines() {
+        let line = line.trim();
+
+        if let Some(value) = line.strip_prefix("name:") {
+            info.name = value.trim().to_string();
+        } else if let Some(value) = line.strip_prefix("version:") {
+            info.version = value.trim().to_string();
+        } else if let Some(value) = line.strip_prefix("id:") {
+            info.id = value.trim().to_string();
+        } else if let Some(value) = line.strip_prefix("library-dirs:") {
+            info.library_dirs = parse_path_list(value);
+        } else if let Some(value) = line.strip_prefix("hs-libraries:") {
+            info.hs_libraries = parse_string_list(value);
+        } else if let Some(value) = line.strip_prefix("extra-libraries:") {
+            info.extra_libraries = parse_string_list(value);
+        } else if let Some(value) = line.strip_prefix("extra-lib-dirs:") {
+            info.extra_lib_dirs = parse_path_list(value);
+        } else if let Some(value) = line.strip_prefix("include-dirs:") {
+            info.include_dirs = parse_path_list(value);
+        } else if let Some(value) = line.strip_prefix("depends:") {
+            info.depends = parse_string_list(value);
+        } else if let Some(value) = line.strip_prefix("exposed:") {
+            info.exposed = value.trim().eq_ignore_ascii_case("true");
+        }
+    }
+
+    info
+}
+
+/// Parse ghc-pkg dump output into multiple PackageInfo entries.
+fn parse_package_dump(output: &str) -> Vec<PackageInfo> {
+    let mut packages = Vec::new();
+    let mut current_block = String::new();
+
+    for line in output.lines() {
+        if line == "---" {
+            if !current_block.is_empty() {
+                packages.push(parse_package_info(&current_block));
+                current_block.clear();
+            }
+        } else {
+            current_block.push_str(line);
+            current_block.push('\n');
+        }
+    }
+
+    // Don't forget the last block
+    if !current_block.is_empty() {
+        packages.push(parse_package_info(&current_block));
+    }
+
+    packages
+}
+
+/// Parse a space-separated list of paths.
+fn parse_path_list(value: &str) -> Vec<PathBuf> {
+    value
+        .split_whitespace()
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .collect()
+}
+
+/// Parse a space-separated list of strings.
+fn parse_string_list(value: &str) -> Vec<String> {
+    value
+        .split_whitespace()
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .collect()
+}
+
+/// Resolve transitive dependencies for a set of packages.
+pub async fn resolve_transitive_deps(
+    package_names: &[String],
+    package_dbs: &[PathBuf],
+) -> Vec<PackageInfo> {
+    let all_packages = query_all_packages(package_dbs).await;
+
+    // Build a map for quick lookup
+    let pkg_map: HashMap<&str, &PackageInfo> = all_packages
+        .iter()
+        .flat_map(|p| {
+            // Index by both name and full ID
+            vec![(p.name.as_str(), p), (p.id.as_str(), p)]
+        })
+        .collect();
+
+    // Collect all needed packages via DFS
+    let mut needed: HashSet<String> = HashSet::new();
+    let mut to_visit: Vec<String> = package_names.to_vec();
+
+    while let Some(pkg_name) = to_visit.pop() {
+        if needed.contains(&pkg_name) {
+            continue;
+        }
+
+        if let Some(info) = pkg_map.get(pkg_name.as_str()) {
+            needed.insert(info.id.clone());
+            for dep in &info.depends {
+                if !needed.contains(dep) {
+                    to_visit.push(dep.clone());
+                }
+            }
+        }
+    }
+
+    // Return the full info for all needed packages
+    all_packages
+        .into_iter()
+        .filter(|p| needed.contains(&p.id))
+        .collect()
+}
+
+/// Get all library paths needed for linking.
+pub fn collect_library_paths(packages: &[PackageInfo]) -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = packages
+        .iter()
+        .flat_map(|p| p.library_dirs.iter().cloned())
+        .collect();
+
+    // Add extra lib dirs too
+    paths.extend(
+        packages
+            .iter()
+            .flat_map(|p| p.extra_lib_dirs.iter().cloned()),
+    );
+
+    // Deduplicate while preserving order
+    let mut seen = HashSet::new();
+    paths.retain(|p| seen.insert(p.clone()));
+
+    paths
+}
+
+/// Get all Haskell libraries needed for linking.
+pub fn collect_hs_libraries(packages: &[PackageInfo]) -> Vec<String> {
+    packages
+        .iter()
+        .flat_map(|p| p.hs_libraries.iter().cloned())
+        .collect()
+}
+
+/// Get all extra C libraries needed for linking.
+pub fn collect_extra_libraries(packages: &[PackageInfo]) -> Vec<String> {
+    let mut libs: Vec<String> = packages
+        .iter()
+        .flat_map(|p| p.extra_libraries.iter().cloned())
+        .collect();
+
+    // Deduplicate while preserving order
+    let mut seen = HashSet::new();
+    libs.retain(|l| seen.insert(l.clone()));
+
+    libs
+}
+
+// ============================================================================
+// Main Module Detection
+// ============================================================================
+
+/// Detect the main module from a module graph by scanning for `main` function.
+///
+/// This function scans modules for patterns like:
+/// - `main :: IO ()`
+/// - `main = `
+///
+/// Returns the module name if a main function is found.
+pub fn detect_main_module(graph: &ModuleGraph) -> Option<String> {
+    // First check if there's a module named "Main" - this is the convention
+    if graph.modules.contains_key("Main")
+        && has_main_function(&graph.modules.get("Main").unwrap().path)
+    {
+        return Some("Main".to_string());
+    }
+
+    // Otherwise scan all modules for a main function
+    for (module_name, info) in &graph.modules {
+        if has_main_function(&info.path) {
+            return Some(module_name.clone());
+        }
+    }
+
+    None
+}
+
+/// Check if a Haskell source file contains a main function definition.
+fn has_main_function(path: &Path) -> bool {
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+
+    // Look for main function patterns
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        // Skip comments
+        if trimmed.starts_with("--") || trimmed.starts_with("{-") {
+            continue;
+        }
+
+        // Check for main type signature
+        if trimmed.starts_with("main ::") {
+            return true;
+        }
+
+        // Check for main definition (must be at start of line, not indented)
+        // This avoids matching things like "doMain = " or "mainHelper ="
+        if line.starts_with("main ")
+            && (trimmed.starts_with("main =") || trimmed.starts_with("main="))
+        {
+            return true;
+        }
+
+        // Handle case where main appears with type annotation on same line
+        if trimmed.starts_with("main ::") && trimmed.contains("IO") {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// List all potential main modules (modules containing a `main` function).
+pub fn find_all_main_modules(graph: &ModuleGraph) -> Vec<String> {
+    graph
+        .modules
+        .iter()
+        .filter_map(|(name, info)| {
+            if has_main_function(&info.path) {
+                Some(name.clone())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+// ============================================================================
 // Module State Tracking for Incremental Builds
 // ============================================================================
 
@@ -208,6 +534,8 @@ pub struct GhcConfig {
     pub package_dbs: Vec<PathBuf>,
     /// Packages to expose
     pub packages: Vec<String>,
+    /// Resolved package information (populated by resolve_packages)
+    pub resolved_packages: Vec<PackageInfo>,
 }
 
 impl Default for GhcConfig {
@@ -217,6 +545,7 @@ impl Default for GhcConfig {
             version: String::new(),
             package_dbs: Vec::new(),
             packages: Vec::new(),
+            resolved_packages: Vec::new(),
         }
     }
 }
@@ -245,6 +574,7 @@ impl GhcConfig {
             version,
             package_dbs,
             packages: Vec::new(),
+            resolved_packages: Vec::new(),
         })
     }
 
@@ -264,6 +594,51 @@ impl GhcConfig {
     pub fn with_packages(mut self, pkgs: impl IntoIterator<Item = String>) -> Self {
         self.packages.extend(pkgs);
         self
+    }
+
+    /// Resolve all package dependencies and populate resolved_packages.
+    pub async fn resolve_packages(&mut self) {
+        if self.packages.is_empty() {
+            return;
+        }
+
+        info!(
+            "Resolving {} package dependencies via ghc-pkg",
+            self.packages.len()
+        );
+
+        self.resolved_packages = resolve_transitive_deps(&self.packages, &self.package_dbs).await;
+
+        info!(
+            "Resolved {} packages (including transitive deps)",
+            self.resolved_packages.len()
+        );
+
+        for pkg in &self.resolved_packages {
+            debug!(
+                "Package {}-{}: {} lib dirs, {} hs-libs, {} extra-libs",
+                pkg.name,
+                pkg.version,
+                pkg.library_dirs.len(),
+                pkg.hs_libraries.len(),
+                pkg.extra_libraries.len()
+            );
+        }
+    }
+
+    /// Get all library paths needed for linking.
+    pub fn library_paths(&self) -> Vec<PathBuf> {
+        collect_library_paths(&self.resolved_packages)
+    }
+
+    /// Get all Haskell libraries needed for linking.
+    pub fn hs_libraries(&self) -> Vec<String> {
+        collect_hs_libraries(&self.resolved_packages)
+    }
+
+    /// Get all extra C libraries needed for linking.
+    pub fn extra_libraries(&self) -> Vec<String> {
+        collect_extra_libraries(&self.resolved_packages)
     }
 }
 
@@ -369,6 +744,10 @@ pub struct NativeBuildOptions {
     pub main_module: Option<String>,
     /// Output executable path
     pub output_exe: Option<PathBuf>,
+    /// Output library archive path (.a file)
+    pub output_lib: Option<PathBuf>,
+    /// Use native linking (include resolved library paths)
+    pub native_linking: bool,
 }
 
 impl Default for NativeBuildOptions {
@@ -384,6 +763,8 @@ impl Default for NativeBuildOptions {
             verbose: false,
             main_module: None,
             output_exe: None,
+            output_lib: None,
+            native_linking: true,
         }
     }
 }
@@ -422,6 +803,8 @@ pub struct NativeBuildResult {
     pub module_results: Vec<ModuleCompileResult>,
     /// Output executable path (if linking)
     pub executable: Option<PathBuf>,
+    /// Output library archive path (if building library)
+    pub library: Option<PathBuf>,
     /// Errors
     pub errors: Vec<String>,
     /// Warnings
@@ -480,12 +863,37 @@ impl NativeBuilder {
                 modules_skipped: 0,
                 module_results: vec![],
                 executable: None,
+                library: None,
                 errors: vec![],
                 warnings: vec![],
             });
         }
 
         info!("Found {} modules", module_count);
+
+        // Auto-detect main module if not specified and building an executable
+        let main_module = if options.main_module.is_some() {
+            options.main_module.clone()
+        } else if options.output_exe.is_some() {
+            let detected = detect_main_module(&graph);
+            if let Some(ref m) = detected {
+                info!("Auto-detected main module: {}", m);
+            } else {
+                info!("No main module detected, will compile as library");
+            }
+            detected
+        } else {
+            None
+        };
+
+        // Create modified options with detected main module
+        let options = if main_module != options.main_module {
+            let mut opts = options.clone();
+            opts.main_module = main_module;
+            opts
+        } else {
+            options.clone()
+        };
 
         // Get parallel compilation groups
         let groups = graph.parallel_groups().map_err(|e| Error::BuildFailed {
@@ -503,7 +911,7 @@ impl NativeBuilder {
 
         // Load previous build state for incremental builds
         let mut build_state = BuildState::load(project_root).unwrap_or_default();
-        let flags_hash = compute_flags_hash(options);
+        let flags_hash = compute_flags_hash(&options);
 
         // Determine which modules need recompilation
         let modules_needing_rebuild: HashSet<String> = graph
@@ -538,6 +946,7 @@ impl NativeBuilder {
                 modules_skipped: module_count,
                 module_results: vec![],
                 executable: options.output_exe.as_ref().map(|p| project_root.join(p)),
+                library: options.output_lib.as_ref().map(|p| project_root.join(p)),
                 errors: vec![],
                 warnings: vec![],
             });
@@ -583,7 +992,7 @@ impl NativeBuilder {
                     &graph,
                     &group_to_compile,
                     project_root,
-                    options,
+                    &options,
                     &compiled_modules,
                 )
                 .await?;
@@ -643,14 +1052,22 @@ impl NativeBuilder {
             }
         }
 
-        // Link if requested and compilation succeeded
+        // Link executable if requested and compilation succeeded
         let executable =
             if errors.is_empty() && options.main_module.is_some() && options.output_exe.is_some() {
-                self.link(project_root, &graph, options, &output_dir, output)
+                self.link(project_root, &graph, &options, &output_dir, output)
                     .await?
             } else {
                 None
             };
+
+        // Create library archive if requested and compilation succeeded
+        let library = if errors.is_empty() && options.output_lib.is_some() {
+            self.create_library(&graph, &options, &output_dir, output)
+                .await?
+        } else {
+            None
+        };
 
         Ok(NativeBuildResult {
             success: errors.is_empty(),
@@ -659,6 +1076,7 @@ impl NativeBuilder {
             modules_skipped: 0, // TODO: incremental
             module_results,
             executable,
+            library,
             errors,
             warnings,
         })
@@ -741,7 +1159,7 @@ impl NativeBuilder {
             None
         };
 
-        // Collect all object files
+        // Collect all object files from local modules
         let mut object_files = Vec::new();
         for module_name in graph.modules.keys() {
             let obj_file = output_dir.join(format!("{}.o", module_name.replace('.', "/")));
@@ -764,6 +1182,26 @@ impl NativeBuilder {
             args.push(pkg.clone());
         }
 
+        // Add library paths from resolved packages (for native linking)
+        if options.native_linking {
+            let lib_paths = self.ghc.library_paths();
+            for path in &lib_paths {
+                args.push(format!("-L{}", path.display()));
+            }
+
+            // Add extra C libraries
+            let extra_libs = self.ghc.extra_libraries();
+            for lib in &extra_libs {
+                args.push(format!("-l{}", lib));
+            }
+
+            debug!(
+                "Native linking with {} lib paths, {} extra libs",
+                lib_paths.len(),
+                extra_libs.len()
+            );
+        }
+
         // Add optimization
         if options.optimization > 0 {
             args.push(format!("-O{}", options.optimization));
@@ -777,6 +1215,10 @@ impl NativeBuilder {
         // Add main module hint
         args.push("-main-is".to_string());
         args.push(main_module.clone());
+
+        if options.verbose {
+            info!("Link command: ghc {}", args.join(" "));
+        }
 
         let runner = CommandRunner::new().with_working_dir(project_root);
         let ghc_path = self.ghc.ghc_path.display().to_string();
@@ -799,6 +1241,103 @@ impl NativeBuilder {
         }
 
         Ok(Some(exe_path))
+    }
+
+    /// Create a static library archive from compiled object files.
+    async fn create_library(
+        &self,
+        graph: &ModuleGraph,
+        options: &NativeBuildOptions,
+        output_dir: &Path,
+        output: &Output,
+    ) -> Result<Option<PathBuf>> {
+        let lib_path = match &options.output_lib {
+            Some(p) => p.clone(),
+            None => return Ok(None),
+        };
+
+        info!("Creating library archive: {:?}", lib_path);
+
+        let spinner = if !options.verbose {
+            Some(Spinner::new("Creating library..."))
+        } else {
+            None
+        };
+
+        // Collect all object files from local modules
+        let mut object_files = Vec::new();
+        for module_name in graph.modules.keys() {
+            let obj_file = output_dir.join(format!("{}.o", module_name.replace('.', "/")));
+            if obj_file.exists() {
+                object_files.push(obj_file);
+            }
+        }
+
+        if object_files.is_empty() {
+            if let Some(spinner) = spinner {
+                spinner.finish_error("No object files found");
+            }
+            return Ok(None);
+        }
+
+        // Ensure parent directory exists
+        if let Some(parent) = lib_path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| Error::Io {
+                message: "failed to create library output directory".to_string(),
+                path: Some(parent.to_path_buf()),
+                source: e,
+            })?;
+        }
+
+        // Use 'ar' to create the static library
+        // On macOS, use libtool; on Linux, use ar
+        let (archiver, args) = if cfg!(target_os = "macos") {
+            (
+                "libtool",
+                vec![
+                    "-static".to_string(),
+                    "-o".to_string(),
+                    lib_path.display().to_string(),
+                ],
+            )
+        } else {
+            (
+                "ar",
+                vec!["rcs".to_string(), lib_path.display().to_string()],
+            )
+        };
+
+        let mut full_args = args;
+        for obj in &object_files {
+            full_args.push(obj.display().to_string());
+        }
+
+        if options.verbose {
+            info!("Archive command: {} {}", archiver, full_args.join(" "));
+        }
+
+        let runner = CommandRunner::new();
+        let cmd_output = runner
+            .run(archiver, full_args.iter().map(|s| s.as_str()))
+            .await?;
+
+        if let Some(spinner) = spinner {
+            if cmd_output.success() {
+                spinner.finish_success(format!("Created {}", lib_path.display()));
+            } else {
+                spinner.finish_error("Archive creation failed");
+            }
+        }
+
+        if !cmd_output.success() {
+            output.info(&cmd_output.stderr);
+            return Err(Error::BuildFailed {
+                errors: vec!["Library archive creation failed".to_string()],
+                fixes: vec![],
+            });
+        }
+
+        Ok(Some(lib_path))
     }
 }
 

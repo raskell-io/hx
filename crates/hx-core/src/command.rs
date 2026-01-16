@@ -62,6 +62,24 @@ impl CommandRunner {
         self
     }
 
+    /// Configure PATH to use a specific GHC installation.
+    ///
+    /// Prepends the given bin directory to PATH, ensuring tools from that
+    /// directory are found first.
+    pub fn with_ghc_bin(mut self, bin_dir: impl AsRef<Path>) -> Self {
+        let current_path = std::env::var("PATH").unwrap_or_default();
+        let bin_str = bin_dir.as_ref().to_string_lossy();
+
+        #[cfg(windows)]
+        let separator = ";";
+        #[cfg(not(windows))]
+        let separator = ":";
+
+        let new_path = format!("{}{}{}", bin_str, separator, current_path);
+        self.env.push(("PATH".into(), new_path));
+        self
+    }
+
     /// Run a command and capture output.
     #[instrument(skip(self, args), fields(program = %program.as_ref().to_string_lossy()))]
     pub async fn run<S, I>(&self, program: S, args: I) -> Result<CommandOutput, Error>
