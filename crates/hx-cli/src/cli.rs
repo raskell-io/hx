@@ -1,6 +1,7 @@
 //! CLI argument parsing.
 
 use clap::{Args, Parser, Subcommand};
+use clap_complete::Shell;
 use hx_core::EnvVars;
 
 use crate::styles::STYLES;
@@ -155,6 +156,24 @@ pub enum Commands {
     Rm {
         /// Package name
         package: String,
+    },
+
+    /// Generate shell completions
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: Shell,
+    },
+
+    /// Upgrade hx to the latest version
+    Upgrade {
+        /// Check for updates without installing
+        #[arg(long)]
+        check: bool,
+
+        /// Upgrade to a specific version
+        #[arg(long = "target")]
+        target_version: Option<String>,
     },
 }
 

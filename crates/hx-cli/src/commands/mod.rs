@@ -2,6 +2,7 @@
 
 mod build;
 mod clean;
+mod completions;
 mod deps;
 mod doctor;
 mod fmt;
@@ -10,6 +11,7 @@ mod lint;
 mod lock;
 mod run;
 mod toolchain;
+mod upgrade;
 
 use crate::cli::{Cli, Commands};
 use anyhow::Result;
@@ -58,6 +60,8 @@ pub async fn run(cli: Cli) -> Result<i32> {
         Some(Commands::Toolchain { command }) => toolchain::run(command, &output).await,
         Some(Commands::Add { package, dev }) => deps::add(&package, dev, &output).await,
         Some(Commands::Rm { package }) => deps::remove(&package, &output).await,
+        Some(Commands::Completions { shell }) => completions::run(shell),
+        Some(Commands::Upgrade { check, target_version }) => upgrade::run(check, target_version, &output).await,
         None => {
             // No command - show help
             use clap::CommandFactory;

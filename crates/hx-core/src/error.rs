@@ -175,4 +175,110 @@ impl Error {
             fixes: vec![],
         }
     }
+
+    /// Create a toolchain missing error with default fix suggestions.
+    pub fn toolchain_missing(tool: impl Into<String>) -> Self {
+        let tool = tool.into();
+        let fixes = match tool.as_str() {
+            "ghc" => vec![
+                Fix::with_command("Install GHC via ghcup", "ghcup install ghc"),
+                Fix::with_command("Or install via hx", "hx toolchain install"),
+            ],
+            "cabal" => vec![
+                Fix::with_command("Install Cabal via ghcup", "ghcup install cabal"),
+                Fix::with_command("Or install via hx", "hx toolchain install"),
+            ],
+            "ghcup" => vec![Fix::new(
+                "Install ghcup from https://www.haskell.org/ghcup/",
+            )],
+            "hls" | "haskell-language-server" => vec![
+                Fix::with_command("Install HLS via ghcup", "ghcup install hls"),
+                Fix::with_command("Or install via hx", "hx toolchain install --hls latest"),
+            ],
+            _ => vec![Fix::with_command(
+                format!("Install {}", tool),
+                "hx toolchain install",
+            )],
+        };
+
+        Error::ToolchainMissing {
+            tool,
+            source: None,
+            fixes,
+        }
+    }
+
+    /// Create a toolchain mismatch error with default fix suggestions.
+    pub fn toolchain_mismatch(
+        tool: impl Into<String>,
+        expected: impl Into<String>,
+        found: impl Into<String>,
+    ) -> Self {
+        let tool = tool.into();
+        let expected = expected.into();
+        let found = found.into();
+
+        let fixes = vec![
+            Fix::with_command(
+                format!("Install {} {}", tool, expected),
+                format!("hx toolchain install --{} {}", tool.to_lowercase(), expected),
+            ),
+            Fix::with_command(
+                format!("Or use {} {} for this session", tool, expected),
+                format!("ghcup set {} {}", tool.to_lowercase(), expected),
+            ),
+        ];
+
+        Error::ToolchainMismatch {
+            tool,
+            expected,
+            found,
+            fixes,
+        }
+    }
+
+    /// Create a project not found error with helpful suggestions.
+    pub fn project_not_found(searched: Vec<PathBuf>) -> Self {
+        Error::ProjectNotFound {
+            searched,
+            fixes: vec![
+                Fix::with_command("Initialize a new project", "hx init"),
+                Fix::new("Or navigate to a directory containing hx.toml or *.cabal"),
+            ],
+        }
+    }
+
+    /// Create a lock error with suggestions.
+    pub fn lock_outdated() -> Self {
+        Error::Lock {
+            message: "lockfile is out of date".to_string(),
+            source: None,
+            fixes: vec![
+                Fix::with_command("Update the lockfile", "hx lock"),
+                Fix::with_command("Or force sync with current lock", "hx sync --force"),
+            ],
+        }
+    }
+
+    /// Create a build failed error with common suggestions.
+    pub fn build_failed(errors: Vec<String>) -> Self {
+        let mut fixes = vec![Fix::with_command("See full compiler output", "hx build --verbose")];
+
+        // Add specific suggestions based on error content
+        for error in &errors {
+            if error.contains("Could not find module") {
+                fixes.push(Fix::with_command(
+                    "Missing dependency - add it",
+                    "hx add <package-name>",
+                ));
+                break;
+            }
+            if error.contains("parse error") || error.contains("Parse error") {
+                fixes.push(Fix::new("Check syntax near the reported line"));
+                break;
+            }
+        }
+
+        Error::BuildFailed { errors, fixes }
+    }
 }
