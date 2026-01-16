@@ -5,9 +5,9 @@ use hx_cabal::freeze;
 use hx_config::{LOCKFILE_FILENAME, Project, find_project_root};
 use hx_lock::{LockedPackage, Lockfile, WorkspacePackageInfo, parse_freeze_file};
 use hx_solver::{
-    compute_deps_fingerprint, default_index_path, load_cached_index, load_cached_resolution,
-    load_index, parse_cabal, save_index_cache, save_resolution_cache, Dependency, IndexOptions,
-    Resolver, ResolverConfig,
+    best_index_path, compute_deps_fingerprint, index_is_current, load_cached_index,
+    load_cached_resolution, load_index, parse_cabal, save_index_cache, save_resolution_cache,
+    update_index, Dependency, IndexOptions, MirrorOptions, Resolver, ResolverConfig,
 };
 use hx_toolchain::Toolchain;
 use hx_ui::{Output, Spinner};
@@ -205,9 +205,32 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
     let plan = if let Some(plan) = plan {
         plan
     } else {
-        // Find the Hackage index
-        let index_path = default_index_path().context(
-            "Hackage index not found. Run `cabal update` to download the package index.",
+        // Auto-update index if stale (> 24 hours old)
+        if !index_is_current(24) {
+            output.info("Index is stale or missing, updating...");
+            let options = MirrorOptions {
+                show_progress: !output.verbosity().eq(&hx_ui::Verbosity::Quiet),
+                ..Default::default()
+            };
+            match update_index(&options).await {
+                Ok(result) => {
+                    if result.downloaded {
+                        output.status(
+                            "Updated",
+                            &format!("index ({:.2} MB)", result.bytes_downloaded as f64 / 1_000_000.0),
+                        );
+                    }
+                }
+                Err(e) => {
+                    output.warn(&format!("Failed to update index: {}", e));
+                    output.info("Continuing with existing index (if available)...");
+                }
+            }
+        }
+
+        // Find the Hackage index (prefers hx-managed, falls back to cabal)
+        let index_path = best_index_path().context(
+            "Hackage index not found. Run `hx index update` or `cabal update` to download the package index.",
         )?;
 
         // Try to load cached index, fall back to parsing the tar.gz

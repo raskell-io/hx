@@ -266,6 +266,12 @@ pub enum Commands {
         #[command(subcommand)]
         command: IdeCommands,
     },
+
+    /// Manage the Hackage package index
+    Index {
+        #[command(subcommand)]
+        command: IndexCommands,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -323,6 +329,30 @@ pub enum NewCommands {
     Benchmark {
         /// Benchmark module name
         name: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum IndexCommands {
+    /// Update the package index from Hackage
+    Update {
+        /// Force full download even if index exists
+        #[arg(long)]
+        force: bool,
+
+        /// Staleness threshold in hours (0 = always update)
+        #[arg(long)]
+        staleness: Option<u64>,
+    },
+
+    /// Show index status and statistics
+    Status,
+
+    /// Clear the local index
+    Clear {
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
     },
 }
 

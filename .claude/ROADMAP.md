@@ -316,10 +316,38 @@ Applied patterns from the uv (Astral) codebase:
   - [x] Binary caching of PackageIndex (bincode serialization)
   - [x] Resolution result caching keyed by dependency fingerprint
   - [x] Automatic cache invalidation when source changes
-- [ ] Controlled Hackage index mirroring (future)
-  - Local package index management
-  - Faster index updates
-  - Offline-capable resolution
+---
+
+## v0.4.0 - Native Fetching & Index Mirroring ✅
+
+### Native Package Fetching
+- [x] Direct package download from Hackage (`hx-solver/fetch` module)
+  - [x] Parallel downloads with configurable concurrency
+  - [x] Progress tracking with ETA display
+  - [x] SHA256 verification from Hackage
+  - [x] Integration with build plans
+
+### Build Plan Generation
+- [x] Native build plan generation (`hx-solver/plan` module)
+  - [x] Topological sorting of dependencies
+  - [x] Cycle detection
+  - [x] Pre-installed package detection (base, ghc-prim, etc.)
+  - [x] Build fingerprint calculation
+
+### UX Improvements
+- [x] Better test output parsing and display
+- [x] Improved benchmark workflow integration
+- [x] Performance testing infrastructure (criterion benchmarks)
+- [x] Integration test suite for solver
+
+### Controlled Hackage Index Mirroring
+- [x] `hx index update` - Direct download from Hackage
+- [x] `hx index status` - Show index age and statistics
+- [x] `hx index clear` - Clear local index
+- [x] HTTP conditional requests for incremental updates (ETag, If-Modified-Since)
+- [x] Auto-update on `hx lock` when index is stale (>24 hours)
+- [x] Offline-capable resolution (prefers hx-managed index, falls back to cabal)
+- [x] Index stored in `~/.cache/hx/index/`
 
 ---
 
@@ -355,6 +383,10 @@ hx ide setup|status
 hx toolchain status
 hx toolchain install
 hx toolchain use
+
+hx index update [--force]
+hx index status
+hx index clear
 
 hx completions <shell>
 hx upgrade [--check]

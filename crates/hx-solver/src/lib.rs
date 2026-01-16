@@ -31,6 +31,7 @@ pub mod cache;
 pub mod cabal;
 pub mod fetch;
 pub mod index;
+pub mod mirror;
 pub mod package;
 pub mod plan;
 pub mod resolver;
@@ -45,6 +46,11 @@ pub use fetch::{
     default_package_cache_dir, fetch_packages, FetchError, FetchOptions, FetchResult, FetchSummary,
 };
 pub use index::{default_index_path, load_index, IndexError, IndexOptions};
+pub use mirror::{
+    best_index_path, clear_index, index_dir, index_is_current, index_path, index_state_path,
+    index_status, load_index_state, update_index, IndexState, IndexStatus, MirrorError,
+    MirrorOptions, UpdateResult,
+};
 pub use package::{
     Dependency, InstallPlan, Package, PackageIndex, PackageVersion, ResolvedPackage,
 };

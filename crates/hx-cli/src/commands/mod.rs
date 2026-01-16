@@ -10,6 +10,7 @@ mod doctor;
 mod fetch;
 mod fmt;
 mod ide;
+mod index;
 mod init;
 mod lint;
 mod lock;
@@ -19,7 +20,7 @@ mod run;
 mod toolchain;
 mod upgrade;
 
-use crate::cli::{CacheCommands, Cli, Commands, GlobalArgs};
+use crate::cli::{CacheCommands, Cli, Commands, GlobalArgs, IndexCommands};
 use anyhow::Result;
 use hx_toolchain::AutoInstallPolicy;
 use hx_ui::{Output, Printer, Verbosity};
@@ -103,6 +104,13 @@ pub async fn run(cli: Cli) -> Result<i32> {
             docs,
         }) => publish::run(dry_run, username, password, docs, &output).await,
         Some(Commands::Ide { command }) => ide::run(command, &output).await,
+        Some(Commands::Index { command }) => match command {
+            IndexCommands::Update { force, staleness } => {
+                index::update(force, staleness, &output).await
+            }
+            IndexCommands::Status => index::status(&output).await,
+            IndexCommands::Clear { yes } => index::clear(yes, &output).await,
+        },
         Some(Commands::Cache { command }) => match command {
             CacheCommands::Status => cache::status(&output).await,
             CacheCommands::Prune { days } => cache::prune(days, &output).await,
