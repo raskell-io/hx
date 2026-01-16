@@ -29,7 +29,7 @@ fn test_version() {
         .assert()
         .success()
         .stdout(predicate::str::contains("hx"))
-        .stdout(predicate::str::contains("0.1.0"));
+        .stdout(predicate::str::is_match(r"\d+\.\d+\.\d+").unwrap());
 }
 
 #[test]

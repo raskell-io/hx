@@ -80,6 +80,10 @@ pub enum Commands {
         /// Target triple
         #[arg(long)]
         target: Option<String>,
+
+        /// Build specific package (in workspace)
+        #[arg(short, long)]
+        package: Option<String>,
     },
 
     /// Run tests
@@ -87,6 +91,10 @@ pub enum Commands {
         /// Test pattern to match
         #[arg(short, long)]
         pattern: Option<String>,
+
+        /// Test specific package (in workspace)
+        #[arg(long)]
+        package: Option<String>,
     },
 
     /// Run the project
@@ -94,6 +102,10 @@ pub enum Commands {
         /// Arguments to pass to the program
         #[arg(last = true)]
         args: Vec<String>,
+
+        /// Run specific package (in workspace)
+        #[arg(short, long)]
+        package: Option<String>,
     },
 
     /// Start a REPL
@@ -174,6 +186,98 @@ pub enum Commands {
         /// Upgrade to a specific version
         #[arg(long = "target")]
         target_version: Option<String>,
+    },
+
+    /// Create a new module or file from a template
+    New {
+        #[command(subcommand)]
+        command: NewCommands,
+    },
+
+    /// Run benchmarks
+    Bench {
+        /// Benchmark filter pattern
+        #[arg(short, long)]
+        filter: Option<String>,
+
+        /// Save baseline for comparison
+        #[arg(long)]
+        save_baseline: Option<String>,
+
+        /// Compare against baseline
+        #[arg(long)]
+        baseline: Option<String>,
+
+        /// Benchmark specific package (in workspace)
+        #[arg(short, long)]
+        package: Option<String>,
+    },
+
+    /// Publish package to Hackage
+    Publish {
+        /// Perform a dry run without uploading
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Hackage username
+        #[arg(long, env = "HACKAGE_USERNAME")]
+        username: Option<String>,
+
+        /// Hackage password
+        #[arg(long, env = "HACKAGE_PASSWORD")]
+        password: Option<String>,
+
+        /// Publish documentation
+        #[arg(long)]
+        docs: bool,
+    },
+
+    /// Configure IDE integration (HLS, hie.yaml)
+    Ide {
+        #[command(subcommand)]
+        command: IdeCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum IdeCommands {
+    /// Generate or update hie.yaml for HLS
+    Setup {
+        /// Overwrite existing hie.yaml
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Check IDE/HLS configuration status
+    Status,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum NewCommands {
+    /// Create a new Haskell module
+    Module {
+        /// Module name (e.g., Data.List.Extra)
+        name: String,
+
+        /// Create in src directory (default)
+        #[arg(long, conflicts_with = "test")]
+        src: bool,
+
+        /// Create in test directory
+        #[arg(long)]
+        test: bool,
+    },
+
+    /// Create a new test module
+    Test {
+        /// Test module name
+        name: String,
+    },
+
+    /// Create a new benchmark module
+    Benchmark {
+        /// Benchmark module name
+        name: String,
     },
 }
 

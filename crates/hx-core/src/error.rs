@@ -221,7 +221,11 @@ impl Error {
         let fixes = vec![
             Fix::with_command(
                 format!("Install {} {}", tool, expected),
-                format!("hx toolchain install --{} {}", tool.to_lowercase(), expected),
+                format!(
+                    "hx toolchain install --{} {}",
+                    tool.to_lowercase(),
+                    expected
+                ),
             ),
             Fix::with_command(
                 format!("Or use {} {} for this session", tool, expected),
@@ -262,7 +266,10 @@ impl Error {
 
     /// Create a build failed error with common suggestions.
     pub fn build_failed(errors: Vec<String>) -> Self {
-        let mut fixes = vec![Fix::with_command("See full compiler output", "hx build --verbose")];
+        let mut fixes = vec![Fix::with_command(
+            "See full compiler output",
+            "hx build --verbose",
+        )];
 
         // Add specific suggestions based on error content
         for error in &errors {

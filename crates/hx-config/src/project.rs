@@ -16,6 +16,19 @@ pub struct Project {
     pub cabal_file: Option<PathBuf>,
     /// Whether cabal.project exists
     pub has_cabal_project: bool,
+    /// Workspace packages (if this is a workspace)
+    pub workspace_packages: Vec<WorkspacePackage>,
+}
+
+/// A package within a workspace.
+#[derive(Debug, Clone)]
+pub struct WorkspacePackage {
+    /// Package name
+    pub name: String,
+    /// Path to the package directory (relative to workspace root)
+    pub path: PathBuf,
+    /// Path to the .cabal file
+    pub cabal_file: PathBuf,
 }
 
 impl Project {
@@ -34,11 +47,19 @@ impl Project {
         let cabal_file = find_cabal_file(&root);
         let has_cabal_project = root.join("cabal.project").exists();
 
+        // Parse workspace packages if this is a multi-package project
+        let workspace_packages = if has_cabal_project {
+            parse_workspace_packages(&root)?
+        } else {
+            Vec::new()
+        };
+
         Ok(Self {
             root,
             manifest,
             cabal_file,
             has_cabal_project,
+            workspace_packages,
         })
     }
 
@@ -70,6 +91,34 @@ impl Project {
     /// Get the project name.
     pub fn name(&self) -> &str {
         &self.manifest.project.name
+    }
+
+    /// Check if this is a workspace (multi-package project).
+    pub fn is_workspace(&self) -> bool {
+        !self.workspace_packages.is_empty()
+    }
+
+    /// Get the number of packages in the workspace.
+    pub fn package_count(&self) -> usize {
+        if self.workspace_packages.is_empty() {
+            1 // Single package project
+        } else {
+            self.workspace_packages.len()
+        }
+    }
+
+    /// Get a workspace package by name.
+    pub fn get_package(&self, name: &str) -> Option<&WorkspacePackage> {
+        self.workspace_packages.iter().find(|p| p.name == name)
+    }
+
+    /// List all package names in the workspace.
+    pub fn package_names(&self) -> Vec<&str> {
+        if self.workspace_packages.is_empty() {
+            vec![self.name()]
+        } else {
+            self.workspace_packages.iter().map(|p| p.name.as_str()).collect()
+        }
     }
 }
 
@@ -133,6 +182,98 @@ fn find_cabal_file(dir: &Path) -> Option<PathBuf> {
         }
     }
     None
+}
+
+/// Parse workspace packages from cabal.project file.
+fn parse_workspace_packages(root: &Path) -> Result<Vec<WorkspacePackage>, Error> {
+    let cabal_project_path = root.join("cabal.project");
+
+    let content = match std::fs::read_to_string(&cabal_project_path) {
+        Ok(c) => c,
+        Err(e) => {
+            debug!("Failed to read cabal.project: {}", e);
+            return Ok(Vec::new());
+        }
+    };
+
+    let mut packages = Vec::new();
+
+    for line in content.lines() {
+        let line = line.trim();
+
+        // Skip comments and empty lines
+        if line.is_empty() || line.starts_with("--") {
+            continue;
+        }
+
+        // Parse "packages:" directive
+        // Can be single line: packages: ./pkg1 ./pkg2
+        // Or multi-line with continuation
+        if line.starts_with("packages:") {
+            let paths_str = line.strip_prefix("packages:").unwrap_or("").trim();
+            for path_part in paths_str.split_whitespace() {
+                if let Some(pkg) = parse_package_path(root, path_part) {
+                    packages.push(pkg);
+                }
+            }
+        } else if !line.contains(':') && !packages.is_empty() {
+            // Continuation line for packages (part of previous packages: block)
+            // Only if we've already seen packages: and line doesn't start a new directive
+            for path_part in line.split_whitespace() {
+                if let Some(pkg) = parse_package_path(root, path_part) {
+                    packages.push(pkg);
+                }
+            }
+        }
+    }
+
+    debug!("Found {} workspace packages", packages.len());
+    Ok(packages)
+}
+
+/// Parse a single package path from cabal.project.
+fn parse_package_path(root: &Path, path_str: &str) -> Option<WorkspacePackage> {
+    // Handle glob patterns like ./packages/*
+    // For now, just handle direct paths
+    let path_str = path_str.trim();
+
+    // Skip glob patterns for now (would need glob crate)
+    if path_str.contains('*') {
+        debug!("Skipping glob pattern in cabal.project: {}", path_str);
+        return None;
+    }
+
+    let package_path = if let Some(stripped) = path_str.strip_prefix("./") {
+        root.join(stripped)
+    } else if path_str.starts_with('/') {
+        PathBuf::from(path_str)
+    } else {
+        root.join(path_str)
+    };
+
+    // Check if the path exists and contains a .cabal file
+    if !package_path.exists() || !package_path.is_dir() {
+        debug!("Package path does not exist: {}", package_path.display());
+        return None;
+    }
+
+    let cabal_file = find_cabal_file(&package_path)?;
+    let name = cabal_file
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    let relative_path = package_path
+        .strip_prefix(root)
+        .unwrap_or(&package_path)
+        .to_path_buf();
+
+    Some(WorkspacePackage {
+        name,
+        path: relative_path,
+        cabal_file,
+    })
 }
 
 /// Check if a directory looks like a Haskell project.

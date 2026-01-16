@@ -1,14 +1,18 @@
 //! Command implementations.
 
+mod bench;
 mod build;
 mod clean;
 mod completions;
 mod deps;
 mod doctor;
 mod fmt;
+mod ide;
 mod init;
 mod lint;
 mod lock;
+mod new;
+mod publish;
 mod run;
 mod toolchain;
 mod upgrade;
@@ -43,13 +47,14 @@ pub async fn run(cli: Cli) -> Result<i32> {
             release,
             jobs,
             target,
-        }) => build::run(release, jobs, target, &output).await,
-        Some(Commands::Test { pattern }) => build::test(pattern, &output).await,
-        Some(Commands::Run { args }) => run::run(args, &output).await,
+            package,
+        }) => build::run(release, jobs, target, package, &output).await,
+        Some(Commands::Test { pattern, package }) => build::test(pattern, package, &output).await,
+        Some(Commands::Run { args, package }) => run::run(args, package, &output).await,
         Some(Commands::Repl) => run::repl(&output).await,
         Some(Commands::Check) => {
             // Check is just a fast build
-            build::run(false, None, None, &output).await
+            build::run(false, None, None, None, &output).await
         }
         Some(Commands::Fmt { check }) => fmt::run(check, &output).await,
         Some(Commands::Lint { fix }) => lint::run(fix, &output).await,
@@ -61,7 +66,24 @@ pub async fn run(cli: Cli) -> Result<i32> {
         Some(Commands::Add { package, dev }) => deps::add(&package, dev, &output).await,
         Some(Commands::Rm { package }) => deps::remove(&package, &output).await,
         Some(Commands::Completions { shell }) => completions::run(shell),
-        Some(Commands::Upgrade { check, target_version }) => upgrade::run(check, target_version, &output).await,
+        Some(Commands::Upgrade {
+            check,
+            target_version,
+        }) => upgrade::run(check, target_version, &output).await,
+        Some(Commands::New { command }) => new::run(command, &output).await,
+        Some(Commands::Bench {
+            filter,
+            save_baseline,
+            baseline,
+            package,
+        }) => bench::run(filter, save_baseline, baseline, package, &output).await,
+        Some(Commands::Publish {
+            dry_run,
+            username,
+            password,
+            docs,
+        }) => publish::run(dry_run, username, password, docs, &output).await,
+        Some(Commands::Ide { command }) => ide::run(command, &output).await,
         None => {
             // No command - show help
             use clap::CommandFactory;

@@ -213,23 +213,61 @@ fn check_cabal(toolchain: &Toolchain, report: &mut DoctorReport) {
 
 fn check_hls(toolchain: &Toolchain, report: &mut DoctorReport) {
     if !toolchain.hls.status.is_found() {
+        // Get recommended version if we have GHC
+        let fix_cmd = if let Some(ghc_version) = toolchain.ghc.status.version() {
+            if let Some(recommended) = hx_config::recommended_hls_for_ghc(&ghc_version.to_string())
+            {
+                format!("ghcup install hls {}", recommended)
+            } else {
+                "ghcup install hls".to_string()
+            }
+        } else {
+            "ghcup install hls".to_string()
+        };
+
         report.add(
             Diagnostic::warning("haskell-language-server not found - IDE features unavailable")
+                .with_fix(Fix::with_command("Install HLS via ghcup", fix_cmd))
                 .with_fix(Fix::with_command(
-                    "Install HLS via ghcup",
-                    "ghcup install hls",
+                    "Or install via hx",
+                    "hx toolchain install --hls latest",
                 )),
         );
     } else {
-        report.add(Diagnostic::info(format!(
-            "hls: {}",
-            toolchain
-                .hls
-                .status
-                .version()
-                .map(|v| v.to_string())
-                .unwrap_or_else(|| "installed".to_string())
-        )));
+        let hls_version = toolchain
+            .hls
+            .status
+            .version()
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "installed".to_string());
+
+        report.add(Diagnostic::info(format!("hls: {}", hls_version)));
+
+        // Check HLS/GHC compatibility if both versions are known
+        if let (Some(hls_ver), Some(ghc_ver)) = (
+            toolchain.hls.status.version(),
+            toolchain.ghc.status.version(),
+        ) {
+            let hls_str = hls_ver.to_string();
+            let ghc_str = ghc_ver.to_string();
+
+            if !hx_config::is_hls_compatible(&hls_str, &ghc_str) {
+                let recommended = hx_config::recommended_hls_for_ghc(&ghc_str);
+                let mut diag = Diagnostic::warning(format!(
+                    "HLS {} may not be fully compatible with GHC {}",
+                    hls_str, ghc_str
+                ));
+
+                if let Some(rec_version) = recommended {
+                    diag = diag.with_fix(Fix::with_command(
+                        format!("Install HLS {} (recommended for GHC {})", rec_version, ghc_str),
+                        format!("ghcup install hls {} && ghcup set hls {}", rec_version, rec_version),
+                    ));
+                }
+
+                report.add(diag);
+            }
+        }
     }
 }
 
@@ -401,6 +439,46 @@ fn check_project(dir: &Path, report: &mut DoctorReport) {
         );
     } else {
         report.add(Diagnostic::info(".cabal file found"));
+    }
+
+    // Check hie.yaml for IDE integration
+    check_hie_yaml(dir, report);
+}
+
+fn check_hie_yaml(dir: &Path, report: &mut DoctorReport) {
+    // Try to load project to check hie.yaml status
+    if let Ok(project) = hx_config::Project::load(dir) {
+        match hx_config::check_hie_yaml(&project) {
+            hx_config::HieYamlStatus::Missing => {
+                // Only suggest creating hie.yaml for workspace projects or complex setups
+                if project.is_workspace() || project.has_cabal_project {
+                    report.add(
+                        Diagnostic::warning(
+                            "hie.yaml missing - HLS may not work correctly with multi-package project",
+                        )
+                        .with_fix(Fix::with_command(
+                            "Generate hie.yaml for IDE integration",
+                            "hx ide setup",
+                        )),
+                    );
+                }
+            }
+            hx_config::HieYamlStatus::Outdated => {
+                report.add(
+                    Diagnostic::warning("hie.yaml is outdated - workspace structure has changed")
+                        .with_fix(Fix::with_command(
+                            "Regenerate hie.yaml",
+                            "hx ide setup --force",
+                        )),
+                );
+            }
+            hx_config::HieYamlStatus::UpToDate => {
+                report.add(Diagnostic::info("hie.yaml up to date"));
+            }
+            hx_config::HieYamlStatus::Exists => {
+                report.add(Diagnostic::info("hie.yaml found (custom configuration)"));
+            }
+        }
     }
 }
 

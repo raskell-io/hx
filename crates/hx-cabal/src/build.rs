@@ -16,6 +16,8 @@ pub struct BuildOptions {
     pub jobs: Option<usize>,
     /// Target triple
     pub target: Option<String>,
+    /// Specific package to build (for workspaces)
+    pub package: Option<String>,
     /// Verbose output
     pub verbose: bool,
 }
@@ -56,6 +58,11 @@ pub async fn build(
 
     if let Some(jobs) = options.jobs {
         args.push(format!("-j{}", jobs));
+    }
+
+    // Add package filter for workspace builds
+    if let Some(ref pkg) = options.package {
+        args.push(pkg.clone());
     }
 
     info!("Running cabal build in {}", project_root.display());
@@ -108,6 +115,7 @@ pub async fn test(
     project_root: &Path,
     build_dir: &Path,
     pattern: Option<&str>,
+    package: Option<&str>,
     output: &Output,
 ) -> Result<BuildResult> {
     let store_dir = cabal_store_dir()?;
@@ -117,6 +125,11 @@ pub async fn test(
         format!("--builddir={}", build_dir.display()),
         format!("--store-dir={}", store_dir.display()),
     ];
+
+    // Add package filter for workspace tests
+    if let Some(pkg) = package {
+        args.push(format!("{}:test", pkg));
+    }
 
     if let Some(p) = pattern {
         args.push(format!("--test-option=--pattern={}", p));
@@ -159,6 +172,7 @@ pub async fn run(
     project_root: &Path,
     build_dir: &Path,
     args: &[String],
+    package: Option<&str>,
     _output: &Output,
 ) -> Result<i32> {
     let store_dir = cabal_store_dir()?;
@@ -168,6 +182,11 @@ pub async fn run(
         format!("--builddir={}", build_dir.display()),
         format!("--store-dir={}", store_dir.display()),
     ];
+
+    // Add package filter for workspace runs
+    if let Some(pkg) = package {
+        cmd_args.push(pkg.to_string());
+    }
 
     // Add -- to separate cabal args from program args
     if !args.is_empty() {

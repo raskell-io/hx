@@ -106,6 +106,7 @@ pub async fn sync(force: bool, output: &Output) -> Result<i32> {
         release: false,
         jobs: None,
         target: None,
+        package: None,
         verbose: output.is_verbose(),
     };
 
