@@ -31,7 +31,7 @@ sha2 = "0.10"
 
 # Async/HTTP
 tokio = { version = "1", features = ["fs", "sync"] }
-reqwest = { version = "0.12", features = ["stream"] }
+reqwest = { workspace = true, features = ["stream"] }
 futures = "0.3"
 
 # Progress
