@@ -252,6 +252,17 @@ pub enum Commands {
         dev: bool,
     },
 
+    /// List all dependencies (alias for `deps list`)
+    List {
+        /// Include dev dependencies
+        #[arg(long)]
+        dev: bool,
+
+        /// Show only direct dependencies
+        #[arg(long)]
+        direct: bool,
+    },
+
     /// Generate shell completions
     Completions {
         /// Shell to generate completions for
