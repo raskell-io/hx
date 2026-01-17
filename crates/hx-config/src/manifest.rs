@@ -297,6 +297,32 @@ impl Manifest {
             dependencies: HashMap::new(),
         }
     }
+
+    /// Apply global config defaults to this manifest.
+    ///
+    /// Project-local settings take precedence over global settings.
+    /// This uses the [`Combine`](crate::Combine) trait where `self` (project)
+    /// has higher precedence than `global` config.
+    pub fn with_global_defaults(self, global: &crate::GlobalConfig) -> Self {
+        use crate::Combine;
+
+        Self {
+            // Project config is always from project manifest
+            project: self.project,
+            // Merge toolchain (project takes precedence)
+            toolchain: self.toolchain.combine(global.toolchain.clone()),
+            // Merge build (project takes precedence)
+            build: self.build.combine(global.build.clone()),
+            // Merge format (project takes precedence)
+            format: self.format.combine(global.format.clone()),
+            // Merge lint (project takes precedence)
+            lint: self.lint.combine(global.lint.clone()),
+            // Merge plugins (project takes precedence)
+            plugins: self.plugins.combine(global.plugins.clone()),
+            // Dependencies are project-specific only
+            dependencies: self.dependencies,
+        }
+    }
 }
 
 #[cfg(test)]

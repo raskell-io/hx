@@ -2,17 +2,20 @@
 //!
 //! This crate handles:
 //! - Parsing `hx.toml` project manifests
+//! - Global configuration (`~/.config/hx/config.toml`)
 //! - Detecting project roots
 //! - Locating `.cabal` files
 //! - Merging configuration defaults
 //! - IDE/HLS configuration (hie.yaml generation)
 
 pub mod combine;
+pub mod global;
 pub mod ide;
 pub mod manifest;
 pub mod project;
 
 pub use combine::Combine;
+pub use global::{GlobalConfig, GlobalConfigError, global_config_path, load_global_config};
 pub use ide::{
     HieYamlStatus, check_hie_yaml, generate_hie_yaml, is_hls_compatible, recommended_hls_for_ghc,
     write_hie_yaml,

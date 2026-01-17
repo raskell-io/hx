@@ -59,6 +59,15 @@ pub fn global_config_dir() -> Result<PathBuf> {
     Ok(dirs.config_dir().to_path_buf())
 }
 
+/// Get the global config file path.
+///
+/// - Linux: `~/.config/hx/config.toml`
+/// - macOS: `~/Library/Application Support/hx/config.toml`
+/// - Windows: `%APPDATA%\hx\config\config.toml`
+pub fn global_config_file() -> Result<PathBuf> {
+    Ok(global_config_dir()?.join("config.toml"))
+}
+
 /// Get the toolchain directory for hx-managed installations.
 ///
 /// Uses `~/.hx/toolchains` on all platforms. This avoids paths with spaces

@@ -50,7 +50,7 @@ hx new hello && cd hello && hx run
 | `hx upgrade` self-update | P0 | Low | ✅ |
 | Shell completions auto-install | P1 | Low | ✅ |
 | `hx init` without flags (smart defaults) | P1 | Low | ✅ |
-| Global config (`~/.hx/config.toml`) | P1 | Medium | TODO |
+| Global config (`~/.hx/config.toml`) | P1 | Medium | ✅ |
 
 ### v0.6.0 - Speed Parity
 

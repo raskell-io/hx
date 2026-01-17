@@ -285,6 +285,46 @@ pre_build = ["./scripts/check.scm"]
 post_test = ["./scripts/notify.scm"]
 ```
 
+## Global Configuration
+
+hx supports global configuration at `~/.config/hx/config.toml` (Linux), `~/Library/Application Support/hx/config.toml` (macOS), or `%APPDATA%\hx\config\config.toml` (Windows).
+
+Global settings provide defaults that can be overridden by project-local `hx.toml`:
+
+```toml
+# ~/.config/hx/config.toml
+
+[toolchain]
+ghc = "9.8.2"
+cabal = "3.12.1.0"
+
+[build]
+optimization = 1
+warnings = true
+
+[format]
+formatter = "fourmolu"
+
+[lint]
+hlint = true
+```
+
+### Managing Global Config
+
+```bash
+hx config show           # Show current global configuration
+hx config path           # Show path to global config file
+hx config edit           # Open config file in your $EDITOR
+hx config init           # Create default config file
+hx config set <key> <val> # Set a configuration value
+hx config get <key>      # Get a configuration value
+
+# Examples:
+hx config set toolchain.ghc 9.8.2
+hx config set build.optimization 2
+hx config set format.formatter ormolu
+```
+
 ## Lockfile
 
 The `hx.lock` file ensures reproducible builds:

@@ -1,9 +1,9 @@
 //! Project detection and context.
 
-use crate::{CACHE_DIR_NAME, LOCKFILE_FILENAME, MANIFEST_FILENAME, Manifest};
+use crate::{CACHE_DIR_NAME, LOCKFILE_FILENAME, MANIFEST_FILENAME, Manifest, load_global_config};
 use hx_core::error::{Error, Fix};
 use std::path::{Path, PathBuf};
-use tracing::debug;
+use tracing::{debug, warn};
 
 /// A detected hx project.
 #[derive(Debug, Clone)]
@@ -33,16 +33,35 @@ pub struct WorkspacePackage {
 
 impl Project {
     /// Load a project from a directory.
+    ///
+    /// This automatically loads and applies global config defaults from
+    /// `~/.config/hx/config.toml` (or platform equivalent). Project-local
+    /// settings in `hx.toml` take precedence over global config.
     pub fn load(root: impl AsRef<Path>) -> Result<Self, Error> {
         let root = root.as_ref().to_path_buf();
         let manifest_path = root.join(MANIFEST_FILENAME);
 
-        let manifest = Manifest::from_file(&manifest_path).map_err(|e| Error::Config {
+        let mut manifest = Manifest::from_file(&manifest_path).map_err(|e| Error::Config {
             message: format!("failed to load manifest: {}", e),
             path: Some(manifest_path.clone()),
             source: Some(Box::new(e)),
             fixes: vec![Fix::with_command("Create a new project", "hx init")],
         })?;
+
+        // Apply global config defaults
+        match load_global_config() {
+            Ok(Some(global)) => {
+                debug!("Applying global config defaults");
+                manifest = manifest.with_global_defaults(&global);
+            }
+            Ok(None) => {
+                debug!("No global config found");
+            }
+            Err(e) => {
+                // Warn but continue - don't fail if global config is malformed
+                warn!("Failed to load global config: {}", e);
+            }
+        }
 
         let cabal_file = find_cabal_file(&root);
         let has_cabal_project = root.join("cabal.project").exists();

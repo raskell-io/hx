@@ -561,6 +561,49 @@ pub enum Commands {
         #[arg(long)]
         version: Option<String>,
     },
+
+    /// Manage global configuration
+    ///
+    /// Global config provides defaults for all projects.
+    /// Located at ~/.config/hx/config.toml (or platform equivalent).
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ConfigCommands {
+    /// Show current global configuration
+    Show,
+
+    /// Show path to global config file
+    Path,
+
+    /// Open global config in editor
+    Edit,
+
+    /// Set a configuration value
+    Set {
+        /// Configuration key (e.g., toolchain.ghc, build.optimization)
+        key: String,
+
+        /// Value to set
+        value: String,
+    },
+
+    /// Get a configuration value
+    Get {
+        /// Configuration key (e.g., toolchain.ghc, build.optimization)
+        key: String,
+    },
+
+    /// Initialize global config file with defaults
+    Init {
+        /// Overwrite existing config
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]

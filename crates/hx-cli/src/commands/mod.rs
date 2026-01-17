@@ -7,6 +7,7 @@ mod cache;
 mod changelog;
 mod clean;
 mod completions;
+mod config;
 mod coverage;
 mod deps;
 mod dist;
@@ -34,8 +35,9 @@ mod upgrade;
 mod watch;
 
 use crate::cli::{
-    ArtifactCommands, CacheCommands, Cli, Commands, CompletionsCommands, DepsCommands,
-    DistCommands, GlobalArgs, GraphFormat, IndexCommands, NixCommands, PluginsCommands,
+    ArtifactCommands, CacheCommands, Cli, Commands, CompletionsCommands, ConfigCommands,
+    DepsCommands, DistCommands, GlobalArgs, GraphFormat, IndexCommands, NixCommands,
+    PluginsCommands,
 };
 use anyhow::Result;
 use hx_toolchain::AutoInstallPolicy;
@@ -278,6 +280,14 @@ pub async fn run(cli: Cli) -> Result<i32> {
                 };
                 dist::run(config, &output).await
             }
+        },
+        Some(Commands::Config { command }) => match command {
+            ConfigCommands::Show => config::show(&output).await,
+            ConfigCommands::Path => config::path(&output).await,
+            ConfigCommands::Edit => config::edit(&output).await,
+            ConfigCommands::Set { key, value } => config::set(&key, &value, &output).await,
+            ConfigCommands::Get { key } => config::get(&key, &output).await,
+            ConfigCommands::Init { force } => config::init(force, &output).await,
         },
         None => {
             // No command - show help
