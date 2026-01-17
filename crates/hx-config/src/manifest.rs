@@ -67,6 +67,19 @@ pub struct ToolchainConfig {
     pub hls: Option<String>,
 }
 
+/// Stackage snapshot configuration section.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct StackageConfig {
+    /// Stackage snapshot to use (e.g., "lts-22.28", "nightly-2024-01-15")
+    pub snapshot: Option<String>,
+    /// Whether to allow packages not in the snapshot (from Hackage)
+    #[serde(default)]
+    pub allow_newer: bool,
+    /// Extra packages to add with specific versions (overrides snapshot)
+    #[serde(default)]
+    pub extra_deps: HashMap<String, String>,
+}
+
 /// Format configuration section.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FormatConfig {
@@ -236,6 +249,10 @@ pub struct Manifest {
     #[serde(default)]
     pub toolchain: ToolchainConfig,
 
+    /// Stackage snapshot configuration
+    #[serde(default)]
+    pub stackage: StackageConfig,
+
     /// Build configuration
     #[serde(default)]
     pub build: BuildConfig,
@@ -290,6 +307,7 @@ impl Manifest {
                 resolver: default_resolver(),
             },
             toolchain: ToolchainConfig::default(),
+            stackage: StackageConfig::default(),
             build: BuildConfig::default(),
             format: FormatConfig::default(),
             lint: LintConfig::default(),
@@ -311,6 +329,8 @@ impl Manifest {
             project: self.project,
             // Merge toolchain (project takes precedence)
             toolchain: self.toolchain.combine(global.toolchain.clone()),
+            // Stackage config is project-specific only
+            stackage: self.stackage,
             // Merge build (project takes precedence)
             build: self.build.combine(global.build.clone()),
             // Merge format (project takes precedence)

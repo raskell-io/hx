@@ -71,6 +71,11 @@ pub async fn build(
         args.push(format!("-j{}", jobs));
     }
 
+    // Add cross-compilation target if specified
+    if let Some(ref target) = options.target {
+        args.push(format!("--target={}", target));
+    }
+
     // Add package filter for workspace builds
     if let Some(ref pkg) = options.package {
         args.push(pkg.clone());
@@ -125,7 +130,11 @@ pub async fn build(
     if let Some(ref fingerprint) = options.fingerprint
         && let Ok(mut store) = StoreIndex::load()
     {
-        let platform = format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS);
+        // Use target triple if cross-compiling, otherwise use host platform
+        let platform = options
+            .target
+            .clone()
+            .unwrap_or_else(|| format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS));
         store.record_build(
             fingerprint.clone(),
             options.ghc_version.clone(),
@@ -147,6 +156,7 @@ pub async fn test(
     build_dir: &Path,
     pattern: Option<&str>,
     package: Option<&str>,
+    target: Option<&str>,
     toolchain_bin_dirs: &[PathBuf],
     output: &Output,
 ) -> Result<BuildResult> {
@@ -158,6 +168,11 @@ pub async fn test(
         "test".to_string(),
         format!("--builddir={}", build_dir.display()),
     ];
+
+    // Add cross-compilation target if specified
+    if let Some(t) = target {
+        args.push(format!("--target={}", t));
+    }
 
     // Add package filter for workspace tests
     if let Some(pkg) = package {
@@ -209,6 +224,7 @@ pub async fn run(
     build_dir: &Path,
     args: &[String],
     package: Option<&str>,
+    target: Option<&str>,
     toolchain_bin_dirs: &[PathBuf],
     _output: &Output,
 ) -> Result<i32> {
@@ -220,6 +236,11 @@ pub async fn run(
         "run".to_string(),
         format!("--builddir={}", build_dir.display()),
     ];
+
+    // Add cross-compilation target if specified
+    if let Some(t) = target {
+        cmd_args.push(format!("--target={}", t));
+    }
 
     // Add package filter for workspace runs
     if let Some(pkg) = package {

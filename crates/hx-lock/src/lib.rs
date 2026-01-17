@@ -70,6 +70,9 @@ pub struct LockedPlan {
     /// Hackage index state
     #[serde(skip_serializing_if = "Option::is_none")]
     pub index_state: Option<String>,
+    /// Stackage snapshot (e.g., "lts-22.28", "nightly-2024-01-15")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<String>,
     /// Overall plan hash
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<String>,
@@ -190,6 +193,9 @@ impl Lockfile {
         if let Some(ref index_state) = self.plan.index_state {
             hasher.update(format!("index:{}", index_state));
         }
+        if let Some(ref snapshot) = self.plan.snapshot {
+            hasher.update(format!("snapshot:{}", snapshot));
+        }
 
         // Include workspace packages (sorted for determinism)
         if self.workspace.is_workspace {
@@ -223,6 +229,11 @@ impl Lockfile {
     pub fn set_toolchain(&mut self, ghc: Option<String>, cabal: Option<String>) {
         self.toolchain.ghc = ghc;
         self.toolchain.cabal = cabal;
+    }
+
+    /// Set the Stackage snapshot.
+    pub fn set_snapshot(&mut self, snapshot: Option<String>) {
+        self.plan.snapshot = snapshot;
     }
 
     /// Set workspace information.

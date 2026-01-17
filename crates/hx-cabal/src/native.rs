@@ -770,6 +770,8 @@ pub struct NativeBuildOptions {
     pub output_lib: Option<PathBuf>,
     /// Use native linking (include resolved library paths)
     pub native_linking: bool,
+    /// Target triple for cross-compilation (e.g., "aarch64-linux-gnu")
+    pub target: Option<String>,
 }
 
 impl Default for NativeBuildOptions {
@@ -787,6 +789,7 @@ impl Default for NativeBuildOptions {
             output_exe: None,
             output_lib: None,
             native_linking: true,
+            target: None,
         }
     }
 }
@@ -1294,6 +1297,11 @@ impl NativeBuilder {
             );
         }
 
+        // Add cross-compilation target if specified
+        if let Some(ref target) = options.target {
+            args.push(format!("-target={}", target));
+        }
+
         // Add optimization
         if options.optimization > 0 {
             args.push(format!("-O{}", options.optimization));
@@ -1526,6 +1534,11 @@ async fn compile_module(
 
     // Add extra flags
     args.extend(options.extra_flags.clone());
+
+    // Add cross-compilation target if specified
+    if let Some(ref target) = options.target {
+        args.push(format!("-target={}", target));
+    }
 
     // Add source file
     args.push(module.path.display().to_string());

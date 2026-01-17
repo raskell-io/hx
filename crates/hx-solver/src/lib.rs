@@ -37,6 +37,7 @@ pub mod modules;
 pub mod package;
 pub mod plan;
 pub mod resolver;
+pub mod snapshot;
 pub mod version;
 
 pub use cabal::{
@@ -71,4 +72,8 @@ pub use plan::{
     BuildPlan, BuildStyle, BuildUnit, PlanError, PlanOptions, PlanSummary, generate_build_plan,
 };
 pub use resolver::{ResolveError, Resolver, ResolverConfig};
+pub use snapshot::{
+    Snapshot, SnapshotError, SnapshotId, SnapshotMetadata, SnapshotPackage, SnapshotType,
+    fetch_snapshot, get_latest_lts, get_latest_nightly, load_snapshot, snapshot_cache_dir,
+};
 pub use version::{Version, VersionConstraint, VersionParseError, parse_constraint};

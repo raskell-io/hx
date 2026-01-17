@@ -101,6 +101,7 @@ pub async fn run(
         &build_dir,
         &args,
         package.as_deref(),
+        None, // No cross-compilation support for run yet
         &toolchain_bin_dirs,
         output,
     )

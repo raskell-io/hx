@@ -70,7 +70,7 @@ pub async fn run(
 
     // Use native build if requested
     if native {
-        return run_native_build(&project, release, jobs, &toolchain, output).await;
+        return run_native_build(&project, release, jobs, target, &toolchain, output).await;
     }
 
     // Get GHC version early for plugin context
@@ -331,6 +331,7 @@ pub async fn test(
         &build_dir,
         pattern.as_deref(),
         package.as_deref(),
+        None, // No cross-compilation support for tests yet
         &toolchain_bin_dirs,
         output,
     )
@@ -360,6 +361,7 @@ async fn run_native_build(
     project: &Project,
     release: bool,
     jobs: Option<usize>,
+    target: Option<String>,
     toolchain: &Toolchain,
     output: &Output,
 ) -> Result<i32> {
@@ -434,6 +436,7 @@ async fn run_native_build(
         output_exe: Some(project.root.join(".hx/native-build").join(project.name())),
         output_lib: None,     // Only set for library projects
         native_linking: true, // Enable native linking with resolved packages
+        target,               // Cross-compilation target
     };
 
     // Create builder and run

@@ -22,7 +22,7 @@ pub use ide::{
 };
 pub use manifest::{
     BuildConfig, FormatConfig, LintConfig, Manifest, PluginConfig, PluginHookConfig, ProjectConfig,
-    ProjectKind, ToolchainConfig,
+    ProjectKind, StackageConfig, ToolchainConfig,
 };
 pub use project::{Project, WorkspacePackage, find_project_root};
 

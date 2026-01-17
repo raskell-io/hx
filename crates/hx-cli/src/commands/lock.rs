@@ -6,9 +6,9 @@ use hx_config::{LOCKFILE_FILENAME, Project, find_project_root};
 use hx_lock::{LockedPackage, Lockfile, WorkspacePackageInfo, parse_freeze_file};
 use hx_plugins::HookEvent;
 use hx_solver::{
-    Dependency, IndexOptions, MirrorOptions, Resolver, ResolverConfig, best_index_path,
+    Dependency, IndexOptions, MirrorOptions, Resolver, ResolverConfig, SnapshotId, best_index_path,
     compute_deps_fingerprint, index_is_current, load_cached_index, load_cached_resolution,
-    load_index, parse_cabal, save_index_cache, save_resolution_cache, update_index,
+    load_index, load_snapshot, parse_cabal, save_index_cache, save_resolution_cache, update_index,
 };
 use hx_toolchain::Toolchain;
 use hx_ui::{Output, Spinner};
@@ -220,11 +220,52 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
     }
     spinner.finish_success(format!("Found {} dependencies", all_deps.len()));
 
+    // Check for Stackage snapshot configuration
+    let snapshot_config = &project.manifest.stackage;
+    let snapshot = if let Some(snapshot_str) = &snapshot_config.snapshot {
+        let spinner = Spinner::new(&format!("Loading Stackage snapshot {}...", snapshot_str));
+        match SnapshotId::parse(snapshot_str) {
+            Ok(snapshot_id) => match load_snapshot(&snapshot_id, None).await {
+                Ok(snapshot) => {
+                    spinner.finish_success(format!(
+                        "Loaded snapshot {} ({} packages, GHC {})",
+                        snapshot_str,
+                        snapshot.packages.len(),
+                        snapshot.metadata.ghc_version
+                    ));
+                    Some((snapshot_str.clone(), snapshot))
+                }
+                Err(e) => {
+                    spinner.finish_error(format!("Failed to load snapshot: {}", e));
+                    if !snapshot_config.allow_newer {
+                        return Err(anyhow::anyhow!(
+                            "Snapshot {} could not be loaded and allow_newer is not set. \
+                             Either fix the snapshot or set [stackage].allow_newer = true",
+                            snapshot_str
+                        ));
+                    }
+                    output.warn("Continuing without snapshot constraints (allow_newer is set)");
+                    None
+                }
+            },
+            Err(e) => {
+                output.error(&format!("Invalid snapshot identifier '{}': {}", snapshot_str, e));
+                return Ok(3); // Config error
+            }
+        }
+    } else {
+        None
+    };
+
     // Compute fingerprint for dependencies (for resolution cache)
-    let deps_for_fingerprint: Vec<(String, String)> = all_deps
+    // Include snapshot name in fingerprint if configured
+    let mut deps_for_fingerprint: Vec<(String, String)> = all_deps
         .iter()
         .map(|d| (d.name.clone(), d.constraint.to_string()))
         .collect();
+    if let Some((ref snapshot_name, _)) = snapshot {
+        deps_for_fingerprint.push(("__snapshot__".to_string(), snapshot_name.clone()));
+    }
     let deps_fingerprint = compute_deps_fingerprint(&deps_for_fingerprint);
 
     // Skip cache if we're updating packages
@@ -334,6 +375,32 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
             }
         }
 
+        // Pin versions from Stackage snapshot if configured
+        if let Some((ref snapshot_name, ref snap)) = snapshot {
+            let mut pinned = 0;
+            for pkg in snap.packages.values() {
+                // Don't override packages being updated or already pinned
+                if !config.installed.contains_key(&pkg.name)
+                    && let Ok(version) = pkg.version.parse()
+                {
+                    config.installed.insert(pkg.name.clone(), version);
+                    pinned += 1;
+                }
+            }
+
+            // Also add extra_deps from config (overrides snapshot)
+            for (name, version_str) in &snapshot_config.extra_deps {
+                if let Ok(version) = version_str.parse() {
+                    config.installed.insert(name.clone(), version);
+                }
+            }
+
+            output.info(&format!(
+                "Pinning {} packages from Stackage snapshot {}",
+                pinned, snapshot_name
+            ));
+        }
+
         let resolver = Resolver::with_config(&index, config);
 
         let plan = resolver
@@ -361,6 +428,11 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
         toolchain.cabal.status.version().map(|v| v.to_string()),
     );
 
+    // Set Stackage snapshot if used
+    if let Some((ref snapshot_name, _)) = snapshot {
+        lockfile.set_snapshot(Some(snapshot_name.clone()));
+    }
+
     // Set workspace info if this is a workspace
     if project.is_workspace() {
         let workspace_packages = collect_workspace_packages(&project);
@@ -387,10 +459,17 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
             }
         }
 
+        // Determine the source - stackage if package came from snapshot, otherwise hackage
+        let source = if snapshot.as_ref().map_or(false, |(_, s)| s.packages.contains_key(&pkg.name)) {
+            "stackage".to_string()
+        } else {
+            "hackage".to_string()
+        };
+
         lockfile.add_package(LockedPackage {
             name: pkg.name.clone(),
             version: pkg.version.to_string(),
-            source: "hackage".to_string(),
+            source,
             hash: None,
         });
     }

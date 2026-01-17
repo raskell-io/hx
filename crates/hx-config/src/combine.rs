@@ -9,7 +9,7 @@
 
 use crate::{
     BuildConfig, FormatConfig, LintConfig, Manifest, PluginConfig, PluginHookConfig, ProjectConfig,
-    ToolchainConfig,
+    StackageConfig, ToolchainConfig,
 };
 
 /// Trait for combining configuration values.
@@ -45,6 +45,7 @@ impl Combine for Manifest {
         Self {
             project: self.project.combine(other.project),
             toolchain: self.toolchain.combine(other.toolchain),
+            stackage: self.stackage.combine(other.stackage),
             build: self.build.combine(other.build),
             format: self.format.combine(other.format),
             lint: self.lint.combine(other.lint),
@@ -81,6 +82,22 @@ impl Combine for ToolchainConfig {
             ghc: self.ghc.combine(other.ghc),
             cabal: self.cabal.combine(other.cabal),
             hls: self.hls.combine(other.hls),
+        }
+    }
+}
+
+impl Combine for StackageConfig {
+    fn combine(self, other: Self) -> Self {
+        Self {
+            snapshot: self.snapshot.combine(other.snapshot),
+            allow_newer: self.allow_newer || other.allow_newer,
+            extra_deps: {
+                let mut deps = self.extra_deps;
+                for (k, v) in other.extra_deps {
+                    deps.entry(k).or_insert(v);
+                }
+                deps
+            },
         }
     }
 }
