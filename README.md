@@ -113,13 +113,26 @@ hx lock                      # Generate/update hx.lock
 hx lock --update             # Update all dependencies
 hx sync                      # Build with locked dependencies
 hx fetch                     # Pre-fetch dependencies in parallel
+
 hx add text                  # Add a dependency
+hx add aeson ">=2.0"         # Add with version constraint
 hx add --dev hspec           # Add dev dependency
 hx rm text                   # Remove a dependency
 
-hx deps tree                 # Show dependency tree
+hx why text                  # Show why a package is a dependency
+hx outdated                  # Check for outdated dependencies
+hx outdated --direct         # Only show direct dependencies
+hx update                    # Update dependencies (minor/patch)
+hx update --major            # Allow major version updates
+hx update --dry-run          # Preview updates without applying
+hx update aeson text         # Update specific packages
+
+hx tree                      # Show dependency tree
+hx tree --depth 2            # Limit tree depth
+hx list                      # List all dependencies
+hx list --direct             # List direct dependencies only
+
 hx deps graph --format dot   # Generate Graphviz graph
-hx deps list --direct        # List direct dependencies only
 
 hx search aeson              # Search Hackage for packages
 hx audit                     # Check for vulnerabilities
