@@ -100,7 +100,11 @@ pub async fn run(cli: Cli) -> Result<i32> {
         Some(Commands::Sync { force }) => lock::sync(force, &output).await,
         Some(Commands::Clean { global }) => clean::run(global, &output).await,
         Some(Commands::Toolchain { command }) => toolchain::run(command, &output).await,
-        Some(Commands::Add { package, dev }) => deps::add(&package, dev, &output).await,
+        Some(Commands::Add {
+            package,
+            constraint,
+            dev,
+        }) => deps::add(&package, constraint.as_deref(), dev, &output).await,
         Some(Commands::Rm { package }) => deps::remove(&package, &output).await,
         Some(Commands::Completions { shell }) => completions::run(shell),
         Some(Commands::Upgrade {

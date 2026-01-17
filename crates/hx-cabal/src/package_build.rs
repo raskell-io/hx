@@ -501,6 +501,7 @@ fn copy_dir_recursive(from: &Path, to: &Path) -> std::io::Result<()> {
 }
 
 /// Generate a package registration file for ghc-pkg.
+#[allow(clippy::too_many_arguments)]
 fn generate_registration_file(
     path: &Path,
     name: &str,

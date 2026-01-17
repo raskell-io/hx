@@ -2,6 +2,9 @@
 //!
 //! A fast, opinionated, batteries-included toolchain for Haskell.
 
+// TODO: Fix these collapsible_if patterns throughout the codebase
+#![allow(clippy::collapsible_if)]
+
 use anyhow::Result;
 use clap::Parser;
 

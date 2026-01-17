@@ -169,10 +169,10 @@ impl PluginPaths {
             }
         }
 
-        if let Some(ref global) = self.global {
-            if global.exists() {
-                paths.push(global);
-            }
+        if let Some(ref global) = self.global
+            && global.exists()
+        {
+            paths.push(global);
         }
 
         paths
@@ -180,10 +180,10 @@ impl PluginPaths {
 }
 
 fn shellexpand(path: &str) -> String {
-    if path.starts_with("~/") {
-        if let Some(dirs) = directories::BaseDirs::new() {
-            return format!("{}{}", dirs.home_dir().display(), &path[1..]);
-        }
+    if path.starts_with("~/")
+        && let Some(dirs) = directories::BaseDirs::new()
+    {
+        return format!("{}{}", dirs.home_dir().display(), &path[1..]);
     }
     path.to_string()
 }

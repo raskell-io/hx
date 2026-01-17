@@ -21,7 +21,7 @@ pub async fn list(output: &Output) -> Result<i32> {
         return Ok(0);
     }
 
-    output.status("Plugins", &project.name().to_string());
+    output.status("Plugins", project.name());
 
     // Discover available plugins
     let plugins = discover_plugins(&config, &project_root)?;
@@ -60,7 +60,7 @@ pub async fn status(output: &Output) -> Result<i32> {
     // Convert config
     let config: PluginConfig = project.manifest.plugins.clone().into();
 
-    output.status("Plugin Status", &project.name().to_string());
+    output.status("Plugin Status", project.name());
 
     // Enabled status
     if config.enabled {

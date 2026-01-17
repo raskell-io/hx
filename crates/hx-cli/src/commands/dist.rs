@@ -110,9 +110,9 @@ fn strip_binary(binary_path: &Path, target: &str, output: &Output) -> Result<()>
         return Ok(());
     }
 
-    let strip_cmd = if target.contains("linux") && !target.contains("musl") {
-        "strip"
-    } else if target.contains("darwin") {
+    let strip_cmd = if target.contains("linux") && !target.contains("musl")
+        || target.contains("darwin")
+    {
         "strip"
     } else {
         // For cross-compilation, try target-prefixed strip

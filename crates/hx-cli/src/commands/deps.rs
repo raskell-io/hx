@@ -3,7 +3,7 @@
 use crate::cli::GraphFormat;
 use anyhow::Result;
 use hx_cabal::{CabalEditError, add_dependency, remove_dependency};
-use hx_config::{Project, find_project_root};
+use hx_config::{Manifest, Project, find_project_root};
 use hx_lock::Lockfile;
 use hx_ui::Output;
 use std::collections::{HashMap, HashSet};
@@ -11,7 +11,12 @@ use std::fs;
 use std::io::Write;
 
 /// Add a dependency to the project.
-pub async fn add(package: &str, _dev: bool, output: &Output) -> Result<i32> {
+pub async fn add(
+    package: &str,
+    version: Option<&str>,
+    _dev: bool,
+    output: &Output,
+) -> Result<i32> {
     // Find project root
     let project_root = match find_project_root(".") {
         Ok(root) => root,
@@ -33,18 +38,37 @@ pub async fn add(package: &str, _dev: bool, output: &Output) -> Result<i32> {
         }
     };
 
+    // Format display string
+    let display_pkg = if let Some(v) = version {
+        format!("{} {}", package, v)
+    } else {
+        package.to_string()
+    };
+
     output.status(
         "Adding",
         &format!(
             "{} to {}",
-            package,
+            display_pkg,
             cabal_file.file_name().unwrap().to_string_lossy()
         ),
     );
 
-    match add_dependency(&cabal_file, package, None) {
+    // Add to .cabal file
+    match add_dependency(&cabal_file, package, version) {
         Ok(()) => {
-            output.status("Added", package);
+            // Also update hx.toml dependencies
+            let manifest_path = project_root.join("hx.toml");
+            if let Ok(mut manifest) = Manifest::from_file(&manifest_path) {
+                let version_str = version.unwrap_or("*").to_string();
+                manifest.dependencies.insert(package.to_string(), version_str);
+                if let Err(e) = manifest.to_file(&manifest_path) {
+                    output.warn(&format!("Failed to update hx.toml: {}", e));
+                }
+            }
+
+            output.status("Added", &display_pkg);
+            output.info("Run `hx lock` to update the lockfile.");
             Ok(0)
         }
         Err(CabalEditError::DependencyExists(_)) => {
@@ -97,7 +121,17 @@ pub async fn remove(package: &str, output: &Output) -> Result<i32> {
 
     match remove_dependency(&cabal_file, package) {
         Ok(()) => {
+            // Also update hx.toml dependencies
+            let manifest_path = project_root.join("hx.toml");
+            if let Ok(mut manifest) = Manifest::from_file(&manifest_path) {
+                manifest.dependencies.remove(package);
+                if let Err(e) = manifest.to_file(&manifest_path) {
+                    output.warn(&format!("Failed to update hx.toml: {}", e));
+                }
+            }
+
             output.status("Removed", package);
+            output.info("Run `hx lock` to update the lockfile.");
             Ok(0)
         }
         Err(CabalEditError::DependencyNotFound(_)) => {

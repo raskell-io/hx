@@ -192,6 +192,9 @@ pub enum Commands {
         /// Package name
         package: String,
 
+        /// Version constraint (e.g., ">=1.0", "^2.0", "==1.2.3")
+        constraint: Option<String>,
+
         /// Add as a development dependency
         #[arg(long)]
         dev: bool,

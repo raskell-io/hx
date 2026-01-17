@@ -69,10 +69,10 @@ impl PackageBuildInfo {
             })
         };
 
-        if let Some(lib) = &self.library {
-            if check_tools(&lib.build_tools) {
-                return true;
-            }
+        if let Some(lib) = &self.library
+            && check_tools(&lib.build_tools)
+        {
+            return true;
         }
 
         for exe in &self.executables {

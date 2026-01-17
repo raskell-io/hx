@@ -2,7 +2,7 @@
 
 use dashmap::DashMap;
 use hx_core::{DiagnosticReport, GhcDiagnostic};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -85,7 +85,7 @@ impl ServerState {
     }
 
     /// Find workspace containing a file.
-    pub fn find_workspace(&self, file: &PathBuf) -> Option<Arc<WorkspaceState>> {
+    pub fn find_workspace(&self, file: &Path) -> Option<Arc<WorkspaceState>> {
         for entry in self.workspaces.iter() {
             if file.starts_with(entry.key()) {
                 return Some(entry.value().clone());

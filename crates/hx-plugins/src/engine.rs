@@ -226,10 +226,8 @@ impl PluginSystem for SteelEngine {
         match self.engine.run(call_code) {
             Ok(results) => {
                 // Try to get an exit code from the result
-                if let Some(result) = results.into_iter().next() {
-                    if let steel::SteelVal::IntV(code) = result {
-                        return Ok(code as i32);
-                    }
+                if let Some(steel::SteelVal::IntV(code)) = results.into_iter().next() {
+                    return Ok(code as i32);
                 }
                 Ok(0)
             }

@@ -168,11 +168,11 @@ mod shellexpand {
     use std::borrow::Cow;
 
     pub fn tilde(path: &str) -> Cow<'_, str> {
-        if path.starts_with("~/") {
-            if let Some(home) = directories::BaseDirs::new() {
-                let home_str = home.home_dir().to_string_lossy();
-                return Cow::Owned(format!("{}{}", home_str, &path[1..]));
-            }
+        if path.starts_with("~/")
+            && let Some(home) = directories::BaseDirs::new()
+        {
+            let home_str = home.home_dir().to_string_lossy();
+            return Cow::Owned(format!("{}{}", home_str, &path[1..]));
         }
         Cow::Borrowed(path)
     }

@@ -4,7 +4,7 @@ use crate::state::{ServerState, WorkspaceState};
 use hx_cabal::{diagnostic_flags, parse_ghc_json, parse_ghc_text, supports_json_diagnostics};
 use hx_core::{DiagnosticReport, DiagnosticSeverity, GhcDiagnostic, QuickFix};
 use hx_toolchain::Toolchain;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::Command;
@@ -107,7 +107,7 @@ impl HxLanguageServer {
     async fn publish_diagnostics(&self, uri: Url, diagnostics: Vec<GhcDiagnostic>) {
         let lsp_diags: Vec<Diagnostic> = diagnostics
             .iter()
-            .map(|d| ghc_to_lsp_diagnostic(d))
+            .map(ghc_to_lsp_diagnostic)
             .collect();
 
         self.client.publish_diagnostics(uri, lsp_diags, None).await;
@@ -163,10 +163,10 @@ impl LanguageServer for HxLanguageServer {
                     self.init_workspace(path).await;
                 }
             }
-        } else if let Some(root_uri) = params.root_uri {
-            if let Ok(path) = root_uri.to_file_path() {
-                self.init_workspace(path).await;
-            }
+        } else if let Some(root_uri) = params.root_uri
+            && let Ok(path) = root_uri.to_file_path()
+        {
+            self.init_workspace(path).await;
         }
 
         self.state.set_initialized(true).await;
@@ -237,8 +237,8 @@ impl LanguageServer for HxLanguageServer {
         for diag in diagnostics {
             if let Some(span) = &diag.span {
                 // Check if diagnostic overlaps with requested range
-                if span.start_line as u32 <= range.end.line + 1
-                    && span.end_line as u32 >= range.start.line + 1
+                if span.start_line <= range.end.line + 1
+                    && span.end_line > range.start.line
                 {
                     // Add quick fixes as code actions
                     for fix in &diag.fixes {
@@ -359,7 +359,7 @@ fn quick_fix_to_code_action(fix: &QuickFix, uri: &Url, diag: &GhcDiagnostic) -> 
 }
 
 /// Check if a path is a Haskell source file.
-fn is_haskell_file(path: &PathBuf) -> bool {
+fn is_haskell_file(path: &Path) -> bool {
     path.extension()
         .map(|ext| ext == "hs" || ext == "lhs")
         .unwrap_or(false)

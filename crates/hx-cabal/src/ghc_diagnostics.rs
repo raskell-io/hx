@@ -239,38 +239,39 @@ fn generate_quick_fixes(
     let mut fixes = Vec::new();
 
     // Pattern: "Variable not in scope: foo"
-    if message.contains("Variable not in scope:") || message.contains("Not in scope:") {
-        if let Some(var_name) = extract_identifier(message) {
-            fixes.push(QuickFix::with_command(
-                format!("Search for '{}'", var_name),
-                format!("hx search {}", var_name),
-            ));
-        }
+    if (message.contains("Variable not in scope:") || message.contains("Not in scope:"))
+        && let Some(var_name) = extract_identifier(message)
+    {
+        fixes.push(QuickFix::with_command(
+            format!("Search for '{}'", var_name),
+            format!("hx search {}", var_name),
+        ));
     }
 
     // Pattern: "Could not find module 'Foo'"
-    if message.contains("Could not find module") || message.contains("Could not load module") {
-        if let Some(module_name) = extract_quoted(message) {
-            // Guess package name from module
-            let package_guess = module_to_package(&module_name);
-            fixes.push(QuickFix::with_command(
-                format!("Add '{}' as a dependency", package_guess),
-                format!("hx add {}", package_guess),
-            ));
-        }
+    if (message.contains("Could not find module") || message.contains("Could not load module"))
+        && let Some(module_name) = extract_quoted(message)
+    {
+        // Guess package name from module
+        let package_guess = module_to_package(&module_name);
+        fixes.push(QuickFix::with_command(
+            format!("Add '{}' as a dependency", package_guess),
+            format!("hx add {}", package_guess),
+        ));
     }
 
     // Pattern: "The import of '...' is redundant"
-    if message.contains("is redundant") && message.contains("import") {
-        if let Some(span) = span {
-            fixes.push(
-                QuickFix::with_edit(
-                    "Remove redundant import".to_string(),
-                    TextEdit::delete(span.clone()),
-                )
-                .preferred(),
-            );
-        }
+    if message.contains("is redundant")
+        && message.contains("import")
+        && let Some(span) = span
+    {
+        fixes.push(
+            QuickFix::with_edit(
+                "Remove redundant import".to_string(),
+                TextEdit::delete(span.clone()),
+            )
+            .preferred(),
+        );
     }
 
     // Pattern: "Defined but not used"
@@ -298,13 +299,13 @@ fn generate_quick_fixes(
     }
 
     // Pattern: "No instance for"
-    if message.contains("No instance for") {
-        if let Some(constraint) = extract_parenthesized(message) {
-            fixes.push(QuickFix::suggestion(format!(
-                "Add constraint '{}' to type signature",
-                constraint
-            )));
-        }
+    if message.contains("No instance for")
+        && let Some(constraint) = extract_parenthesized(message)
+    {
+        fixes.push(QuickFix::suggestion(format!(
+            "Add constraint '{}' to type signature",
+            constraint
+        )));
     }
 
     // Pattern: "Ambiguous type variable"

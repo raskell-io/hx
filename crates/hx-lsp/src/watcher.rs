@@ -6,7 +6,7 @@
 #![allow(dead_code)]
 
 use notify_debouncer_mini::{DebouncedEventKind, Debouncer, new_debouncer};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, channel};
 use std::time::Duration;
 use tracing::{debug, warn};
@@ -37,7 +37,7 @@ pub struct FileWatcher {
 
 impl FileWatcher {
     /// Create a new file watcher for a directory.
-    pub fn new(root: &PathBuf, debounce_ms: u64) -> anyhow::Result<Self> {
+    pub fn new(root: &Path, debounce_ms: u64) -> anyhow::Result<Self> {
         let (tx, rx) = channel();
 
         let mut debouncer = new_debouncer(
@@ -64,10 +64,10 @@ impl FileWatcher {
                             })
                             .collect();
 
-                        if !changes.is_empty() {
-                            if let Err(e) = tx.send(changes) {
-                                warn!("Failed to send file change events: {}", e);
-                            }
+                        if !changes.is_empty()
+                            && let Err(e) = tx.send(changes)
+                        {
+                            warn!("Failed to send file change events: {}", e);
                         }
                     }
                     Err(e) => {
@@ -102,7 +102,7 @@ impl FileWatcher {
 }
 
 /// Check if a path is a Haskell source file.
-fn is_haskell_file(path: &PathBuf) -> bool {
+fn is_haskell_file(path: &Path) -> bool {
     path.extension()
         .map(|ext| ext == "hs" || ext == "lhs")
         .unwrap_or(false)
