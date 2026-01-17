@@ -21,7 +21,7 @@ pub async fn run(
     let project = Project::load(&project_root)?;
 
     // Check toolchain requirements
-    let toolchain = Toolchain::detect().await;
+    let mut toolchain = Toolchain::detect().await;
     if let Err(e) = ensure_toolchain(
         &toolchain,
         project.manifest.toolchain.ghc.as_deref(),
@@ -32,6 +32,11 @@ pub async fn run(
     {
         output.print_error(&e);
         return Ok(4); // Toolchain error exit code
+    }
+
+    // Re-detect toolchain after potential installation to get updated paths
+    if !toolchain.ghc.status.is_found() || !toolchain.cabal.status.is_found() {
+        toolchain = Toolchain::detect().await;
     }
 
     // Validate package selection for workspaces
@@ -116,7 +121,7 @@ pub async fn repl(policy: AutoInstallPolicy, output: &Output) -> Result<i32> {
     let project = Project::load(&project_root)?;
 
     // Check toolchain requirements
-    let toolchain = Toolchain::detect().await;
+    let mut toolchain = Toolchain::detect().await;
     if let Err(e) = ensure_toolchain(
         &toolchain,
         project.manifest.toolchain.ghc.as_deref(),
@@ -127,6 +132,11 @@ pub async fn repl(policy: AutoInstallPolicy, output: &Output) -> Result<i32> {
     {
         output.print_error(&e);
         return Ok(4); // Toolchain error exit code
+    }
+
+    // Re-detect toolchain after potential installation to get updated paths
+    if !toolchain.ghc.status.is_found() || !toolchain.cabal.status.is_found() {
+        toolchain = Toolchain::detect().await;
     }
 
     output.status("Starting", "REPL");
