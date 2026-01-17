@@ -165,3 +165,7 @@ tracing::debug!("Build options: {:?}", options);
 3. **Use appropriate levels** - Debug for details, Info for progress
 4. **Include relevant fields** - Package names, versions, paths
 5. **Don't log user-facing messages** - Use hx-ui instead
+
+## Documentation
+
+- [Tracing Spans](./spans.md) - Detailed guide to using spans

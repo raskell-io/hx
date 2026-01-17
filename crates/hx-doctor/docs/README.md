@@ -213,3 +213,7 @@ if !project_root.join("README.md").exists() {
         .with_fix(Fix::new("Create a README for your project")));
 }
 ```
+
+## Documentation
+
+- [Diagnostic Checks](./checks.md) - Details on all checks performed

@@ -288,3 +288,8 @@ fetch_packages(&["aeson-2.2.1.0", "text-2.1"], &options)?;
 // Get cache location
 let cache = default_package_cache_dir()?;
 ```
+
+## Documentation
+
+- [Version Constraints](./constraints.md) - PVP versioning and constraint syntax
+- [Dependency Resolution](./resolution.md) - How the resolver works

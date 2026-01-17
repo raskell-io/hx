@@ -215,3 +215,8 @@ Enable debug logging:
 ```bash
 RUST_LOG=hx_lsp=debug hx lsp
 ```
+
+## Documentation
+
+- [LSP Protocol](./protocol.md) - Protocol implementation details
+- [Editor Setup](./editor-setup.md) - Configuration for VS Code, Neovim, Emacs, etc.

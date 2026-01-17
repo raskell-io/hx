@@ -327,3 +327,8 @@ if let Some(ref mut h) = hooks {
 3. **Fail early** - Use `continue_on_error = false` for CI
 4. **Idempotent scripts** - Hooks may run multiple times
 5. **Exit codes matter** - Non-zero = failure
+
+## Documentation
+
+- [Steel API Reference](./steel-api.md) - Complete API reference for hx functions
+- [Custom Commands](./custom-commands.md) - Creating custom hx commands

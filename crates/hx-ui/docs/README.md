@@ -241,3 +241,8 @@ fn main() {
 4. **Use `error()` for failures** - With fix suggestions
 5. **Use `verbose()` for debug** - Cache hits, timing
 6. **Respect NO_COLOR** - Don't force colors
+
+## Documentation
+
+- [Progress Indicators](./progress.md) - Spinners and progress bars
+- [Terminal Styling](./styling.md) - Colors and formatting

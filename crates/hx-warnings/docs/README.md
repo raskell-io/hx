@@ -190,3 +190,7 @@ fn process_config(config: &Config) {
     }
 }
 ```
+
+## Documentation
+
+- [Error Chain Formatting](./error-chain.md) - Formatting nested errors
