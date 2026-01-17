@@ -206,6 +206,12 @@ pub enum Commands {
         package: String,
     },
 
+    /// Show why a package is a dependency
+    Why {
+        /// Package name to trace
+        package: String,
+    },
+
     /// Generate shell completions
     Completions {
         /// Shell to generate completions for

@@ -1,14 +1,16 @@
-//! Dependency management commands (add, rm, graph).
+//! Dependency management commands (add, rm, why, graph).
 
 use crate::cli::GraphFormat;
 use anyhow::Result;
 use hx_cabal::{CabalEditError, add_dependency, remove_dependency};
 use hx_config::{Manifest, Project, find_project_root};
 use hx_lock::Lockfile;
+use hx_solver::{IndexOptions, best_index_path, load_index};
 use hx_ui::Output;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::io::Write;
+use std::path::Path;
 
 /// Add a dependency to the project.
 pub async fn add(
@@ -147,6 +149,283 @@ pub async fn remove(package: &str, output: &Output) -> Result<i32> {
             Ok(1)
         }
     }
+}
+
+/// Show why a package is a dependency.
+pub async fn why(package: &str, output: &Output) -> Result<i32> {
+    // Find project root
+    let project_root = match find_project_root(".") {
+        Ok(root) => root,
+        Err(_) => {
+            output.error("Not in an hx project (no hx.toml found)");
+            output.info("Run `hx init` to create a new project first.");
+            return Ok(3);
+        }
+    };
+
+    let project = Project::load(&project_root)?;
+
+    // Load lockfile to get dependencies
+    let lockfile_path = project.lockfile_path();
+    let lockfile = match Lockfile::from_file(&lockfile_path) {
+        Ok(lf) => lf,
+        Err(_) => {
+            output.error("No lockfile found");
+            output.info("Run `hx lock` to generate a lockfile first.");
+            return Ok(3);
+        }
+    };
+
+    // Check if the package is in the lockfile
+    let target_pkg = lockfile.packages.iter().find(|p| p.name == package);
+    if target_pkg.is_none() {
+        output.error(&format!("Package '{}' is not in the lockfile", package));
+        output.info("This package is not a dependency of your project.");
+        return Ok(1);
+    }
+    let target_pkg = target_pkg.unwrap();
+
+    // Get direct dependencies from .cabal file
+    let cabal_file = find_cabal_file(&project_root);
+    let direct_deps = if let Some(cabal_path) = cabal_file {
+        parse_direct_deps(&cabal_path)
+    } else {
+        // Fall back to hx.toml dependencies
+        project.manifest.dependencies.keys().cloned().collect()
+    };
+
+    // Check if it's a direct dependency
+    if direct_deps.contains(package) {
+        println!("{} {}", package, target_pkg.version);
+        println!("  └── (direct dependency)");
+        return Ok(0);
+    }
+
+    // Try to build dependency graph from Hackage index
+    let locked_names: Vec<String> = lockfile.packages.iter().map(|p| p.name.clone()).collect();
+
+    // Load index with filtering for efficiency
+    let dep_graph = match build_dep_graph_from_index(&lockfile, &locked_names) {
+        Ok(graph) => graph,
+        Err(e) => {
+            output.warn(&format!("Could not load Hackage index: {}", e));
+            // Fall back to showing it's a transitive dependency
+            println!("{} {}", package, target_pkg.version);
+            println!("  └── (transitive dependency)");
+            output.info("Run `cabal update` to download the package index for detailed paths.");
+            return Ok(0);
+        }
+    };
+
+    // Find all paths from direct dependencies to the target package
+    let paths = find_dependency_paths(&direct_deps, package, &dep_graph);
+
+    // Display the result
+    println!("{} {}", package, target_pkg.version);
+
+    if paths.is_empty() {
+        println!("  └── (transitive dependency, path unknown)");
+    } else {
+        for (i, path) in paths.iter().enumerate() {
+            let is_last = i == paths.len() - 1;
+            let prefix = if is_last { "└── " } else { "├── " };
+
+            // Format the path: direct_dep -> intermediate -> ... -> target
+            let path_str = path
+                .iter()
+                .map(|p| {
+                    let version = dep_graph.versions.get(p).map(|v| v.as_str()).unwrap_or("?");
+                    if direct_deps.contains(p) {
+                        format!("{} {} (direct)", p, version)
+                    } else {
+                        format!("{} {}", p, version)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(" → ");
+
+            println!("  {}{}", prefix, path_str);
+        }
+    }
+
+    Ok(0)
+}
+
+/// Parse direct dependencies from a .cabal file.
+fn parse_direct_deps(cabal_path: &Path) -> HashSet<String> {
+    let mut deps = HashSet::new();
+
+    if let Ok(content) = fs::read_to_string(cabal_path) {
+        // Simple parser: look for build-depends lines
+        let mut in_build_depends = false;
+
+        for line in content.lines() {
+            let trimmed = line.trim().to_lowercase();
+
+            if trimmed.starts_with("build-depends:") {
+                in_build_depends = true;
+                // Parse deps on the same line
+                if let Some(deps_part) = line.split(':').nth(1) {
+                    for dep in parse_dep_list(deps_part) {
+                        deps.insert(dep);
+                    }
+                }
+            } else if in_build_depends {
+                // Check if this is a continuation line
+                if line.starts_with(' ') || line.starts_with('\t') {
+                    for dep in parse_dep_list(line) {
+                        deps.insert(dep);
+                    }
+                } else if !trimmed.is_empty() {
+                    in_build_depends = false;
+                }
+            }
+        }
+    }
+
+    deps
+}
+
+/// Parse a comma-separated list of dependencies.
+fn parse_dep_list(s: &str) -> Vec<String> {
+    s.split(',')
+        .filter_map(|part| {
+            let part = part.trim();
+            // Extract package name (before any version constraint)
+            let name = part
+                .split(|c: char| c.is_whitespace() || c == '>' || c == '<' || c == '=' || c == '^')
+                .next()
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())?;
+            Some(name.to_string())
+        })
+        .collect()
+}
+
+/// Dependency graph with version information.
+struct WhyDepGraph {
+    /// Package name -> version
+    versions: HashMap<String, String>,
+    /// Package name -> its dependencies (used for forward traversal)
+    #[allow(dead_code)]
+    deps: HashMap<String, Vec<String>>,
+    /// Reverse map: package name -> packages that depend on it
+    reverse_deps: HashMap<String, Vec<String>>,
+}
+
+/// Build dependency graph from Hackage index.
+fn build_dep_graph_from_index(
+    lockfile: &Lockfile,
+    filter_packages: &[String],
+) -> Result<WhyDepGraph> {
+    let index_path = best_index_path().ok_or_else(|| anyhow::anyhow!("Hackage index not found"))?;
+
+    let options = IndexOptions {
+        filter_packages: filter_packages.to_vec(),
+        skip_errors: true,
+        show_progress: false,
+        ..Default::default()
+    };
+
+    let index = load_index(&index_path, &options)?;
+
+    let mut versions = HashMap::new();
+    let mut deps: HashMap<String, Vec<String>> = HashMap::new();
+    let mut reverse_deps: HashMap<String, Vec<String>> = HashMap::new();
+
+    // Build maps from lockfile packages and their dependencies
+    for pkg in &lockfile.packages {
+        versions.insert(pkg.name.clone(), pkg.version.clone());
+        deps.entry(pkg.name.clone()).or_default();
+        reverse_deps.entry(pkg.name.clone()).or_default();
+    }
+
+    // Look up dependencies for each locked package from the index
+    for pkg in &lockfile.packages {
+        if let Some(index_pkg) = index.packages.get(&pkg.name) {
+            // Try to find the exact version, or the closest one
+            let version: Option<hx_solver::Version> = pkg.version.parse().ok();
+            let pkg_version = version
+                .as_ref()
+                .and_then(|v| index_pkg.get_version(v))
+                .or_else(|| index_pkg.versions.values().next());
+
+            if let Some(pv) = pkg_version {
+                for dep in &pv.dependencies {
+                    // Only track dependencies that are in our lockfile
+                    if versions.contains_key(&dep.name) {
+                        deps.entry(pkg.name.clone())
+                            .or_default()
+                            .push(dep.name.clone());
+                        reverse_deps
+                            .entry(dep.name.clone())
+                            .or_default()
+                            .push(pkg.name.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(WhyDepGraph {
+        versions,
+        deps,
+        reverse_deps,
+    })
+}
+
+/// Find all paths from direct dependencies to the target package.
+fn find_dependency_paths(
+    direct_deps: &HashSet<String>,
+    target: &str,
+    graph: &WhyDepGraph,
+) -> Vec<Vec<String>> {
+    let mut paths = Vec::new();
+
+    // Use BFS from target back to direct dependencies via reverse_deps
+    let mut queue: VecDeque<Vec<String>> = VecDeque::new();
+    queue.push_back(vec![target.to_string()]);
+
+    let mut visited_paths: HashSet<String> = HashSet::new();
+
+    while let Some(current_path) = queue.pop_front() {
+        let current = current_path.last().unwrap();
+
+        // If we reached a direct dependency, we found a path
+        if direct_deps.contains(current) {
+            // Reverse the path so it goes from direct dep to target
+            let mut path = current_path.clone();
+            path.reverse();
+            let path_key = path.join("->");
+            if !visited_paths.contains(&path_key) {
+                visited_paths.insert(path_key);
+                paths.push(path);
+            }
+            continue;
+        }
+
+        // Explore reverse dependencies (packages that depend on current)
+        if let Some(rdeps) = graph.reverse_deps.get(current) {
+            for rdep in rdeps {
+                // Avoid cycles
+                if !current_path.contains(rdep) {
+                    let mut new_path = current_path.clone();
+                    new_path.push(rdep.clone());
+
+                    // Limit path length to avoid explosion
+                    if new_path.len() <= 10 {
+                        queue.push_back(new_path);
+                    }
+                }
+            }
+        }
+    }
+
+    // Sort by path length (shorter paths first) and limit results
+    paths.sort_by_key(|p| p.len());
+    paths.truncate(5); // Show at most 5 paths
+
+    paths
 }
 
 /// Show dependency graph.
