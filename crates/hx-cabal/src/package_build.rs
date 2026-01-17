@@ -3,7 +3,7 @@
 //! This module handles building a single Haskell dependency package from source
 //! using direct GHC invocation, without relying on Cabal.
 
-use crate::native::GhcConfig;
+use crate::native::{CCompileOptions, CCompilerConfig, GhcConfig, compile_c_sources};
 use hx_core::{CommandRunner, Error, Fix, Result};
 use hx_solver::{ExtractedPackage, LibraryConfig};
 use hx_ui::Output;
@@ -17,6 +17,8 @@ use tracing::{debug, info};
 pub struct PackageBuildConfig {
     /// GHC configuration
     pub ghc: GhcConfig,
+    /// C compiler configuration (None to auto-detect when needed)
+    pub cc: Option<CCompilerConfig>,
     /// Build output directory
     pub build_dir: PathBuf,
     /// Installation directory (for final artifacts)
@@ -35,6 +37,7 @@ impl Default for PackageBuildConfig {
     fn default() -> Self {
         Self {
             ghc: GhcConfig::default(),
+            cc: None,
             build_dir: PathBuf::from(".hx/pkg-build"),
             install_dir: PathBuf::from(".hx/pkg-install"),
             dependency_ids: Vec::new(),
@@ -62,8 +65,10 @@ pub struct PackageBuildResult {
     pub success: bool,
     /// Build duration
     pub duration: Duration,
-    /// Number of modules compiled
+    /// Number of Haskell modules compiled
     pub modules_compiled: usize,
+    /// Number of C source files compiled
+    pub c_sources_compiled: usize,
     /// Warnings during build
     pub warnings: Vec<String>,
     /// Errors during build
@@ -135,6 +140,162 @@ pub async fn build_package(
         source: e,
     })?;
 
+    // Initialize collections for warnings and errors
+    let mut all_warnings = Vec::new();
+    let mut all_errors = Vec::new();
+
+    // Compile C sources if present
+    let c_sources: Vec<PathBuf> = lib_config
+        .c_sources
+        .iter()
+        .map(PathBuf::from)
+        .collect();
+
+    let mut c_object_files = Vec::new();
+    let c_sources_compiled = c_sources.len();
+
+    if !c_sources.is_empty() {
+        if config.verbose {
+            output.info(&format!(
+                "Compiling {} C source files for {}",
+                c_sources.len(),
+                name
+            ));
+        }
+
+        // Get or detect C compiler
+        let cc = match &config.cc {
+            Some(cc) => cc.clone(),
+            None => CCompilerConfig::detect().await?,
+        };
+
+        let c_output_dir = o_dir.join("cbits");
+
+        let c_options = CCompileOptions {
+            include_dirs: lib_config
+                .include_dirs
+                .iter()
+                .map(|s| package.source_dir.join(s))
+                .collect(),
+            defines: Vec::new(),
+            optimization: config.optimization.to_string(),
+            extra_flags: Vec::new(), // TODO: Parse cc-options from cabal file
+            pic: true,
+            output_dir: c_output_dir.clone(),
+            verbose: config.verbose,
+        };
+
+        let c_result = compile_c_sources(&cc, &c_sources, &c_options, &package.source_dir).await?;
+
+        if !c_result.success {
+            return Ok(PackageBuildResult {
+                name: name.clone(),
+                version: version.clone(),
+                package_id,
+                library_path: None,
+                registration_file: PathBuf::new(),
+                success: false,
+                duration: start.elapsed(),
+                modules_compiled: 0,
+                c_sources_compiled,
+                warnings: c_result.warnings,
+                errors: c_result.errors,
+            });
+        }
+
+        c_object_files = c_result.object_files;
+
+        if config.verbose && !c_result.warnings.is_empty() {
+            for warning in &c_result.warnings {
+                output.warn(warning);
+            }
+        }
+    }
+
+    // Run preprocessors if needed
+    let src_dirs: Vec<PathBuf> = if lib_config.hs_source_dirs.is_empty() {
+        vec![package.source_dir.clone()]
+    } else {
+        lib_config
+            .hs_source_dirs
+            .iter()
+            .map(|d| package.source_dir.join(d))
+            .collect()
+    };
+
+    let preproc_sources = crate::preprocessor::detect_preprocessors(&src_dirs);
+    let mut generated_dir: Option<PathBuf> = None;
+
+    if !preproc_sources.is_empty() {
+        if config.verbose {
+            output.info(&format!(
+                "Preprocessing {} files for {}",
+                preproc_sources.total_files(),
+                name
+            ));
+        }
+
+        // Check preprocessor availability (fail gracefully if missing)
+        match crate::preprocessor::check_availability(&preproc_sources).await {
+            Ok(_) => {
+                let gen_dir = pkg_build_dir.join("generated");
+                let preproc_config = crate::preprocessor::PreprocessorConfig {
+                    include_dirs: lib_config
+                        .include_dirs
+                        .iter()
+                        .map(|s| package.source_dir.join(s))
+                        .collect(),
+                    cpp_defines: Vec::new(),
+                    output_dir: gen_dir.clone(),
+                    verbose: config.verbose,
+                    cc_options: lib_config.cpp_options.clone(),
+                    ld_options: Vec::new(),
+                };
+
+                match crate::preprocessor::preprocess_all(
+                    &preproc_sources,
+                    &preproc_config,
+                    &config.ghc.ghc_path,
+                )
+                .await
+                {
+                    Ok(results) => {
+                        for result in &results {
+                            all_warnings.extend(result.warnings.clone());
+                        }
+                        if gen_dir.exists() {
+                            generated_dir = Some(gen_dir);
+                        }
+                    }
+                    Err(e) => {
+                        return Ok(PackageBuildResult {
+                            name: name.clone(),
+                            version: version.clone(),
+                            package_id,
+                            library_path: None,
+                            registration_file: PathBuf::new(),
+                            success: false,
+                            duration: start.elapsed(),
+                            modules_compiled: 0,
+                            c_sources_compiled,
+                            warnings: all_warnings,
+                            errors: vec![format!("Preprocessing failed: {}", e)],
+                        });
+                    }
+                }
+            }
+            Err(e) => {
+                // Log warning but continue - some packages list build-tools they don't actually need
+                if config.verbose {
+                    output.warn(&format!(
+                        "Preprocessors not available for {}: {}",
+                        name, e
+                    ));
+                }
+            }
+        }
+    }
+
     // Get all modules to compile
     let modules = collect_modules(lib_config);
     let module_count = modules.len();
@@ -144,13 +305,20 @@ pub async fn build_package(
     }
 
     // Compile each module
-    let mut all_warnings = Vec::new();
-    let mut all_errors = Vec::new();
     let mut object_files = Vec::new();
+    let extra_src_dirs: Vec<PathBuf> = generated_dir.iter().cloned().collect();
 
     for module in &modules {
-        let result =
-            compile_package_module(module, package, lib_config, config, &hi_dir, &o_dir).await;
+        let result = compile_package_module(
+            module,
+            package,
+            lib_config,
+            config,
+            &hi_dir,
+            &o_dir,
+            &extra_src_dirs,
+        )
+        .await;
 
         all_warnings.extend(result.warnings);
 
@@ -165,6 +333,7 @@ pub async fn build_package(
                 success: false,
                 duration: start.elapsed(),
                 modules_compiled: object_files.len(),
+                c_sources_compiled,
                 warnings: all_warnings,
                 errors: all_errors,
             });
@@ -175,12 +344,16 @@ pub async fn build_package(
         }
     }
 
-    // Create static library
+    // Create static library (including C object files)
     let lib_name = format!("libHS{}-{}.a", name, version);
     let lib_path = lib_install_dir.join(&lib_name);
 
-    if !object_files.is_empty() {
-        create_library(&lib_path, &object_files, config.verbose).await?;
+    // Combine Haskell and C object files
+    let mut all_object_files = object_files.clone();
+    all_object_files.extend(c_object_files);
+
+    if !all_object_files.is_empty() {
+        create_library(&lib_path, &all_object_files, config.verbose).await?;
     }
 
     // Copy interface files to install directory
@@ -210,6 +383,7 @@ pub async fn build_package(
         success: true,
         duration: start.elapsed(),
         modules_compiled: module_count,
+        c_sources_compiled,
         warnings: all_warnings,
         errors: all_errors,
     })
@@ -263,12 +437,13 @@ async fn compile_package_module(
     config: &PackageBuildConfig,
     hi_dir: &Path,
     o_dir: &Path,
+    extra_src_dirs: &[PathBuf],
 ) -> ModuleCompileResult {
     debug!("Compiling module: {} in {}", module_name, package.name);
 
     // Convert module name to path
     let module_path = module_name.replace('.', "/");
-    let source_file = find_module_source(package, lib_config, &module_path);
+    let source_file = find_module_source(package, lib_config, &module_path, extra_src_dirs);
 
     let Some(source_file) = source_file else {
         return ModuleCompileResult {
@@ -296,6 +471,11 @@ async fn compile_package_module(
     for src_dir in &src_dirs {
         let full_path = package.source_dir.join(src_dir);
         args.push(format!("-i{}", full_path.display()));
+    }
+
+    // Add extra source directories (e.g., generated preprocessor output)
+    for extra_dir in extra_src_dirs {
+        args.push(format!("-i{}", extra_dir.display()));
     }
 
     // Add package databases
@@ -381,6 +561,7 @@ fn find_module_source(
     package: &ExtractedPackage,
     lib_config: &LibraryConfig,
     module_path: &str,
+    extra_dirs: &[PathBuf],
 ) -> Option<PathBuf> {
     let src_dirs = if lib_config.hs_source_dirs.is_empty() {
         vec![".".to_string()]
@@ -390,12 +571,23 @@ fn find_module_source(
 
     let extensions = ["hs", "lhs"];
 
+    // Search in package source directories
     for src_dir in &src_dirs {
         for ext in &extensions {
             let path = package
                 .source_dir
                 .join(src_dir)
                 .join(format!("{}.{}", module_path, ext));
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+
+    // Search in extra directories (e.g., generated preprocessor output)
+    for extra_dir in extra_dirs {
+        for ext in &extensions {
+            let path = extra_dir.join(format!("{}.{}", module_path, ext));
             if path.exists() {
                 return Some(path);
             }

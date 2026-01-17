@@ -48,6 +48,15 @@ pub struct PackageBuildInfo {
     pub executables: Vec<ExecutableConfig>,
     /// Cabal version specification
     pub cabal_version: Option<String>,
+    /// Custom Setup.hs configuration (for build-type: Custom)
+    pub custom_setup: Option<CustomSetupConfig>,
+}
+
+/// Configuration for custom Setup.hs dependencies.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CustomSetupConfig {
+    /// Dependencies required to build Setup.hs
+    pub setup_depends: Vec<Dependency>,
 }
 
 impl PackageBuildInfo {
@@ -57,15 +66,15 @@ impl PackageBuildInfo {
     }
 
     /// Check if this package requires preprocessors we don't support.
+    ///
+    /// We now support alex, happy, and hsc2hs natively. Only c2hs and cpphs
+    /// are still unsupported.
     pub fn needs_unsupported_preprocessors(&self) -> bool {
         let check_tools = |tools: &[String]| {
             tools.iter().any(|t| {
                 let t = t.to_lowercase();
-                t.contains("alex")
-                    || t.contains("happy")
-                    || t.contains("hsc2hs")
-                    || t.contains("c2hs")
-                    || t.contains("cpphs")
+                // c2hs and cpphs are still unsupported
+                t.contains("c2hs") || t.contains("cpphs")
             })
         };
 
@@ -82,6 +91,36 @@ impl PackageBuildInfo {
         }
 
         false
+    }
+
+    /// Get the list of preprocessors needed by this package.
+    pub fn needed_preprocessors(&self) -> Vec<&'static str> {
+        let mut preprocessors = Vec::new();
+
+        let collect_from_tools = |tools: &[String], preprocessors: &mut Vec<&'static str>| {
+            for tool in tools {
+                let t = tool.to_lowercase();
+                if t.contains("alex") && !preprocessors.contains(&"alex") {
+                    preprocessors.push("alex");
+                }
+                if t.contains("happy") && !preprocessors.contains(&"happy") {
+                    preprocessors.push("happy");
+                }
+                if t.contains("hsc2hs") && !preprocessors.contains(&"hsc2hs") {
+                    preprocessors.push("hsc2hs");
+                }
+            }
+        };
+
+        if let Some(lib) = &self.library {
+            collect_from_tools(&lib.build_tools, &mut preprocessors);
+        }
+
+        for exe in &self.executables {
+            collect_from_tools(&exe.build_tools, &mut preprocessors);
+        }
+
+        preprocessors
     }
 
     /// Get all dependencies for building the library.
@@ -189,6 +228,7 @@ pub fn parse_cabal_full(content: &str) -> PackageBuildInfo {
     let mut current_section = Section::TopLevel;
     let mut current_library = LibraryConfig::default();
     let mut current_executable: Option<ExecutableConfig> = None;
+    let mut current_custom_setup = CustomSetupConfig::default();
     let mut field_buffer = FieldBuffer::new();
 
     for line in content.lines() {
@@ -208,6 +248,7 @@ pub fn parse_cabal_full(content: &str) -> PackageBuildInfo {
                 &mut info,
                 &mut current_library,
                 &mut current_executable,
+                &mut current_custom_setup,
             );
 
             // Save current section data
@@ -218,6 +259,11 @@ pub fn parse_cabal_full(content: &str) -> PackageBuildInfo {
                 Section::Executable(_) => {
                     if let Some(exe) = current_executable.take() {
                         info.executables.push(exe);
+                    }
+                }
+                Section::CustomSetup => {
+                    if !current_custom_setup.setup_depends.is_empty() {
+                        info.custom_setup = Some(std::mem::take(&mut current_custom_setup));
                     }
                 }
                 _ => {}
@@ -243,6 +289,7 @@ pub fn parse_cabal_full(content: &str) -> PackageBuildInfo {
                 &mut info,
                 &mut current_library,
                 &mut current_executable,
+                &mut current_custom_setup,
             );
             // Start new field
             field_buffer.start(key, value);
@@ -259,6 +306,7 @@ pub fn parse_cabal_full(content: &str) -> PackageBuildInfo {
         &mut info,
         &mut current_library,
         &mut current_executable,
+        &mut current_custom_setup,
     );
 
     // Save final section
@@ -269,6 +317,11 @@ pub fn parse_cabal_full(content: &str) -> PackageBuildInfo {
         Section::Executable(_) => {
             if let Some(exe) = current_executable {
                 info.executables.push(exe);
+            }
+        }
+        Section::CustomSetup => {
+            if !current_custom_setup.setup_depends.is_empty() {
+                info.custom_setup = Some(current_custom_setup);
             }
         }
         _ => {}
@@ -328,6 +381,7 @@ fn flush_field(
     info: &mut PackageBuildInfo,
     library: &mut LibraryConfig,
     executable: &mut Option<ExecutableConfig>,
+    custom_setup: &mut CustomSetupConfig,
 ) {
     let Some((key, value)) = buffer.take() else {
         return;
@@ -345,7 +399,17 @@ fn flush_field(
                 apply_executable_field(exe, &key, &value);
             }
         }
+        Section::CustomSetup => {
+            apply_custom_setup_field(custom_setup, &key, &value);
+        }
         Section::Other => {}
+    }
+}
+
+/// Apply a custom-setup section field to CustomSetupConfig.
+fn apply_custom_setup_field(setup: &mut CustomSetupConfig, key: &str, value: &str) {
+    if key == "setup-depends" {
+        setup.setup_depends = parse_build_depends(value);
     }
 }
 
@@ -552,6 +616,7 @@ enum Section {
     Library,
     #[allow(dead_code)] // Name stored for future use
     Executable(String),
+    CustomSetup,
     Other,
 }
 
@@ -560,6 +625,10 @@ fn parse_section_header(line: &str) -> Option<Section> {
 
     if lower == "library" {
         return Some(Section::Library);
+    }
+
+    if lower == "custom-setup" {
+        return Some(Section::CustomSetup);
     }
 
     if lower.starts_with("executable ") {
@@ -751,6 +820,27 @@ library
 "#;
 
         let info = parse_cabal_full(content);
+        // alex and happy are now supported, so this should return false
+        assert!(!info.needs_unsupported_preprocessors());
+        // But we should detect them as needed preprocessors
+        let needed = info.needed_preprocessors();
+        assert!(needed.contains(&"alex"));
+        assert!(needed.contains(&"happy"));
+    }
+
+    #[test]
+    fn test_unsupported_preprocessors() {
+        let content = r#"
+name:       c2hs-pkg
+version:    1.0
+build-type: Simple
+
+library
+  build-tools: c2hs
+"#;
+
+        let info = parse_cabal_full(content);
+        // c2hs is still unsupported
         assert!(info.needs_unsupported_preprocessors());
     }
 
@@ -772,6 +862,33 @@ library
         assert_eq!(lib.c_sources, vec!["cbits/foo.c", "cbits/bar.c"]);
         assert_eq!(lib.include_dirs, vec!["include"]);
         assert_eq!(lib.extra_libraries, vec!["pthread", "m"]);
+    }
+
+    #[test]
+    fn test_parse_custom_setup() {
+        let content = r#"
+name:       custom-pkg
+version:    1.0
+build-type: Custom
+
+custom-setup
+  setup-depends: base >= 4.10 && < 5,
+                 Cabal >= 2.0,
+                 directory
+
+library
+  exposed-modules: Custom
+"#;
+
+        let info = parse_cabal_full(content);
+        assert_eq!(info.build_type, BuildType::Custom);
+        assert!(!info.is_simple_build());
+
+        let setup = info.custom_setup.as_ref().expect("custom_setup should be present");
+        assert_eq!(setup.setup_depends.len(), 3);
+        assert!(setup.setup_depends.iter().any(|d| d.name == "base"));
+        assert!(setup.setup_depends.iter().any(|d| d.name == "Cabal"));
+        assert!(setup.setup_depends.iter().any(|d| d.name == "directory"));
     }
 
     #[test]

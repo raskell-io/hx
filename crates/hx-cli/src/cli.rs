@@ -570,6 +570,30 @@ pub enum Commands {
         #[command(subcommand)]
         command: ConfigCommands,
     },
+
+    /// Persistent compilation server for fast incremental rebuilds
+    ///
+    /// The server keeps a GHCi process running in the background to enable
+    /// sub-second incremental rebuilds via :reload instead of full builds.
+    Server {
+        #[command(subcommand)]
+        command: ServerCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ServerCommands {
+    /// Start the compilation server
+    Start,
+
+    /// Stop the compilation server
+    Stop,
+
+    /// Show compilation server status
+    Status,
+
+    /// Restart the compilation server
+    Restart,
 }
 
 #[derive(Subcommand, Debug)]

@@ -30,6 +30,7 @@ mod publish;
 mod run;
 mod script;
 mod search;
+mod server;
 mod toolchain;
 mod upgrade;
 mod watch;
@@ -37,7 +38,7 @@ mod watch;
 use crate::cli::{
     ArtifactCommands, CacheCommands, Cli, Commands, CompletionsCommands, ConfigCommands,
     DepsCommands, DistCommands, GlobalArgs, GraphFormat, IndexCommands, NixCommands,
-    PluginsCommands,
+    PluginsCommands, ServerCommands,
 };
 use anyhow::Result;
 use hx_toolchain::AutoInstallPolicy;
@@ -288,6 +289,12 @@ pub async fn run(cli: Cli) -> Result<i32> {
             ConfigCommands::Set { key, value } => config::set(&key, &value, &output).await,
             ConfigCommands::Get { key } => config::get(&key, &output).await,
             ConfigCommands::Init { force } => config::init(force, &output).await,
+        },
+        Some(Commands::Server { command }) => match command {
+            ServerCommands::Start => server::start(&output).await,
+            ServerCommands::Stop => server::stop(&output).await,
+            ServerCommands::Status => server::status(&output).await,
+            ServerCommands::Restart => server::restart(&output).await,
         },
         None => {
             // No command - show help

@@ -840,12 +840,50 @@ impl NativeBuilder {
         let mut warnings = Vec::new();
         let mut module_results = Vec::new();
 
-        // Build module dependency graph
-        let src_dirs: Vec<PathBuf> = options
+        // Build source directories list
+        let mut src_dirs: Vec<PathBuf> = options
             .src_dirs
             .iter()
             .map(|d| project_root.join(d))
             .collect();
+
+        // Detect and run preprocessors
+        let preproc_sources = crate::preprocessor::detect_preprocessors(&src_dirs);
+        if !preproc_sources.is_empty() {
+            info!(
+                "Found {} files requiring preprocessing",
+                preproc_sources.total_files()
+            );
+
+            // Check preprocessor availability
+            let _available = crate::preprocessor::check_availability(&preproc_sources).await?;
+
+            // Configure preprocessing
+            let generated_dir = project_root.join(&options.output_dir).join("generated");
+            let preproc_config = crate::preprocessor::PreprocessorConfig {
+                output_dir: generated_dir.clone(),
+                verbose: options.verbose,
+                ..Default::default()
+            };
+
+            // Run all preprocessors
+            let preproc_results = crate::preprocessor::preprocess_all(
+                &preproc_sources,
+                &preproc_config,
+                &self.ghc.ghc_path,
+            )
+            .await?;
+
+            // Collect warnings from preprocessing
+            for result in &preproc_results {
+                warnings.extend(result.warnings.clone());
+            }
+
+            // Add generated directory to source dirs
+            if generated_dir.exists() {
+                src_dirs.push(generated_dir);
+            }
+        }
 
         info!("Building module graph from {:?}", src_dirs);
         let graph = build_module_graph(&src_dirs).map_err(|e| Error::BuildFailed {
@@ -1527,6 +1565,279 @@ fn format_duration(duration: Duration) -> String {
     }
 }
 
+// ============================================================================
+// C Compiler Support
+// ============================================================================
+
+/// C compiler configuration.
+#[derive(Debug, Clone)]
+pub struct CCompilerConfig {
+    /// Path to C compiler executable
+    pub cc_path: PathBuf,
+    /// Compiler type (gcc, clang, cc)
+    pub compiler_type: CCompilerType,
+}
+
+/// Type of C compiler.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CCompilerType {
+    Gcc,
+    Clang,
+    Generic, // Unknown cc
+}
+
+impl Default for CCompilerConfig {
+    fn default() -> Self {
+        Self {
+            cc_path: PathBuf::from("cc"),
+            compiler_type: CCompilerType::Generic,
+        }
+    }
+}
+
+impl CCompilerConfig {
+    /// Detect the C compiler from the environment.
+    pub async fn detect() -> Result<Self> {
+        let runner = CommandRunner::new();
+
+        // Try clang first (often better diagnostics)
+        if let Ok(output) = runner.run("clang", ["--version"]).await
+            && output.success()
+        {
+            return Ok(Self {
+                cc_path: PathBuf::from("clang"),
+                compiler_type: CCompilerType::Clang,
+            });
+        }
+
+        // Try gcc
+        if let Ok(output) = runner.run("gcc", ["--version"]).await
+            && output.success()
+        {
+            return Ok(Self {
+                cc_path: PathBuf::from("gcc"),
+                compiler_type: CCompilerType::Gcc,
+            });
+        }
+
+        // Try generic cc
+        if let Ok(output) = runner.run("cc", ["--version"]).await
+            && output.success()
+        {
+            return Ok(Self {
+                cc_path: PathBuf::from("cc"),
+                compiler_type: CCompilerType::Generic,
+            });
+        }
+
+        Err(Error::ToolchainMissing {
+            tool: "cc".to_string(),
+            source: None,
+            fixes: vec![
+                hx_core::Fix::new("Install a C compiler (gcc, clang, or cc)"),
+            ],
+        })
+    }
+}
+
+/// Result of compiling C source files.
+#[derive(Debug, Clone)]
+pub struct CCompileResult {
+    /// Whether all compilations succeeded
+    pub success: bool,
+    /// Paths to compiled object files
+    pub object_files: Vec<PathBuf>,
+    /// Number of files compiled
+    pub files_compiled: usize,
+    /// Compilation duration
+    pub duration: Duration,
+    /// Warnings from compilation
+    pub warnings: Vec<String>,
+    /// Errors from compilation
+    pub errors: Vec<String>,
+}
+
+/// Options for C source compilation.
+#[derive(Debug, Clone)]
+pub struct CCompileOptions {
+    /// Include directories (-I flags)
+    pub include_dirs: Vec<PathBuf>,
+    /// Preprocessor defines (-D flags)
+    pub defines: Vec<String>,
+    /// Optimization level (0, 1, 2, 3, or s)
+    pub optimization: String,
+    /// Additional compiler flags
+    pub extra_flags: Vec<String>,
+    /// Enable position-independent code (-fPIC)
+    pub pic: bool,
+    /// Output directory for object files
+    pub output_dir: PathBuf,
+    /// Enable verbose output
+    pub verbose: bool,
+}
+
+impl Default for CCompileOptions {
+    fn default() -> Self {
+        Self {
+            include_dirs: Vec::new(),
+            defines: Vec::new(),
+            optimization: "2".to_string(),
+            extra_flags: Vec::new(),
+            pic: true, // Usually needed for shared libraries
+            output_dir: PathBuf::from("."),
+            verbose: false,
+        }
+    }
+}
+
+/// Compile C source files.
+///
+/// Takes a list of C source files and compiles them to object files.
+pub async fn compile_c_sources(
+    cc: &CCompilerConfig,
+    sources: &[PathBuf],
+    options: &CCompileOptions,
+    working_dir: &Path,
+) -> Result<CCompileResult> {
+    let start = Instant::now();
+
+    if sources.is_empty() {
+        return Ok(CCompileResult {
+            success: true,
+            object_files: Vec::new(),
+            files_compiled: 0,
+            duration: start.elapsed(),
+            warnings: Vec::new(),
+            errors: Vec::new(),
+        });
+    }
+
+    // Ensure output directory exists
+    let output_dir = working_dir.join(&options.output_dir);
+    std::fs::create_dir_all(&output_dir).map_err(|e| Error::Io {
+        message: "Failed to create C output directory".to_string(),
+        path: Some(output_dir.clone()),
+        source: e,
+    })?;
+
+    let mut object_files = Vec::new();
+    let mut all_warnings = Vec::new();
+    let mut all_errors = Vec::new();
+    let mut success = true;
+
+    let runner = CommandRunner::new().with_working_dir(working_dir);
+    let cc_path = cc.cc_path.display().to_string();
+
+    for source in sources {
+        // Compute output object file path
+        let source_stem = source
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "out".to_string());
+
+        // Preserve directory structure in output
+        let relative_path = if source.is_relative() {
+            source.clone()
+        } else if let Ok(rel) = source.strip_prefix(working_dir) {
+            rel.to_path_buf()
+        } else {
+            PathBuf::from(&source_stem)
+        };
+
+        let obj_subdir = relative_path.parent().unwrap_or(Path::new(""));
+        let obj_dir = output_dir.join(obj_subdir);
+        std::fs::create_dir_all(&obj_dir).ok();
+
+        let obj_file = obj_dir.join(format!("{}.o", source_stem));
+
+        // Build compiler args
+        let mut args: Vec<String> = vec![
+            "-c".to_string(), // Compile only
+            "-o".to_string(),
+            obj_file.display().to_string(),
+        ];
+
+        // Add optimization
+        if !options.optimization.is_empty() {
+            args.push(format!("-O{}", options.optimization));
+        }
+
+        // Add PIC flag
+        if options.pic {
+            args.push("-fPIC".to_string());
+        }
+
+        // Add include directories
+        for inc in &options.include_dirs {
+            let full_path = if inc.is_absolute() {
+                inc.clone()
+            } else {
+                working_dir.join(inc)
+            };
+            args.push(format!("-I{}", full_path.display()));
+        }
+
+        // Add defines
+        for def in &options.defines {
+            args.push(format!("-D{}", def));
+        }
+
+        // Add extra flags
+        args.extend(options.extra_flags.clone());
+
+        // Add source file
+        let source_path = if source.is_absolute() {
+            source.clone()
+        } else {
+            working_dir.join(source)
+        };
+        args.push(source_path.display().to_string());
+
+        if options.verbose {
+            info!("C compile: {} {}", cc_path, args.join(" "));
+        }
+
+        // Run the compiler
+        let output = match runner.run(&cc_path, &args).await {
+            Ok(o) => o,
+            Err(e) => {
+                all_errors.push(format!("Failed to run C compiler: {}", e));
+                success = false;
+                continue;
+            }
+        };
+
+        if output.success() {
+            object_files.push(obj_file);
+
+            // Collect any warnings from stderr
+            if !output.stderr.is_empty() {
+                for line in output.stderr.lines() {
+                    if line.contains("warning:") {
+                        all_warnings.push(line.to_string());
+                    }
+                }
+            }
+        } else {
+            success = false;
+            all_errors.push(format!(
+                "C compilation failed for {}: {}",
+                source.display(),
+                output.stderr
+            ));
+        }
+    }
+
+    Ok(CCompileResult {
+        success,
+        object_files,
+        files_compiled: sources.len(),
+        duration: start.elapsed(),
+        warnings: all_warnings,
+        errors: all_errors,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1572,5 +1883,50 @@ mod tests {
         assert_eq!(warnings.len(), 1);
         assert!(errors.is_empty());
         assert!(warnings[0].contains("warning:"));
+    }
+
+    #[test]
+    fn test_c_compiler_config_default() {
+        let config = CCompilerConfig::default();
+        assert_eq!(config.cc_path, PathBuf::from("cc"));
+        assert_eq!(config.compiler_type, CCompilerType::Generic);
+    }
+
+    #[test]
+    fn test_c_compile_options_default() {
+        let options = CCompileOptions::default();
+        assert!(options.include_dirs.is_empty());
+        assert!(options.defines.is_empty());
+        assert_eq!(options.optimization, "2");
+        assert!(options.pic);
+        assert!(!options.verbose);
+    }
+
+    #[tokio::test]
+    async fn test_compile_c_sources_empty() {
+        let cc = CCompilerConfig::default();
+        let options = CCompileOptions::default();
+        let working_dir = PathBuf::from(".");
+
+        let result = compile_c_sources(&cc, &[], &options, &working_dir).await;
+        assert!(result.is_ok());
+
+        let result = result.unwrap();
+        assert!(result.success);
+        assert_eq!(result.files_compiled, 0);
+        assert!(result.object_files.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_c_compiler_detect() {
+        // This test may fail on systems without a C compiler
+        if let Ok(cc) = CCompilerConfig::detect().await {
+            // Should detect one of the known compiler types
+            assert!(
+                cc.compiler_type == CCompilerType::Clang
+                    || cc.compiler_type == CCompilerType::Gcc
+                    || cc.compiler_type == CCompilerType::Generic
+            );
+        }
     }
 }

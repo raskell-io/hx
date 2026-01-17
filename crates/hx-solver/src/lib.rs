@@ -40,8 +40,8 @@ pub mod resolver;
 pub mod version;
 
 pub use cabal::{
-    BuildType, CabalFile, ExecutableConfig, LibraryConfig, PackageBuildInfo, parse_cabal,
-    parse_cabal_full,
+    BuildType, CabalFile, CustomSetupConfig, ExecutableConfig, LibraryConfig, PackageBuildInfo,
+    parse_cabal, parse_cabal_full,
 };
 pub use cache::{
     CacheError, clear_index_cache, clear_resolution_cache, compute_deps_fingerprint,

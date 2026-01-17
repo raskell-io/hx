@@ -248,7 +248,11 @@ impl FullNativeBuilder {
             })?;
 
         // Check if this package can be built natively
-        if !extracted.can_build_native() {
+        // Custom build types are now supported via the setup module
+        let build_type = &extracted.build_info.build_type;
+        let is_custom = matches!(build_type, hx_solver::BuildType::Custom);
+
+        if !extracted.can_build_native() && !is_custom {
             let reason = extracted
                 .skip_reason()
                 .unwrap_or_else(|| "unknown".to_string());
@@ -275,6 +279,13 @@ impl FullNativeBuilder {
             return Ok(());
         }
 
+        // Handle Custom build type packages
+        if is_custom {
+            return self
+                .build_custom_package(&extracted, unit, options, output, result)
+                .await;
+        }
+
         // Collect dependency package IDs
         let dep_ids: Vec<String> = unit
             .depends
@@ -285,6 +296,7 @@ impl FullNativeBuilder {
         // Configure the build
         let build_config = PackageBuildConfig {
             ghc: self.ghc.clone(),
+            cc: None, // Auto-detect C compiler when needed
             build_dir: self.cache_dir.join("builds").join(&pkg_key),
             install_dir: self
                 .cache_dir
@@ -322,6 +334,108 @@ impl FullNativeBuilder {
         info!(
             "Built {} {} ({} modules in {:?})",
             unit.name, unit.version, build_result.modules_compiled, build_result.duration
+        );
+
+        Ok(())
+    }
+
+    /// Build a package with Custom build type using Setup.hs.
+    async fn build_custom_package(
+        &mut self,
+        extracted: &hx_solver::ExtractedPackage,
+        unit: &BuildUnit,
+        options: &FullNativeBuildOptions,
+        _output: &Output,
+        result: &mut FullNativeBuildResult,
+    ) -> Result<()> {
+        use crate::setup::{
+            BuildFlags, ConfigureFlags, CopyFlags, CustomSetupOptions, build_with_setup,
+        };
+
+        let pkg_key = format!("{}-{}", unit.name, unit.version);
+        info!("Building {} with custom Setup.hs", pkg_key);
+
+        // Prepare setup-depends packages
+        let setup_depends: Vec<String> = extracted
+            .build_info
+            .custom_setup
+            .as_ref()
+            .map(|cs| cs.setup_depends.iter().map(|d| d.name.clone()).collect())
+            .unwrap_or_default();
+
+        // Configure custom setup options
+        let setup_options = CustomSetupOptions {
+            ghc_path: self.ghc.ghc_path.clone(),
+            package_dbs: self.ghc.package_dbs.clone(),
+            setup_depends,
+            build_dir: self.cache_dir.join("builds").join(&pkg_key).join("setup"),
+            verbose: options.verbose,
+        };
+
+        // Install directory
+        let install_dir = self
+            .cache_dir
+            .join(format!("ghc-{}", self.ghc.version))
+            .join("lib")
+            .join(&pkg_key);
+
+        std::fs::create_dir_all(&install_dir).map_err(|e| Error::Io {
+            message: "failed to create install directory".to_string(),
+            path: Some(install_dir.clone()),
+            source: e,
+        })?;
+
+        // Configure flags
+        let configure_flags = ConfigureFlags {
+            prefix: Some(install_dir.clone()),
+            package_db: Some(self.package_db.db_path().to_path_buf()),
+            with_ghc: Some(self.ghc.ghc_path.clone()),
+            ..Default::default()
+        };
+
+        // Build flags
+        let build_flags = BuildFlags {
+            jobs: Some(options.jobs),
+            ..Default::default()
+        };
+
+        // Copy flags
+        let copy_flags = CopyFlags {
+            destdir: None, // Install directly to prefix
+            ..Default::default()
+        };
+
+        // Run the custom build
+        let build_result = build_with_setup(
+            &extracted.source_dir,
+            &setup_options,
+            &configure_flags,
+            &build_flags,
+            Some(&copy_flags),
+            Some(self.package_db.db_path()),
+        )
+        .await?;
+
+        if !build_result.success {
+            return Err(Error::BuildFailed {
+                errors: build_result.errors,
+                fixes: vec![Fix::with_command("See full output", "hx build --verbose")],
+            });
+        }
+
+        // For Custom builds, we assume the package registers itself
+        // via Setup register. Mark it as built.
+        let package_id = format!("{}-{}", unit.name, unit.version);
+        result.registered_packages.push(package_id.clone());
+        result.packages_built += 1;
+        self.built_packages.insert(unit.name.clone(), package_id);
+
+        // Collect warnings
+        result.warnings.extend(build_result.warnings);
+
+        info!(
+            "Built {} {} via custom Setup.hs in {:?}",
+            unit.name, unit.version, build_result.duration
         );
 
         Ok(())

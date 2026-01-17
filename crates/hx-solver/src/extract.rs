@@ -90,7 +90,7 @@ impl ExtractedPackage {
             ));
         }
         if self.build_info.needs_unsupported_preprocessors() {
-            return Some("requires unsupported preprocessors (alex/happy/hsc2hs)".to_string());
+            return Some("requires unsupported preprocessors (c2hs/cpphs)".to_string());
         }
         None
     }
