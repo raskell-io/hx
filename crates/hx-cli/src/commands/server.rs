@@ -47,7 +47,11 @@ pub async fn start(output: &Output) -> Result<i32> {
         src_dirs,
         package_dbs: ghc_config.package_dbs.clone(),
         packages: ghc_config.packages.clone(),
-        ghc_path: ghc_config.ghc_path.parent().unwrap().join("ghci"),
+        ghc_path: ghc_config
+            .ghc_path
+            .parent()
+            .map(|p| p.join("ghci"))
+            .unwrap_or_else(|| PathBuf::from("ghci")),
         idle_timeout_ms: 0,
         extensions: project.manifest.build.ghc_flags.clone(),
         ghci_options: Vec::new(),
