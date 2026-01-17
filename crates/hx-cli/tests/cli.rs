@@ -145,3 +145,107 @@ fn test_subcommand_help() {
         .success()
         .stdout(predicate::str::contains("doctor"));
 }
+
+// ========== Stackage Commands ==========
+
+#[test]
+fn test_stackage_help() {
+    hx().args(["stackage", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Stackage"))
+        .stdout(predicate::str::contains("list"))
+        .stdout(predicate::str::contains("info"))
+        .stdout(predicate::str::contains("set"));
+}
+
+#[test]
+fn test_stackage_list_help() {
+    hx().args(["stackage", "list", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--lts"))
+        .stdout(predicate::str::contains("--nightly"))
+        .stdout(predicate::str::contains("--limit"));
+}
+
+#[test]
+fn test_stackage_info_help() {
+    hx().args(["stackage", "info", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("snapshot"))
+        .stdout(predicate::str::contains("--packages"));
+}
+
+#[test]
+fn test_stackage_set_help() {
+    hx().args(["stackage", "set", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("snapshot"));
+}
+
+// ========== Cross-Compilation Flags ==========
+
+#[test]
+fn test_build_target_flag() {
+    hx().args(["build", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--target"))
+        .stdout(predicate::str::contains("triple"));
+}
+
+#[test]
+fn test_test_target_flag() {
+    hx().args(["test", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--target"))
+        .stdout(predicate::str::contains("triple"));
+}
+
+#[test]
+fn test_run_target_flag() {
+    hx().args(["run", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--target"))
+        .stdout(predicate::str::contains("triple"));
+}
+
+// ========== Lock --snapshot ==========
+
+#[test]
+fn test_lock_snapshot_flag() {
+    hx().args(["lock", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--snapshot"));
+}
+
+// ========== Server Commands ==========
+
+#[test]
+fn test_server_help() {
+    hx().args(["server", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("start"))
+        .stdout(predicate::str::contains("stop"))
+        .stdout(predicate::str::contains("status"))
+        .stdout(predicate::str::contains("restart"));
+}
+
+// ========== Coverage Commands ==========
+
+#[test]
+fn test_coverage_help() {
+    hx().args(["coverage", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--html"))
+        .stdout(predicate::str::contains("--threshold"))
+        .stdout(predicate::str::contains("--json"));
+}

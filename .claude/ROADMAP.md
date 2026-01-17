@@ -255,6 +255,31 @@ hx v0.1.0 is shippable when:
   - [x] Module exclusion (--exclude flag)
   - [x] Browser open support (--open flag)
 
+### Stackage Snapshot Support ✅
+- [x] Stackage integration in resolver
+  - [x] Parse LTS and Nightly snapshot identifiers
+  - [x] Fetch snapshot metadata from Stackage API
+  - [x] Pin package versions from snapshots
+  - [x] Local snapshot caching
+- [x] `hx stackage` commands
+  - [x] `hx stackage list` - Show available snapshots
+  - [x] `hx stackage info <snapshot>` - Show snapshot details
+  - [x] `hx stackage set <snapshot>` - Set project snapshot
+- [x] `hx lock --snapshot` shorthand
+- [x] GHC version validation against snapshot
+
+### Cross-Compilation Support ✅
+- [x] `--target` flag for builds
+  - [x] `hx build --target <triple>`
+  - [x] `hx test --target <triple>`
+  - [x] `hx run --target <triple>`
+- [x] Common target triple support
+  - [x] x86_64-linux-gnu, aarch64-linux-gnu
+  - [x] x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
+  - [x] x86_64-apple-darwin, aarch64-apple-darwin
+  - [x] x86_64-w64-mingw32
+- [x] Native build cross-compilation (`--native --target`)
+
 ---
 
 ## v0.4.0 - Cloud & Enterprise
@@ -272,8 +297,8 @@ hx v0.1.0 is shippable when:
 ```
 hx init [--bin|--lib] [--ci]
 hx build [--package <name>] [--native] [--target <triple>]
-hx test [--package <name>]
-hx run [--package <name>]
+hx test [--package <name>] [--target <triple>]
+hx run [--package <name>] [--target <triple>]
 hx repl
 hx check
 
@@ -289,7 +314,7 @@ hx fmt [--check]
 hx lint [--fix]
 hx doctor
 
-hx lock [--cabal]
+hx lock [--cabal] [--snapshot <name>]
 hx fetch [-j <jobs>]
 hx sync
 hx clean [--global]
@@ -309,6 +334,10 @@ hx toolchain use <version>
 hx index update [--force]
 hx index status
 hx index clear
+
+hx stackage list [--lts] [--nightly] [--limit <n>]
+hx stackage info <snapshot> [--packages]
+hx stackage set <snapshot>
 
 hx nix flake|shell [--output <file>]
 hx profile [--heap] [--time] <args>

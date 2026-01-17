@@ -137,6 +137,9 @@ pub async fn run_checks(project_dir: Option<&Path>) -> DoctorReport {
     // Check native dependencies (platform-specific)
     check_native_deps(&mut report);
 
+    // Check cross-compilation toolchains
+    check_cross_compilation(&mut report);
+
     // Check project if we're in one
     if let Some(dir) = project_dir {
         check_project(dir, &mut report);
@@ -584,6 +587,106 @@ fn check_project(dir: &Path, report: &mut DoctorReport) {
 
     // Check hie.yaml for IDE integration
     check_hie_yaml(dir, report);
+
+    // Check Stackage configuration
+    check_stackage_config(dir, report);
+}
+
+fn check_stackage_config(dir: &Path, report: &mut DoctorReport) {
+    if let Ok(project) = hx_config::Project::load(dir) {
+        if let Some(ref snapshot) = project.manifest.stackage.snapshot {
+            // Check if snapshot identifier looks valid
+            let is_valid = snapshot.starts_with("lts-") || snapshot.starts_with("nightly");
+            if !is_valid {
+                report.add(
+                    Diagnostic::warning(format!(
+                        "Invalid Stackage snapshot identifier: {}",
+                        snapshot
+                    ))
+                    .with_fix(Fix::new("Use format: lts-XX.YY or nightly-YYYY-MM-DD"))
+                    .with_fix(Fix::with_command(
+                        "List available snapshots",
+                        "hx stackage list",
+                    )),
+                );
+            } else {
+                report.add(Diagnostic::info(format!("Stackage snapshot: {}", snapshot)));
+            }
+        }
+    }
+}
+
+/// Check for cross-compilation toolchains.
+pub fn check_cross_compilation(report: &mut DoctorReport) {
+    // Common cross-compilation targets
+    let targets = [
+        ("aarch64-linux-gnu", "aarch64-linux-gnu-gcc", "ARM64 Linux"),
+        ("x86_64-linux-gnu", "x86_64-linux-gnu-gcc", "x86_64 Linux"),
+        (
+            "aarch64-apple-darwin",
+            "aarch64-apple-darwin-gcc",
+            "ARM64 macOS",
+        ),
+    ];
+
+    let mut found_any = false;
+
+    for (_target, compiler, description) in targets {
+        if check_cross_compiler(compiler) {
+            found_any = true;
+            report.add(Diagnostic::info(format!(
+                "Cross-compiler for {}: available",
+                description
+            )));
+        }
+    }
+
+    if !found_any {
+        report.add(Diagnostic::info(
+            "No cross-compilation toolchains detected (install if needed for --target builds)",
+        ));
+    }
+
+    // Check for common cross-compilation tools
+    #[cfg(target_os = "macos")]
+    {
+        // On macOS, check for Linux cross-compilers via Homebrew
+        if !check_cross_compiler("x86_64-linux-gnu-gcc")
+            && !check_cross_compiler("aarch64-linux-gnu-gcc")
+        {
+            report.add(
+                Diagnostic::info("Linux cross-compilers not found")
+                    .with_fix(Fix::with_command(
+                        "Install x86_64 Linux cross-compiler",
+                        "brew install x86_64-linux-gnu-gcc",
+                    ))
+                    .with_fix(Fix::with_command(
+                        "Install ARM64 Linux cross-compiler",
+                        "brew install aarch64-linux-gnu-gcc",
+                    )),
+            );
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // On Linux, check for common cross-compilers
+        if !check_cross_compiler("aarch64-linux-gnu-gcc") {
+            report.add(
+                Diagnostic::info("ARM64 cross-compiler not found").with_fix(Fix::with_command(
+                    "Install on Debian/Ubuntu",
+                    "sudo apt-get install gcc-aarch64-linux-gnu",
+                )),
+            );
+        }
+    }
+}
+
+fn check_cross_compiler(name: &str) -> bool {
+    Command::new(name)
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success())
 }
 
 fn check_hie_yaml(dir: &Path, report: &mut DoctorReport) {

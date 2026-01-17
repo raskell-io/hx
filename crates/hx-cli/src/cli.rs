@@ -555,6 +555,7 @@ pub enum Commands {
     },
 
     /// Create distributable release archives
+    #[command(disable_version_flag = true)]
     Dist {
         #[command(subcommand)]
         command: Option<DistCommands>,
@@ -576,7 +577,7 @@ pub enum Commands {
         completions: bool,
 
         /// Version for archive name (default: from Cargo.toml)
-        #[arg(long)]
+        #[arg(long, id = "pkg_version")]
         version: Option<String>,
     },
 
@@ -900,8 +901,10 @@ pub enum ToolchainCommands {
     },
 
     /// Install a GHC version
+    #[command(disable_version_flag = true)]
     Install {
         /// GHC version to install (e.g., 9.8.2)
+        #[arg(id = "ghc_version")]
         version: Option<String>,
 
         /// GHC version (alternative to positional)
@@ -930,8 +933,10 @@ pub enum ToolchainCommands {
     },
 
     /// Remove an installed GHC version
+    #[command(disable_version_flag = true)]
     Remove {
         /// GHC version to remove
+        #[arg(id = "ghc_version")]
         version: String,
 
         /// Skip confirmation prompt
@@ -940,8 +945,10 @@ pub enum ToolchainCommands {
     },
 
     /// Set the active GHC version
+    #[command(disable_version_flag = true)]
     Use {
         /// GHC version to activate
+        #[arg(id = "ghc_version")]
         version: String,
     },
 }
@@ -1032,9 +1039,10 @@ pub enum PluginsCommands {
 #[derive(Subcommand, Debug)]
 pub enum DistCommands {
     /// Generate Homebrew formula
+    #[command(disable_version_flag = true)]
     Formula {
         /// Version for the formula
-        #[arg(long)]
+        #[arg(long, id = "pkg_version")]
         version: Option<String>,
 
         /// Output file (default: stdout)
@@ -1043,9 +1051,10 @@ pub enum DistCommands {
     },
 
     /// Generate installation script
+    #[command(disable_version_flag = true)]
     InstallScript {
         /// Version for the script
-        #[arg(long)]
+        #[arg(long, id = "pkg_version")]
         version: Option<String>,
 
         /// Output file (default: stdout)

@@ -568,7 +568,6 @@ fn is_process_running(pid: u32) -> bool {
 
 #[cfg(windows)]
 fn is_process_running(pid: u32) -> bool {
-    use std::ptr;
     const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
     const STILL_ACTIVE: u32 = 259;
 
@@ -585,7 +584,7 @@ fn is_process_running(pid: u32) -> bool {
 }
 
 #[cfg(windows)]
-extern "system" {
+unsafe extern "system" {
     fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> *mut std::ffi::c_void;
     fn GetExitCodeProcess(hProcess: *mut std::ffi::c_void, lpExitCode: *mut u32) -> i32;
     fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32;
