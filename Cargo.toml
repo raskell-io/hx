@@ -61,7 +61,7 @@ sha2 = "0.10"
 directories = "5"
 
 # HTTP
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 # Time
 chrono = { version = "0.4", features = ["serde"] }
@@ -70,7 +70,7 @@ chrono = { version = "0.4", features = ["serde"] }
 which = "7"
 bincode = "1.3"
 once_cell = "1"
-self_update = { version = "0.42", features = ["archive-tar", "archive-zip", "compression-flate2", "compression-zip-deflate"] }
+self_update = { version = "0.42", default-features = false, features = ["archive-tar", "archive-zip", "compression-flate2", "compression-zip-deflate", "rustls"] }
 
 # Archive creation
 tar = "0.4"
