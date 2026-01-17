@@ -227,7 +227,8 @@ hx script file.hs            # Run single-file script
 hx import --from stack       # Import from stack.yaml
 hx nix flake                 # Generate flake.nix
 hx nix shell                 # Generate shell.nix
-hx completions bash          # Generate shell completions
+hx completions install       # Auto-install completions for your shell
+hx completions generate bash # Generate completions to stdout
 hx upgrade                   # Upgrade hx to latest version
 ```
 
