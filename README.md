@@ -120,6 +120,8 @@ hx add --dev hspec           # Add dev dependency
 hx rm text                   # Remove a dependency
 
 hx why text                  # Show why a package is a dependency
+hx info aeson                # Show package details from Hackage
+hx info aeson --versions     # Include all available versions
 hx outdated                  # Check for outdated dependencies
 hx outdated --direct         # Only show direct dependencies
 hx update                    # Update dependencies (minor/patch)
