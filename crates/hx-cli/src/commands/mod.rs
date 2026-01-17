@@ -114,6 +114,9 @@ pub async fn run(cli: Cli) -> Result<i32> {
             dry_run,
             major,
         }) => deps::update(packages, direct, dry_run, major, &output).await,
+        Some(Commands::Tree { depth, dev }) => {
+            deps::graph(GraphFormat::Tree, depth, None, None, dev, false, &output).await
+        }
         Some(Commands::Completions { shell }) => completions::run(shell),
         Some(Commands::Upgrade {
             check,

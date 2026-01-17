@@ -241,6 +241,17 @@ pub enum Commands {
         major: bool,
     },
 
+    /// Show dependency tree (alias for `deps tree`)
+    Tree {
+        /// Maximum depth to display (0 = unlimited)
+        #[arg(long, short, default_value = "0")]
+        depth: usize,
+
+        /// Include dev dependencies
+        #[arg(long)]
+        dev: bool,
+    },
+
     /// Generate shell completions
     Completions {
         /// Shell to generate completions for
