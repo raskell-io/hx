@@ -25,5 +25,6 @@ reqwest = { workspace = true, features = ["stream"] }
 atty = "0.2"
 xz2 = "0.1"
 tar = "0.4"
+zip = "2.2"
 futures-util = "0.3"
 tempfile.workspace = true

@@ -17,6 +17,11 @@ pub struct ToolchainManifest {
     pub ghc: Vec<InstalledGhc>,
     /// Currently active GHC version (global default).
     pub active_ghc: Option<String>,
+    /// Installed Cabal versions.
+    #[serde(default)]
+    pub cabal: Vec<InstalledCabal>,
+    /// Currently active Cabal version (global default).
+    pub active_cabal: Option<String>,
 }
 
 fn default_schema_version() -> u32 {
@@ -27,6 +32,19 @@ fn default_schema_version() -> u32 {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstalledGhc {
     /// Version string (e.g., "9.8.2").
+    pub version: String,
+    /// Installation path.
+    pub install_path: PathBuf,
+    /// When this version was installed.
+    pub installed_at: DateTime<Utc>,
+    /// How the toolchain was installed.
+    pub source: InstallSource,
+}
+
+/// An installed Cabal entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstalledCabal {
+    /// Version string (e.g., "3.12.1.0").
     pub version: String,
     /// Installation path.
     pub install_path: PathBuf,
@@ -71,7 +89,10 @@ impl ToolchainManifest {
         let manifest_path = toolchain_dir.join("manifest.json");
 
         if !manifest_path.exists() {
-            debug!("No manifest found at {}, using empty", manifest_path.display());
+            debug!(
+                "No manifest found at {}, using empty",
+                manifest_path.display()
+            );
             return Ok(Self::new());
         }
 
@@ -101,9 +122,8 @@ impl ToolchainManifest {
         })?;
 
         let manifest_path = toolchain_dir.join("manifest.json");
-        let content = serde_json::to_string_pretty(self).map_err(|e| {
-            Error::config(format!("Failed to serialize manifest: {}", e))
-        })?;
+        let content = serde_json::to_string_pretty(self)
+            .map_err(|e| Error::config(format!("Failed to serialize manifest: {}", e)))?;
 
         std::fs::write(&manifest_path, content).map_err(|e| Error::Io {
             message: format!("Failed to write manifest: {}", e),
@@ -149,18 +169,13 @@ impl ToolchainManifest {
 
     /// Get the active GHC installation.
     pub fn active(&self) -> Option<&InstalledGhc> {
-        self.active_ghc
-            .as_ref()
-            .and_then(|v| self.get_ghc(v))
+        self.active_ghc.as_ref().and_then(|v| self.get_ghc(v))
     }
 
     /// Set the active GHC version.
     pub fn set_active(&mut self, version: &str) -> Result<()> {
         if !self.is_installed(version) {
-            return Err(Error::config(format!(
-                "GHC {} is not installed",
-                version
-            )));
+            return Err(Error::config(format!("GHC {} is not installed", version)));
         }
         self.active_ghc = Some(version.to_string());
         Ok(())
@@ -169,6 +184,60 @@ impl ToolchainManifest {
     /// Get all installed versions.
     pub fn installed_versions(&self) -> Vec<&str> {
         self.ghc.iter().map(|g| g.version.as_str()).collect()
+    }
+
+    // ---- Cabal management methods ----
+
+    /// Add an installed Cabal version.
+    pub fn add_cabal(&mut self, cabal: InstalledCabal) {
+        // Remove any existing entry with the same version
+        self.cabal.retain(|c| c.version != cabal.version);
+        self.cabal.push(cabal);
+        // Sort by version (newest first)
+        self.cabal.sort_by(|a, b| b.version.cmp(&a.version));
+    }
+
+    /// Remove an installed Cabal version.
+    pub fn remove_cabal(&mut self, version: &str) -> Option<InstalledCabal> {
+        if let Some(pos) = self.cabal.iter().position(|c| c.version == version) {
+            let removed = self.cabal.remove(pos);
+            // Clear active if we removed the active version
+            if self.active_cabal.as_deref() == Some(version) {
+                self.active_cabal = None;
+            }
+            Some(removed)
+        } else {
+            None
+        }
+    }
+
+    /// Get an installed Cabal by version.
+    pub fn get_cabal(&self, version: &str) -> Option<&InstalledCabal> {
+        self.cabal.iter().find(|c| c.version == version)
+    }
+
+    /// Check if a Cabal version is installed.
+    pub fn is_cabal_installed(&self, version: &str) -> bool {
+        self.cabal.iter().any(|c| c.version == version)
+    }
+
+    /// Get the active Cabal installation.
+    pub fn active_cabal(&self) -> Option<&InstalledCabal> {
+        self.active_cabal.as_ref().and_then(|v| self.get_cabal(v))
+    }
+
+    /// Set the active Cabal version.
+    pub fn set_active_cabal(&mut self, version: &str) -> Result<()> {
+        if !self.is_cabal_installed(version) {
+            return Err(Error::config(format!("Cabal {} is not installed", version)));
+        }
+        self.active_cabal = Some(version.to_string());
+        Ok(())
+    }
+
+    /// Get all installed Cabal versions.
+    pub fn installed_cabal_versions(&self) -> Vec<&str> {
+        self.cabal.iter().map(|c| c.version.as_str()).collect()
     }
 }
 
@@ -200,13 +269,42 @@ impl InstalledGhc {
     }
 }
 
+impl InstalledCabal {
+    /// Create a new InstalledCabal entry.
+    pub fn new(version: impl Into<String>, install_path: impl Into<PathBuf>) -> Self {
+        Self {
+            version: version.into(),
+            install_path: install_path.into(),
+            installed_at: Utc::now(),
+            source: InstallSource::Direct,
+        }
+    }
+
+    /// Set the installation source.
+    pub fn with_source(mut self, source: InstallSource) -> Self {
+        self.source = source;
+        self
+    }
+
+    /// Get the path to the cabal binary.
+    pub fn cabal_path(&self) -> PathBuf {
+        self.install_path.join("bin").join(cabal_binary_name())
+    }
+
+    /// Get the path to the bin directory.
+    pub fn bin_dir(&self) -> PathBuf {
+        self.install_path.join("bin")
+    }
+}
+
 /// Get the GHC binary name for the current platform.
 fn ghc_binary_name() -> &'static str {
-    if cfg!(windows) {
-        "ghc.exe"
-    } else {
-        "ghc"
-    }
+    if cfg!(windows) { "ghc.exe" } else { "ghc" }
+}
+
+/// Get the Cabal binary name for the current platform.
+fn cabal_binary_name() -> &'static str {
+    if cfg!(windows) { "cabal.exe" } else { "cabal" }
 }
 
 #[cfg(test)]
@@ -282,5 +380,53 @@ mod tests {
 
         let ghc_path = ghc.ghc_path();
         assert!(ghc_path.ends_with("ghc") || ghc_path.ends_with("ghc.exe"));
+    }
+
+    // ---- Cabal tests ----
+
+    #[test]
+    fn test_manifest_add_cabal() {
+        let mut manifest = ToolchainManifest::new();
+        manifest.add_cabal(InstalledCabal::new("3.12.1.0", "/path/to/3.12.1.0"));
+        manifest.add_cabal(InstalledCabal::new("3.10.3.0", "/path/to/3.10.3.0"));
+
+        assert_eq!(manifest.cabal.len(), 2);
+        assert!(manifest.is_cabal_installed("3.12.1.0"));
+        assert!(manifest.is_cabal_installed("3.10.3.0"));
+    }
+
+    #[test]
+    fn test_manifest_remove_cabal() {
+        let mut manifest = ToolchainManifest::new();
+        manifest.add_cabal(InstalledCabal::new("3.12.1.0", "/path/to/3.12.1.0"));
+        manifest.active_cabal = Some("3.12.1.0".to_string());
+
+        let removed = manifest.remove_cabal("3.12.1.0");
+        assert!(removed.is_some());
+        assert!(!manifest.is_cabal_installed("3.12.1.0"));
+        assert!(manifest.active_cabal.is_none()); // Should be cleared
+    }
+
+    #[test]
+    fn test_manifest_set_active_cabal() {
+        let mut manifest = ToolchainManifest::new();
+        manifest.add_cabal(InstalledCabal::new("3.12.1.0", "/path/to/3.12.1.0"));
+
+        assert!(manifest.set_active_cabal("3.12.1.0").is_ok());
+        assert_eq!(manifest.active_cabal, Some("3.12.1.0".to_string()));
+
+        // Can't set active to non-installed version
+        assert!(manifest.set_active_cabal("3.10.3.0").is_err());
+    }
+
+    #[test]
+    fn test_installed_cabal_paths() {
+        let cabal = InstalledCabal::new("3.12.1.0", "/home/user/.hx/toolchains/cabal/3.12.1.0");
+
+        let bin_dir = cabal.bin_dir();
+        assert!(bin_dir.ends_with("bin"));
+
+        let cabal_path = cabal.cabal_path();
+        assert!(cabal_path.ends_with("cabal") || cabal_path.ends_with("cabal.exe"));
     }
 }

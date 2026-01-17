@@ -2,6 +2,7 @@
 //!
 //! Provides smart installation that tries direct download first, then falls back to ghcup.
 
+use crate::cabal::{self, CabalDownloadOptions};
 use crate::ghc::{self, DownloadOptions, Platform};
 use hx_cache::toolchain_dir;
 use hx_core::{CommandRunner, Error, Fix, Result};
@@ -270,6 +271,107 @@ async fn install_ghc_direct(options: &SmartInstallOptions) -> Result<()> {
         info!("GHC {} was already installed", options.version);
     } else {
         info!("GHC {} installed successfully", options.version);
+    }
+
+    Ok(())
+}
+
+/// Options for smart Cabal installation.
+#[derive(Debug, Clone)]
+pub struct SmartCabalInstallOptions {
+    /// Cabal version to install.
+    pub version: String,
+    /// Installation strategy.
+    pub strategy: InstallStrategy,
+    /// Whether to set as active after installation.
+    pub set_active: bool,
+    /// Force reinstall even if already installed.
+    pub force: bool,
+}
+
+impl SmartCabalInstallOptions {
+    /// Create new options for a version.
+    pub fn new(version: impl Into<String>) -> Self {
+        Self {
+            version: version.into(),
+            strategy: InstallStrategy::default(),
+            set_active: false,
+            force: false,
+        }
+    }
+
+    /// Set the installation strategy.
+    pub fn with_strategy(mut self, strategy: InstallStrategy) -> Self {
+        self.strategy = strategy;
+        self
+    }
+
+    /// Set as active after installation.
+    pub fn with_set_active(mut self, set_active: bool) -> Self {
+        self.set_active = set_active;
+        self
+    }
+
+    /// Force reinstall.
+    pub fn with_force(mut self, force: bool) -> Self {
+        self.force = force;
+        self
+    }
+}
+
+/// Install Cabal using smart strategy: direct download first, fallback to ghcup.
+///
+/// This is the preferred method for installing Cabal as it:
+/// 1. Tries direct download from downloads.haskell.org (faster, no ghcup dependency)
+/// 2. Falls back to ghcup if direct download fails
+///
+/// Use `InstallStrategy::Direct` to disable ghcup fallback.
+/// Use `InstallStrategy::Ghcup` to skip direct download.
+pub async fn install_cabal_smart(options: &SmartCabalInstallOptions) -> Result<()> {
+    match options.strategy {
+        InstallStrategy::Direct => install_cabal_direct(options).await,
+        InstallStrategy::Ghcup => install_cabal(&options.version).await,
+        InstallStrategy::Smart => {
+            // Check if platform is supported for direct download
+            if Platform::current().is_none() {
+                info!("Platform not supported for direct download, using ghcup");
+                return install_cabal(&options.version).await;
+            }
+
+            // Try direct download first
+            match install_cabal_direct(options).await {
+                Ok(()) => Ok(()),
+                Err(e) => {
+                    warn!(
+                        "Direct Cabal installation failed, falling back to ghcup: {}",
+                        e
+                    );
+                    install_cabal(&options.version).await
+                }
+            }
+        }
+    }
+}
+
+/// Install Cabal via direct download.
+async fn install_cabal_direct(options: &SmartCabalInstallOptions) -> Result<()> {
+    let tc_dir = toolchain_dir()?;
+
+    let download_options = CabalDownloadOptions {
+        version: options.version.clone(),
+        platform: Platform::current(),
+        toolchain_dir: tc_dir,
+        set_active: options.set_active,
+        force: options.force,
+        ..Default::default()
+    };
+
+    let result = cabal::download_and_install_cabal(&download_options).await?;
+
+    if result.was_cached {
+        info!("Cabal {} was already installed", options.version);
+    } else {
+        info!("Cabal {} installed successfully", options.version);
     }
 
     Ok(())

@@ -22,7 +22,7 @@ pub use download::{
     DownloadOptions, InstallResult, download_and_install_ghc, get_active, list_installed,
     remove_ghc, set_active,
 };
-pub use manifest::{InstallSource, InstalledGhc, ToolchainManifest};
+pub use manifest::{InstallSource, InstalledCabal, InstalledGhc, ToolchainManifest};
 pub use platform::{Platform, ghc_archive_filename, ghc_download_url};
 pub use versions::{
     GhcVersion, KNOWN_GHC_VERSIONS, RECOMMENDED_GHC_VERSION, is_known_version, is_valid_version,

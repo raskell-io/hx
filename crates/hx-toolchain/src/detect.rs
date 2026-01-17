@@ -1,6 +1,7 @@
 //! Tool detection utilities.
 
-use crate::ghc::{GhcSource, ResolutionConfig, resolve_ghc};
+use crate::ghc::{GhcSource, ResolutionConfig, ToolchainManifest, resolve_ghc};
+use hx_cache::toolchain_dir;
 use hx_core::{CommandRunner, Version};
 use std::path::PathBuf;
 use tracing::{debug, instrument};
@@ -111,17 +112,17 @@ async fn detect_ghc(runner: &CommandRunner) -> DetectedTool {
 
         // Verify the binary works
         let ghc_path = resolved.ghc_path();
-        if ghc_path.exists() {
-            if let Ok(version) = resolved.version.parse() {
-                return DetectedTool {
-                    name: "ghc".to_string(),
-                    status: ToolStatus::Found {
-                        version,
-                        path: ghc_path,
-                    },
-                    source: Some(resolved.source),
-                };
-            }
+        if ghc_path.exists()
+            && let Ok(version) = resolved.version.parse()
+        {
+            return DetectedTool {
+                name: "ghc".to_string(),
+                status: ToolStatus::Found {
+                    version,
+                    path: ghc_path,
+                },
+                source: Some(resolved.source),
+            };
         }
     }
 
@@ -130,6 +131,34 @@ async fn detect_ghc(runner: &CommandRunner) -> DetectedTool {
 }
 
 async fn detect_cabal(runner: &CommandRunner) -> DetectedTool {
+    // First, check hx-managed installations
+    if let Ok(tc_dir) = toolchain_dir()
+        && let Ok(manifest) = ToolchainManifest::load(&tc_dir)
+        && let Some(active) = manifest.active_cabal()
+    {
+        debug!(
+            "Found hx-managed Cabal {} at {}",
+            active.version,
+            active.install_path.display()
+        );
+
+        // Verify the binary exists
+        let cabal_path = active.cabal_path();
+        if cabal_path.exists()
+            && let Ok(version) = active.version.parse()
+        {
+            return DetectedTool {
+                name: "cabal".to_string(),
+                status: ToolStatus::Found {
+                    version,
+                    path: cabal_path,
+                },
+                source: Some(GhcSource::HxManaged),
+            };
+        }
+    }
+
+    // Fall back to PATH detection
     detect_tool(runner, "cabal", &["--version"]).await
 }
 

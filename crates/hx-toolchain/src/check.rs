@@ -1,7 +1,7 @@
 //! Toolchain version checking and auto-installation.
 
 use crate::detect::{ToolStatus, Toolchain};
-use crate::install;
+use crate::install::{self, SmartCabalInstallOptions, SmartInstallOptions};
 use hx_core::{Error, Fix, Result, Version};
 use std::io::{self, Write};
 use tracing::info;
@@ -13,7 +13,7 @@ pub struct ToolchainCheck {
     pub ghc_mismatch: Option<(String, Option<String>)>,
     /// Cabal version mismatch (expected, found)
     pub cabal_mismatch: Option<(String, Option<String>)>,
-    /// Whether ghcup is available
+    /// Whether ghcup is available (for fallback)
     pub has_ghcup: bool,
 }
 
@@ -23,9 +23,11 @@ impl ToolchainCheck {
         self.ghc_mismatch.is_some() || self.cabal_mismatch.is_some()
     }
 
-    /// Check if mismatches can be auto-fixed (ghcup is available).
+    /// Check if mismatches can be auto-fixed.
+    ///
+    /// We can always auto-fix via direct download, ghcup is optional fallback.
     pub fn can_auto_fix(&self) -> bool {
-        self.has_ghcup && self.has_mismatch()
+        self.has_mismatch()
     }
 
     /// Get a description of the mismatches.
@@ -120,6 +122,11 @@ pub enum AutoInstallPolicy {
 }
 
 /// Ensure the toolchain matches requirements, optionally installing missing versions.
+///
+/// When `required_ghc` or `required_cabal` are specified (from hx.toml), the effective
+/// policy defaults to `Always` unless explicitly set to `Never`. This enables seamless
+/// project-specific toolchain bootstrapping - just `hx build` in a project with hx.toml
+/// and the correct toolchain versions will be downloaded automatically.
 pub async fn ensure_toolchain(
     toolchain: &Toolchain,
     required_ghc: Option<&str>,
@@ -134,20 +141,18 @@ pub async fn ensure_toolchain(
 
     info!("Toolchain mismatch detected: {}", check.mismatch_summary());
 
-    // Check if we can fix it
-    if !check.has_ghcup {
-        return Err(Error::ToolchainMismatch {
-            tool: "toolchain".to_string(),
-            expected: check.mismatch_summary(),
-            found: "cannot auto-install (ghcup not found)".to_string(),
-            fixes: vec![
-                Fix::new("Install ghcup to enable automatic toolchain management"),
-                Fix::with_command("Install ghcup", install::ghcup_install_command()),
-            ],
-        });
-    }
+    // If project specifies versions, default to auto-install
+    // This enables seamless bootstrapping: `hx build` just works
+    let effective_policy = if required_ghc.is_some() || required_cabal.is_some() {
+        match policy {
+            AutoInstallPolicy::Never => AutoInstallPolicy::Never,
+            _ => AutoInstallPolicy::Always,
+        }
+    } else {
+        policy
+    };
 
-    match policy {
+    match effective_policy {
         AutoInstallPolicy::Never => {
             return Err(Error::ToolchainMismatch {
                 tool: "toolchain".to_string(),
@@ -171,13 +176,16 @@ pub async fn ensure_toolchain(
         }
     }
 
-    // Install missing/mismatched tools
+    // Install missing/mismatched tools using smart installation
+    // This tries direct download first, then falls back to ghcup
     if let Some((version, _)) = &check.ghc_mismatch {
-        install::install_ghc(version).await?;
+        let options = SmartInstallOptions::new(version).with_set_active(true);
+        install::install_ghc_smart(&options).await?;
     }
 
     if let Some((version, _)) = &check.cabal_mismatch {
-        install::install_cabal(version).await?;
+        let options = SmartCabalInstallOptions::new(version).with_set_active(true);
+        install::install_cabal_smart(&options).await?;
     }
 
     Ok(())

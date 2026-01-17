@@ -7,7 +7,7 @@ use crate::ghc::{InstalledGhc, ToolchainManifest};
 use hx_cache::{toolchain_bin_dir, toolchain_dir};
 use hx_core::{Error, Result};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::{debug, info};
 
 /// Source of a resolved GHC version.
@@ -108,7 +108,7 @@ pub fn resolve_ghc(config: &ResolutionConfig) -> Result<Option<ResolvedGhc>> {
 }
 
 /// Try to resolve a specific version from hx-managed installations.
-fn resolve_version_from_hx(version: &str, tc_dir: &PathBuf) -> Result<Option<ResolvedGhc>> {
+fn resolve_version_from_hx(version: &str, tc_dir: &Path) -> Result<Option<ResolvedGhc>> {
     let manifest = ToolchainManifest::load(tc_dir)?;
 
     // Check for exact match
@@ -229,7 +229,11 @@ pub fn create_symlinks(ghc: &InstalledGhc) -> Result<()> {
                 })?;
             }
 
-            debug!("Created symlink: {} -> {}", target.display(), source.display());
+            debug!(
+                "Created symlink: {} -> {}",
+                target.display(),
+                source.display()
+            );
         }
     }
 
@@ -268,7 +272,11 @@ fn ghc_binary_name() -> &'static str {
 }
 
 fn ghc_pkg_binary_name() -> &'static str {
-    if cfg!(windows) { "ghc-pkg.exe" } else { "ghc-pkg" }
+    if cfg!(windows) {
+        "ghc-pkg.exe"
+    } else {
+        "ghc-pkg"
+    }
 }
 
 fn tool_binary_name(name: &str) -> String {
