@@ -236,8 +236,8 @@ pub async fn build_package(
         }
 
         // Check preprocessor availability (fail gracefully if missing)
-        match crate::preprocessor::check_availability(&preproc_sources).await {
-            Ok(_) => {
+        match crate::preprocessor::check_availability(&preproc_sources, Some(&config.ghc.ghc_path)).await {
+            Ok(available) => {
                 let gen_dir = pkg_build_dir.join("generated");
                 let preproc_config = crate::preprocessor::PreprocessorConfig {
                     include_dirs: lib_config
@@ -256,6 +256,7 @@ pub async fn build_package(
                     &preproc_sources,
                     &preproc_config,
                     &config.ghc.ghc_path,
+                    &available,
                 )
                 .await
                 {

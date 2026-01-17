@@ -187,16 +187,33 @@ fn scan_directory_for_preprocessor_files(dir: &Path, sources: &mut PreprocessorS
 }
 
 /// Check which preprocessors are available in the system.
+///
+/// The `ghc_path` parameter is used to check the GHC bin directory for tools
+/// like hsc2hs that are bundled with GHC and may not be in PATH.
 pub async fn check_availability(
     needed: &PreprocessorSources,
+    ghc_path: Option<&Path>,
 ) -> Result<HashMap<Preprocessor, PathBuf>> {
     let mut available = HashMap::new();
     let runner = CommandRunner::new();
 
+    // Get the GHC bin directory if available
+    let ghc_bin_dir = ghc_path.and_then(|p| p.parent());
+
     for preprocessor in needed.needed_preprocessors() {
         let exe = preprocessor.executable();
 
-        // Try to find the executable
+        // First, check the GHC bin directory (for hsc2hs and other bundled tools)
+        if let Some(bin_dir) = ghc_bin_dir {
+            let tool_path = bin_dir.join(exe);
+            if tool_path.exists() {
+                debug!("Found {} in GHC bin dir: {}", exe, tool_path.display());
+                available.insert(preprocessor, tool_path);
+                continue;
+            }
+        }
+
+        // Try to find the executable in PATH
         let output = match runner.run("which", [exe]).await {
             Ok(o) if o.success() => o,
             _ => {
@@ -293,6 +310,7 @@ pub async fn run_alex(
     input: &Path,
     output_dir: &Path,
     config: &PreprocessorConfig,
+    exe_path: &Path,
 ) -> Result<PreprocessResult> {
     let start = Instant::now();
 
@@ -316,13 +334,14 @@ pub async fn run_alex(
 
     args.push(input.display().to_string());
 
+    let exe_str = exe_path.display().to_string();
     if config.verbose {
-        info!("Running alex: alex {}", args.join(" "));
+        info!("Running alex: {} {}", exe_str, args.join(" "));
     }
 
     let runner = CommandRunner::new();
     let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    let cmd_output = runner.run("alex", args_refs).await?;
+    let cmd_output = runner.run(exe_str.as_str(), args_refs).await?;
 
     let success = cmd_output.success();
     let (warnings, errors) = parse_preprocessor_output(&cmd_output.stderr, &cmd_output.stdout);
@@ -343,6 +362,7 @@ pub async fn run_happy(
     input: &Path,
     output_dir: &Path,
     config: &PreprocessorConfig,
+    exe_path: &Path,
 ) -> Result<PreprocessResult> {
     let start = Instant::now();
 
@@ -368,13 +388,14 @@ pub async fn run_happy(
 
     args.push(input.display().to_string());
 
+    let exe_str = exe_path.display().to_string();
     if config.verbose {
-        info!("Running happy: happy {}", args.join(" "));
+        info!("Running happy: {} {}", exe_str, args.join(" "));
     }
 
     let runner = CommandRunner::new();
     let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    let cmd_output = runner.run("happy", args_refs).await?;
+    let cmd_output = runner.run(exe_str.as_str(), args_refs).await?;
 
     let success = cmd_output.success();
     let (warnings, errors) = parse_preprocessor_output(&cmd_output.stderr, &cmd_output.stdout);
@@ -395,7 +416,8 @@ pub async fn run_hsc2hs(
     input: &Path,
     output_dir: &Path,
     config: &PreprocessorConfig,
-    ghc_path: &Path,
+    _ghc_path: &Path,
+    exe_path: &Path,
 ) -> Result<PreprocessResult> {
     let start = Instant::now();
 
@@ -416,8 +438,8 @@ pub async fn run_hsc2hs(
         output_path.display().to_string(),
     ];
 
-    // Add compiler flags
-    args.push(format!("--cc={}", ghc_path.display()));
+    // Note: We don't set --cc here; hsc2hs will use the default C compiler.
+    // Setting --cc to GHC doesn't work as GHC doesn't accept raw C compiler flags.
 
     // Add include directories
     for inc_dir in &config.include_dirs {
@@ -441,13 +463,14 @@ pub async fn run_hsc2hs(
 
     args.push(input.display().to_string());
 
+    let exe_str = exe_path.display().to_string();
     if config.verbose {
-        info!("Running hsc2hs: hsc2hs {}", args.join(" "));
+        info!("Running hsc2hs: {} {}", exe_str, args.join(" "));
     }
 
     let runner = CommandRunner::new();
     let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    let cmd_output = runner.run("hsc2hs", args_refs).await?;
+    let cmd_output = runner.run(exe_str.as_str(), args_refs).await?;
 
     let success = cmd_output.success();
     let (warnings, errors) = parse_preprocessor_output(&cmd_output.stderr, &cmd_output.stdout);
@@ -464,10 +487,14 @@ pub async fn run_hsc2hs(
 }
 
 /// Run all preprocessors on the given sources.
+///
+/// The `available` map should contain the paths to each preprocessor executable,
+/// as returned by `check_availability`.
 pub async fn preprocess_all(
     sources: &PreprocessorSources,
     config: &PreprocessorConfig,
     ghc_path: &Path,
+    available: &HashMap<Preprocessor, PathBuf>,
 ) -> Result<Vec<PreprocessResult>> {
     if sources.is_empty() {
         return Ok(Vec::new());
@@ -485,39 +512,45 @@ pub async fn preprocess_all(
     let mut had_errors = false;
 
     // Process alex files
-    for file in &sources.alex_files {
-        let result = run_alex(file, &config.output_dir, config).await?;
-        if !result.success {
-            had_errors = true;
-            for error in &result.errors {
-                warn!("alex error in {}: {}", file.display(), error);
+    if let Some(alex_path) = available.get(&Preprocessor::Alex) {
+        for file in &sources.alex_files {
+            let result = run_alex(file, &config.output_dir, config, alex_path).await?;
+            if !result.success {
+                had_errors = true;
+                for error in &result.errors {
+                    warn!("alex error in {}: {}", file.display(), error);
+                }
             }
+            results.push(result);
         }
-        results.push(result);
     }
 
     // Process happy files
-    for file in &sources.happy_files {
-        let result = run_happy(file, &config.output_dir, config).await?;
-        if !result.success {
-            had_errors = true;
-            for error in &result.errors {
-                warn!("happy error in {}: {}", file.display(), error);
+    if let Some(happy_path) = available.get(&Preprocessor::Happy) {
+        for file in &sources.happy_files {
+            let result = run_happy(file, &config.output_dir, config, happy_path).await?;
+            if !result.success {
+                had_errors = true;
+                for error in &result.errors {
+                    warn!("happy error in {}: {}", file.display(), error);
+                }
             }
+            results.push(result);
         }
-        results.push(result);
     }
 
     // Process hsc2hs files
-    for file in &sources.hsc_files {
-        let result = run_hsc2hs(file, &config.output_dir, config, ghc_path).await?;
-        if !result.success {
-            had_errors = true;
-            for error in &result.errors {
-                warn!("hsc2hs error in {}: {}", file.display(), error);
+    if let Some(hsc2hs_path) = available.get(&Preprocessor::Hsc2hs) {
+        for file in &sources.hsc_files {
+            let result = run_hsc2hs(file, &config.output_dir, config, ghc_path, hsc2hs_path).await?;
+            if !result.success {
+                had_errors = true;
+                for error in &result.errors {
+                    warn!("hsc2hs error in {}: {}", file.display(), error);
+                }
             }
+            results.push(result);
         }
-        results.push(result);
     }
 
     if had_errors {

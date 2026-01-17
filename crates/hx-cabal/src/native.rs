@@ -894,7 +894,7 @@ impl NativeBuilder {
             );
 
             // Check preprocessor availability
-            let _available = crate::preprocessor::check_availability(&preproc_sources).await?;
+            let available = crate::preprocessor::check_availability(&preproc_sources, Some(&self.ghc.ghc_path)).await?;
 
             // Configure preprocessing
             let generated_dir = project_root.join(&options.output_dir).join("generated");
@@ -909,6 +909,7 @@ impl NativeBuilder {
                 &preproc_sources,
                 &preproc_config,
                 &self.ghc.ghc_path,
+                &available,
             )
             .await?;
 
@@ -922,6 +923,12 @@ impl NativeBuilder {
                 src_dirs.push(generated_dir);
             }
         }
+
+        // Create updated options with full source directories (including generated)
+        let options = NativeBuildOptions {
+            src_dirs: src_dirs.clone(),
+            ..options.clone()
+        };
 
         info!("Building module graph from {:?}", src_dirs);
         let graph = build_module_graph(&src_dirs).map_err(|e| Error::BuildFailed {
