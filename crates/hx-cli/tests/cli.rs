@@ -45,7 +45,9 @@ fn test_init_bin_project() {
     let temp = TempDir::new().unwrap();
     let project_dir = temp.path().join("myapp");
 
-    hx().args(["init", "--bin", "--name", "myapp", "--dir"])
+    // --bin is no longer needed (executable is default)
+    // Path is now positional instead of --dir
+    hx().args(["init", "--name", "myapp"])
         .arg(&project_dir)
         .assert()
         .success();
@@ -79,7 +81,8 @@ fn test_init_lib_project() {
     let temp = TempDir::new().unwrap();
     let project_dir = temp.path().join("mylib");
 
-    hx().args(["init", "--lib", "--name", "mylib", "--dir"])
+    // Path is now positional instead of --dir
+    hx().args(["init", "--lib", "--name", "mylib"])
         .arg(&project_dir)
         .assert()
         .success();
@@ -104,8 +107,9 @@ fn test_init_default_bin() {
     let temp = TempDir::new().unwrap();
     let project_dir = temp.path().join("defaultapp");
 
-    // Without --bin or --lib, should default to bin
-    hx().args(["init", "--name", "defaultapp", "--dir"])
+    // Without --lib, should default to bin
+    // Path is now positional instead of --dir
+    hx().args(["init", "--name", "defaultapp"])
         .arg(&project_dir)
         .assert()
         .success();
