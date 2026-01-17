@@ -100,7 +100,12 @@ jobs:
           mkdir release
           find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec mv {} release/ \;
           cd release
-          sha256sum * > checksums.txt
+          # Create individual .sha256 files for each artifact (for install.sh compatibility)
+          for f in *; do
+            sha256sum "$f" > "$f.sha256"
+          done
+          # Also create combined checksums.txt for convenience
+          sha256sum *.tar.gz *.zip 2>/dev/null > checksums.txt || true
           cat checksums.txt
 
       - name: Create GitHub Release
@@ -127,18 +132,22 @@ jobs:
 
       - name: Publish crates
         run: |
-          # Publish in dependency order
+          # Publish in dependency order (base crates first)
           cargo publish -p hx-core --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
           sleep 30
           cargo publish -p hx-warnings --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
           sleep 30
           cargo publish -p hx-ui --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
           sleep 30
-          cargo publish -p hx-config --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 30
           cargo publish -p hx-cache --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
           sleep 30
+          cargo publish -p hx-telemetry --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+          sleep 30
+          cargo publish -p hx-config --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+          sleep 30
           cargo publish -p hx-lock --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+          sleep 30
+          cargo publish -p hx-solver --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
           sleep 30
           cargo publish -p hx-toolchain --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
           sleep 30
@@ -146,7 +155,9 @@ jobs:
           sleep 30
           cargo publish -p hx-doctor --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
           sleep 30
-          cargo publish -p hx-telemetry --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+          cargo publish -p hx-lsp --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+          sleep 30
+          cargo publish -p hx-plugins --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
           sleep 30
           cargo publish -p hx-cli --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
         continue-on-error: true
