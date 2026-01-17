@@ -25,5 +25,8 @@ num_cpus = "1.16"
 dirs = "5.0"
 regex = "1"
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 tempfile.workspace = true

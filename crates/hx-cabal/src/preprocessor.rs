@@ -590,10 +590,16 @@ pub async fn preprocess_all(
 /// Compute the output path for a preprocessed file.
 fn compute_output_path(input: &Path, output_dir: &Path, new_ext: &str) -> PathBuf {
     let stem = input.file_stem().unwrap_or_default();
+    let parent = input.parent().unwrap_or(Path::new(""));
 
-    // Preserve directory structure relative to the source
-    // e.g., src/Lexer.x -> generated/src/Lexer.hs
-    let relative_dir = input.parent().unwrap_or(Path::new(""));
+    // If the input path is absolute, we can't safely join it to output_dir
+    // (on Unix, joining an absolute path replaces the base entirely).
+    // In this case, just use the filename without preserving directory structure.
+    let relative_dir = if parent.is_absolute() {
+        Path::new("")
+    } else {
+        parent
+    };
 
     output_dir
         .join(relative_dir)
@@ -859,6 +865,20 @@ mod tests {
         let output_dir = PathBuf::from("generated");
         let output = compute_output_path(&input, &output_dir, "hs");
         assert_eq!(output, PathBuf::from("generated/Main.hs"));
+    }
+
+    #[test]
+    fn test_compute_output_path_absolute_input() {
+        // When input has an absolute path, we should not try to join it
+        // as that would replace the output_dir entirely on Unix
+        let input = PathBuf::from("/home/user/project/src/Lexer.x");
+        let output_dir = PathBuf::from("/home/user/project/.hx/generated");
+        let output = compute_output_path(&input, &output_dir, "hs");
+        // Should just use the filename, not the full absolute path
+        assert_eq!(
+            output,
+            PathBuf::from("/home/user/project/.hx/generated/Lexer.hs")
+        );
     }
 
     #[test]

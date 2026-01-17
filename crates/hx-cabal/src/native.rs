@@ -4,7 +4,7 @@
 //! without going through Cabal. It uses module dependency analysis to compile
 //! modules in the correct order with parallel compilation support.
 
-use hx_core::{CommandOutput, CommandRunner, Error, Result};
+use hx_core::{CommandOutput, CommandRunner, Error, Fix, Result};
 use hx_solver::{ModuleGraph, ModuleInfo, build_module_graph};
 use hx_ui::{Output, Progress, Spinner};
 use serde::{Deserialize, Serialize};
@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::Semaphore;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 // ============================================================================
 // Package Information from ghc-pkg
@@ -273,8 +273,8 @@ pub fn collect_extra_libraries(packages: &[PackageInfo]) -> Vec<String> {
 /// Returns the module name if a main function is found.
 pub fn detect_main_module(graph: &ModuleGraph) -> Option<String> {
     // First check if there's a module named "Main" - this is the convention
-    if graph.modules.contains_key("Main")
-        && has_main_function(&graph.modules.get("Main").unwrap().path)
+    if let Some(main_module) = graph.modules.get("Main")
+        && has_main_function(&main_module.path)
     {
         return Some("Main".to_string());
     }
@@ -840,12 +840,28 @@ impl NativeBuilder {
         let mut warnings = Vec::new();
         let mut module_results = Vec::new();
 
-        // Build source directories list
-        let mut src_dirs: Vec<PathBuf> = options
-            .src_dirs
-            .iter()
-            .map(|d| project_root.join(d))
-            .collect();
+        // Build source directories list and warn about missing directories
+        let mut src_dirs: Vec<PathBuf> = Vec::new();
+        for dir in &options.src_dirs {
+            let full_path = project_root.join(dir);
+            if full_path.exists() {
+                src_dirs.push(full_path);
+            } else {
+                warn!("Source directory does not exist: {}", full_path.display());
+                warnings.push(format!("Source directory not found: {}", dir.display()));
+            }
+        }
+
+        // Check if we have any valid source directories
+        if src_dirs.is_empty() {
+            return Err(Error::BuildFailed {
+                errors: vec!["No valid source directories found".to_string()],
+                fixes: vec![
+                    Fix::new("Check that your source directories exist"),
+                    Fix::new("Default source directory is 'src/' - create it if missing"),
+                ],
+            });
+        }
 
         // Detect and run preprocessors
         let preproc_sources = crate::preprocessor::detect_preprocessors(&src_dirs);

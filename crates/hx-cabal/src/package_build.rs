@@ -179,7 +179,7 @@ pub async fn build_package(
                 .collect(),
             defines: Vec::new(),
             optimization: config.optimization.to_string(),
-            extra_flags: Vec::new(), // TODO: Parse cc-options from cabal file
+            extra_flags: lib_config.cc_options.clone(),
             pic: true,
             output_dir: c_output_dir.clone(),
             verbose: config.verbose,

@@ -112,6 +112,13 @@ pub struct CompilationServer {
 impl CompilationServer {
     /// Start a new compilation server.
     pub async fn start(project_root: PathBuf, config: ServerConfig) -> Result<Self> {
+        // Clean up any stale socket file before starting
+        let socket_path = server_socket_path(&project_root);
+        if socket_path.exists() {
+            debug!("Removing stale socket file: {}", socket_path.display());
+            let _ = std::fs::remove_file(&socket_path);
+        }
+
         let server = Self {
             inner: Arc::new(Mutex::new(None)),
             project_root,
@@ -121,18 +128,37 @@ impl CompilationServer {
         // Start the GHCi process
         server.spawn_ghci().await?;
 
+        // Create the socket file to indicate server is running
+        let socket_path = server_socket_path(&server.project_root);
+        if let Some(parent) = socket_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        // Write PID to socket file for stale detection
+        if let Err(e) = std::fs::write(&socket_path, std::process::id().to_string()) {
+            warn!("Failed to create socket file: {}", e);
+        }
+
         Ok(server)
     }
 
     /// Connect to an existing server or start a new one.
     pub async fn connect_or_start(project_root: PathBuf, config: ServerConfig) -> Result<Self> {
-        // Check if server socket exists
+        // Check if server socket exists and is valid
         let socket_path = server_socket_path(&project_root);
 
         if socket_path.exists() {
-            // Try to connect to existing server
-            // For now, we'll just start a new one since IPC is complex
-            info!("Starting new compilation server");
+            // Check if the PID in the socket file is still running
+            if let Ok(pid_str) = std::fs::read_to_string(&socket_path)
+                && let Ok(pid) = pid_str.trim().parse::<u32>()
+                && is_process_running(pid)
+            {
+                // Server is already running, but we can't connect to it yet
+                // (IPC not implemented), so warn and start fresh
+                warn!("Existing server (PID {}) found but IPC not implemented, starting new", pid);
+            }
+            // Socket exists but server is dead or invalid - clean up
+            debug!("Cleaning up stale socket file");
+            let _ = std::fs::remove_file(&socket_path);
         }
 
         Self::start(project_root, config).await
@@ -490,13 +516,19 @@ impl CompilationServer {
 
 impl Drop for CompilationServer {
     fn drop(&mut self) {
-        // Best-effort cleanup
+        // Best-effort cleanup of GHCi process
         if let Ok(mut guard) = self.inner.try_lock()
             && let Some(mut process) = guard.take()
         {
             let _ = writeln!(process.stdin, ":quit");
             let _ = process.stdin.flush();
             let _ = process.child.wait();
+        }
+
+        // Clean up socket file
+        let socket_path = server_socket_path(&self.project_root);
+        if socket_path.exists() {
+            let _ = std::fs::remove_file(&socket_path);
         }
     }
 }
@@ -507,9 +539,56 @@ pub fn server_socket_path(project_root: &Path) -> PathBuf {
 }
 
 /// Check if a compilation server is running for a project.
+///
+/// This checks if the socket file exists AND the process is still alive.
 pub fn is_server_running(project_root: &Path) -> bool {
     let socket_path = server_socket_path(project_root);
-    socket_path.exists()
+    if !socket_path.exists() {
+        return false;
+    }
+
+    // Read PID from socket file and check if process is alive
+    if let Ok(pid_str) = std::fs::read_to_string(&socket_path)
+        && let Ok(pid) = pid_str.trim().parse::<u32>()
+    {
+        return is_process_running(pid);
+    }
+
+    // Socket exists but we can't determine if server is running
+    // Assume it's stale
+    false
+}
+
+/// Check if a process with the given PID is running.
+#[cfg(unix)]
+fn is_process_running(pid: u32) -> bool {
+    // On Unix, we can use kill with signal 0 to check if process exists
+    unsafe { libc::kill(pid as i32, 0) == 0 }
+}
+
+#[cfg(windows)]
+fn is_process_running(pid: u32) -> bool {
+    use std::ptr;
+    const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+    const STILL_ACTIVE: u32 = 259;
+
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle.is_null() {
+            return false;
+        }
+        let mut exit_code: u32 = 0;
+        let result = GetExitCodeProcess(handle, &mut exit_code);
+        CloseHandle(handle);
+        result != 0 && exit_code == STILL_ACTIVE
+    }
+}
+
+#[cfg(windows)]
+extern "system" {
+    fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> *mut std::ffi::c_void;
+    fn GetExitCodeProcess(hProcess: *mut std::ffi::c_void, lpExitCode: *mut u32) -> i32;
+    fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32;
 }
 
 #[cfg(test)]

@@ -175,8 +175,10 @@ pub struct LibraryConfig {
     pub other_extensions: Vec<String>,
     /// GHC options
     pub ghc_options: Vec<String>,
-    /// CPP options
+    /// CPP options (preprocessor flags)
     pub cpp_options: Vec<String>,
+    /// CC options (C compiler flags)
+    pub cc_options: Vec<String>,
     /// C source files
     pub c_sources: Vec<String>,
     /// Include directories for C headers
@@ -212,8 +214,14 @@ pub struct ExecutableConfig {
     pub default_extensions: Vec<String>,
     /// GHC options
     pub ghc_options: Vec<String>,
+    /// CPP options (preprocessor flags)
+    pub cpp_options: Vec<String>,
+    /// CC options (C compiler flags)
+    pub cc_options: Vec<String>,
     /// C source files
     pub c_sources: Vec<String>,
+    /// Include directories for C headers
+    pub include_dirs: Vec<String>,
     /// Extra libraries
     pub extra_libraries: Vec<String>,
     /// Build tools required
@@ -435,6 +443,7 @@ fn apply_library_field(lib: &mut LibraryConfig, key: &str, value: &str) {
         "other-extensions" => lib.other_extensions = parse_list(value),
         "ghc-options" => lib.ghc_options = parse_ghc_options(value),
         "cpp-options" => lib.cpp_options = parse_ghc_options(value),
+        "cc-options" => lib.cc_options = parse_ghc_options(value),
         "c-sources" => lib.c_sources = parse_list(value),
         "include-dirs" => lib.include_dirs = parse_list(value),
         "includes" => lib.includes = parse_list(value),
@@ -456,7 +465,10 @@ fn apply_executable_field(exe: &mut ExecutableConfig, key: &str, value: &str) {
         "build-depends" => exe.build_depends = parse_build_depends(value),
         "default-extensions" => exe.default_extensions = parse_list(value),
         "ghc-options" => exe.ghc_options = parse_ghc_options(value),
+        "cpp-options" => exe.cpp_options = parse_ghc_options(value),
+        "cc-options" => exe.cc_options = parse_ghc_options(value),
         "c-sources" => exe.c_sources = parse_list(value),
+        "include-dirs" => exe.include_dirs = parse_list(value),
         "extra-libraries" => exe.extra_libraries = parse_list(value),
         "build-tools" | "build-tool-depends" => exe.build_tools.extend(parse_list(value)),
         "default-language" => exe.default_language = Some(value.to_string()),
