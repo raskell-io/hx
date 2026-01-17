@@ -13,6 +13,7 @@ use crate::plugins::PluginHooks;
 pub async fn run(
     args: Vec<String>,
     package: Option<String>,
+    target: Option<String>,
     policy: AutoInstallPolicy,
     output: &Output,
 ) -> Result<i32> {
@@ -101,7 +102,7 @@ pub async fn run(
         &build_dir,
         &args,
         package.as_deref(),
-        None, // No cross-compilation support for run yet
+        target.as_deref(),
         &toolchain_bin_dirs,
         output,
     )

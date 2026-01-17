@@ -107,6 +107,10 @@ pub enum Commands {
         /// Test specific package (in workspace)
         #[arg(long)]
         package: Option<String>,
+
+        /// Target triple for cross-compilation
+        #[arg(long)]
+        target: Option<String>,
     },
 
     /// Run the project
@@ -118,6 +122,10 @@ pub enum Commands {
         /// Run specific package (in workspace)
         #[arg(short, long)]
         package: Option<String>,
+
+        /// Target triple for cross-compilation
+        #[arg(long)]
+        target: Option<String>,
     },
 
     /// Start a REPL
@@ -152,6 +160,10 @@ pub enum Commands {
         /// Update specific packages (or all if none specified)
         #[arg(long, num_args = 0..)]
         update: Option<Vec<String>>,
+
+        /// Set Stackage snapshot before locking (e.g., lts-22.28, nightly)
+        #[arg(long)]
+        snapshot: Option<String>,
     },
 
     /// Pre-fetch dependencies in parallel
@@ -344,6 +356,12 @@ pub enum Commands {
     Index {
         #[command(subcommand)]
         command: IndexCommands,
+    },
+
+    /// Manage Stackage snapshots
+    Stackage {
+        #[command(subcommand)]
+        command: StackageCommands,
     },
 
     /// Generate documentation
@@ -828,6 +846,40 @@ pub enum IndexCommands {
         /// Skip confirmation prompt
         #[arg(short, long)]
         yes: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum StackageCommands {
+    /// List available Stackage snapshots
+    List {
+        /// Show only LTS snapshots
+        #[arg(long)]
+        lts: bool,
+
+        /// Show only Nightly snapshots
+        #[arg(long)]
+        nightly: bool,
+
+        /// Maximum number of snapshots to show
+        #[arg(short, long, default_value = "10")]
+        limit: usize,
+    },
+
+    /// Show information about a snapshot
+    Info {
+        /// Snapshot identifier (e.g., lts-22.28, nightly-2024-01-15)
+        snapshot: String,
+
+        /// Show all packages in the snapshot
+        #[arg(long)]
+        packages: bool,
+    },
+
+    /// Set the Stackage snapshot for the current project
+    Set {
+        /// Snapshot identifier (e.g., lts-22.28, nightly-2024-01-15, lts, nightly)
+        snapshot: String,
     },
 }
 

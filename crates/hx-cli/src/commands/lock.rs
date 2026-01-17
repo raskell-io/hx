@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result};
 use hx_cabal::freeze;
-use hx_config::{LOCKFILE_FILENAME, Project, find_project_root};
+use hx_config::{LOCKFILE_FILENAME, MANIFEST_FILENAME, Manifest, Project, find_project_root};
 use hx_lock::{LockedPackage, Lockfile, WorkspacePackageInfo, parse_freeze_file};
 use hx_plugins::HookEvent;
 use hx_solver::{
@@ -17,7 +17,50 @@ use std::path::Path;
 use crate::plugins::PluginHooks;
 
 /// Run the lock command.
-pub async fn run(use_cabal: bool, update: Option<Vec<String>>, output: &Output) -> Result<i32> {
+pub async fn run(
+    use_cabal: bool,
+    update: Option<Vec<String>>,
+    snapshot: Option<String>,
+    output: &Output,
+) -> Result<i32> {
+    // Handle --snapshot flag: set snapshot in manifest before locking
+    if let Some(snapshot_str) = snapshot {
+        let project_root = find_project_root(".")?;
+        let manifest_path = project_root.join(MANIFEST_FILENAME);
+
+        // Validate the snapshot first
+        let snapshot_id = match SnapshotId::parse(&snapshot_str) {
+            Ok(id) => id,
+            Err(e) => {
+                output.error(&format!("Invalid snapshot identifier '{}': {}", snapshot_str, e));
+                output.info("Examples: lts-22.28, lts-22, nightly-2024-01-15, nightly");
+                return Ok(1);
+            }
+        };
+
+        output.status("Validating", &format!("snapshot {}...", snapshot_str));
+        match load_snapshot(&snapshot_id, None).await {
+            Ok(snap) => {
+                output.info(&format!(
+                    "Snapshot {} uses GHC {} with {} packages",
+                    snapshot_str,
+                    snap.metadata.ghc_version,
+                    snap.packages.len()
+                ));
+            }
+            Err(e) => {
+                output.error(&format!("Failed to load snapshot: {}", e));
+                return Ok(1);
+            }
+        }
+
+        // Update manifest
+        let mut manifest = Manifest::from_file(&manifest_path)?;
+        manifest.stackage.snapshot = Some(snapshot_str.clone());
+        manifest.to_file(&manifest_path)?;
+        output.info(&format!("Set snapshot to {} in {}", snapshot_str, MANIFEST_FILENAME));
+    }
+
     // Default is native solver, --cabal uses cabal freeze
     if !use_cabal {
         return run_native(update, output).await;
@@ -233,6 +276,23 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
                         snapshot.packages.len(),
                         snapshot.metadata.ghc_version
                     ));
+
+                    // Warn if project GHC version doesn't match snapshot
+                    if let Some(ref project_ghc) = project.manifest.toolchain.ghc {
+                        if *project_ghc != snapshot.metadata.ghc_version {
+                            output.warn(&format!(
+                                "Project uses GHC {} but snapshot {} uses GHC {}",
+                                project_ghc,
+                                snapshot_str,
+                                snapshot.metadata.ghc_version
+                            ));
+                            output.info(&format!(
+                                "Consider updating [toolchain].ghc to \"{}\" in hx.toml",
+                                snapshot.metadata.ghc_version
+                            ));
+                        }
+                    }
+
                     Some((snapshot_str.clone(), snapshot))
                 }
                 Err(e) => {

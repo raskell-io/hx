@@ -31,6 +31,7 @@ mod run;
 mod script;
 mod search;
 mod server;
+mod stackage;
 mod toolchain;
 mod upgrade;
 mod watch;
@@ -85,10 +86,12 @@ pub async fn run(cli: Cli) -> Result<i32> {
             package,
             native,
         }) => build::run(release, jobs, target, package, native, policy, &output).await,
-        Some(Commands::Test { pattern, package }) => {
-            build::test(pattern, package, policy, &output).await
+        Some(Commands::Test { pattern, package, target }) => {
+            build::test(pattern, package, target, policy, &output).await
         }
-        Some(Commands::Run { args, package }) => run::run(args, package, policy, &output).await,
+        Some(Commands::Run { args, package, target }) => {
+            run::run(args, package, target, policy, &output).await
+        }
         Some(Commands::Repl) => run::repl(policy, &output).await,
         Some(Commands::Check) => {
             // Check is just a fast build
@@ -97,7 +100,9 @@ pub async fn run(cli: Cli) -> Result<i32> {
         Some(Commands::Fmt { check }) => fmt::run(check, &output).await,
         Some(Commands::Lint { fix }) => lint::run(fix, &output).await,
         Some(Commands::Doctor) => doctor::run(&output).await,
-        Some(Commands::Lock { cabal, update }) => lock::run(cabal, update, &output).await,
+        Some(Commands::Lock { cabal, update, snapshot }) => {
+            lock::run(cabal, update, snapshot, &output).await
+        }
         Some(Commands::Fetch { jobs }) => fetch::run(jobs, &output).await,
         Some(Commands::Sync { force }) => lock::sync(force, &output).await,
         Some(Commands::Clean { global }) => clean::run(global, &output).await,
@@ -152,6 +157,7 @@ pub async fn run(cli: Cli) -> Result<i32> {
             IndexCommands::Status => index::status(&output).await,
             IndexCommands::Clear { yes } => index::clear(yes, &output).await,
         },
+        Some(Commands::Stackage { command }) => stackage::run(command, &output).await,
         Some(Commands::Docs {
             open,
             deps,

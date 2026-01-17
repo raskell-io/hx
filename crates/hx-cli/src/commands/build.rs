@@ -243,6 +243,7 @@ fn get_build_fingerprint(project: &Project) -> (Option<String>, usize) {
 pub async fn test(
     pattern: Option<String>,
     package: Option<String>,
+    target: Option<String>,
     policy: AutoInstallPolicy,
     output: &Output,
 ) -> Result<i32> {
@@ -331,7 +332,7 @@ pub async fn test(
         &build_dir,
         pattern.as_deref(),
         package.as_deref(),
-        None, // No cross-compilation support for tests yet
+        target.as_deref(),
         &toolchain_bin_dirs,
         output,
     )
