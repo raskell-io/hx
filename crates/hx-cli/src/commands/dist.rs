@@ -52,8 +52,7 @@ fn get_version(override_version: Option<String>) -> Result<String> {
         .unwrap_or_else(|| PathBuf::from("Cargo.toml"));
 
     if cargo_toml.exists() {
-        let content = fs::read_to_string(&cargo_toml)
-            .context("Failed to read Cargo.toml")?;
+        let content = fs::read_to_string(&cargo_toml).context("Failed to read Cargo.toml")?;
 
         // Simple TOML parsing for version
         for line in content.lines() {
@@ -78,15 +77,18 @@ fn build_release(target: &str, output: &Output) -> Result<PathBuf> {
     let mut cmd = Command::new("cargo");
     cmd.args(["build", "--release", "--target", target, "-p", "hx-cli"]);
 
-    let status = cmd.status()
-        .context("Failed to spawn cargo build")?;
+    let status = cmd.status().context("Failed to spawn cargo build")?;
 
     if !status.success() {
         bail!("Cargo build failed with exit code: {:?}", status.code());
     }
 
     // Find the built binary
-    let binary_name = if target.contains("windows") { "hx.exe" } else { "hx" };
+    let binary_name = if target.contains("windows") {
+        "hx.exe"
+    } else {
+        "hx"
+    };
     let binary_path = PathBuf::from("target")
         .join(target)
         .join("release")
@@ -117,9 +119,7 @@ fn strip_binary(binary_path: &Path, target: &str, output: &Output) -> Result<()>
         return Ok(()); // Skip if not available
     };
 
-    let status = Command::new(strip_cmd)
-        .arg(binary_path)
-        .status();
+    let status = Command::new(strip_cmd).arg(binary_path).status();
 
     match status {
         Ok(s) if s.success() => {
@@ -144,11 +144,9 @@ fn create_staging(config: &DistConfig, target: &str, version: &str) -> Result<Pa
 
     // Clean and create staging directory
     if staging_dir.exists() {
-        fs::remove_dir_all(&staging_dir)
-            .context("Failed to remove existing staging directory")?;
+        fs::remove_dir_all(&staging_dir).context("Failed to remove existing staging directory")?;
     }
-    fs::create_dir_all(&staging_dir)
-        .context("Failed to create staging directory")?;
+    fs::create_dir_all(&staging_dir).context("Failed to create staging directory")?;
 
     // Create completions subdirectory
     if config.include_completions {
@@ -161,11 +159,14 @@ fn create_staging(config: &DistConfig, target: &str, version: &str) -> Result<Pa
 
 /// Copy binary to staging directory.
 fn copy_binary(staging_dir: &Path, binary_path: &Path, target: &str) -> Result<()> {
-    let binary_name = if target.contains("windows") { "hx.exe" } else { "hx" };
+    let binary_name = if target.contains("windows") {
+        "hx.exe"
+    } else {
+        "hx"
+    };
     let dest = staging_dir.join(binary_name);
 
-    fs::copy(binary_path, &dest)
-        .context("Failed to copy binary to staging")?;
+    fs::copy(binary_path, &dest).context("Failed to copy binary to staging")?;
 
     // Set executable permissions on Unix
     #[cfg(unix)]
@@ -192,8 +193,7 @@ fn copy_metadata(staging_dir: &Path, output: &Output) -> Result<()> {
         let src = project_root.join(file);
         if src.exists() {
             let dest = staging_dir.join(file);
-            fs::copy(&src, &dest)
-                .with_context(|| format!("Failed to copy {}", file))?;
+            fs::copy(&src, &dest).with_context(|| format!("Failed to copy {}", file))?;
             output.verbose(&format!("Copied {}", file));
         }
     }
@@ -214,8 +214,8 @@ fn generate_completions(staging_dir: &Path, output: &Output) -> Result<()> {
 
     for (shell, filename) in &shells {
         let path = completions_dir.join(filename);
-        let mut file = File::create(&path)
-            .with_context(|| format!("Failed to create {}", filename))?;
+        let mut file =
+            File::create(&path).with_context(|| format!("Failed to create {}", filename))?;
 
         let mut cmd = Cli::command();
         generate(*shell, &mut cmd, "hx", &mut file);
@@ -227,8 +227,15 @@ fn generate_completions(staging_dir: &Path, output: &Output) -> Result<()> {
 }
 
 /// Create archive from staging directory.
-fn create_archive(staging_dir: &Path, config: &DistConfig, target: &str, _version: &str, output: &Output) -> Result<PathBuf> {
-    let archive_name = staging_dir.file_name()
+fn create_archive(
+    staging_dir: &Path,
+    config: &DistConfig,
+    target: &str,
+    _version: &str,
+    output: &Output,
+) -> Result<PathBuf> {
+    let archive_name = staging_dir
+        .file_name()
         .and_then(|n| n.to_str())
         .context("Invalid staging directory name")?;
 
@@ -252,13 +259,13 @@ fn create_tarball(staging_dir: &Path, archive_path: &Path, output: &Output) -> R
 
     output.verbose(&format!("Creating tarball: {}", archive_path.display()));
 
-    let tar_gz = File::create(archive_path)
-        .context("Failed to create tarball file")?;
+    let tar_gz = File::create(archive_path).context("Failed to create tarball file")?;
     let enc = GzEncoder::new(tar_gz, Compression::default());
     let mut tar = tar::Builder::new(enc);
 
     // Get the directory name for the archive root
-    let _archive_name = staging_dir.file_name()
+    let _archive_name = staging_dir
+        .file_name()
         .and_then(|n| n.to_str())
         .context("Invalid staging directory name")?;
 
@@ -271,15 +278,17 @@ fn create_tarball(staging_dir: &Path, archive_path: &Path, output: &Output) -> R
             continue;
         }
 
-        let relative_path = path.strip_prefix(staging_dir.parent().unwrap_or(staging_dir))
+        let relative_path = path
+            .strip_prefix(staging_dir.parent().unwrap_or(staging_dir))
             .context("Failed to get relative path")?;
 
         if path.is_file() {
             tar.append_path_with_name(path, relative_path)
                 .with_context(|| format!("Failed to add {} to tarball", path.display()))?;
         } else if path.is_dir() {
-            tar.append_dir(relative_path, path)
-                .with_context(|| format!("Failed to add directory {} to tarball", path.display()))?;
+            tar.append_dir(relative_path, path).with_context(|| {
+                format!("Failed to add directory {} to tarball", path.display())
+            })?;
         }
     }
 
@@ -290,17 +299,15 @@ fn create_tarball(staging_dir: &Path, archive_path: &Path, output: &Output) -> R
 
 /// Create a zip archive.
 fn create_zip(staging_dir: &Path, archive_path: &Path, output: &Output) -> Result<()> {
-    use zip::write::SimpleFileOptions;
     use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
 
     output.verbose(&format!("Creating zip: {}", archive_path.display()));
 
-    let file = File::create(archive_path)
-        .context("Failed to create zip file")?;
+    let file = File::create(archive_path).context("Failed to create zip file")?;
     let mut zip = ZipWriter::new(file);
 
-    let options = SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
     for entry in walkdir::WalkDir::new(staging_dir) {
         let entry = entry.context("Failed to read directory entry")?;
@@ -310,7 +317,8 @@ fn create_zip(staging_dir: &Path, archive_path: &Path, output: &Output) -> Resul
             continue;
         }
 
-        let relative_path = path.strip_prefix(staging_dir.parent().unwrap_or(staging_dir))
+        let relative_path = path
+            .strip_prefix(staging_dir.parent().unwrap_or(staging_dir))
             .context("Failed to get relative path")?;
         let name = relative_path.to_string_lossy();
 
@@ -336,8 +344,7 @@ fn create_zip(staging_dir: &Path, archive_path: &Path, output: &Output) -> Resul
 fn generate_checksum(archive_path: &Path, output: &Output) -> Result<PathBuf> {
     output.verbose("Generating SHA256 checksum...");
 
-    let mut file = File::open(archive_path)
-        .context("Failed to open archive for checksum")?;
+    let mut file = File::open(archive_path).context("Failed to open archive for checksum")?;
     let mut hasher = Sha256::new();
     let mut buffer = [0u8; 8192];
 
@@ -352,7 +359,8 @@ fn generate_checksum(archive_path: &Path, output: &Output) -> Result<PathBuf> {
     let hash = hasher.finalize();
     let hash_hex = hex::encode(hash);
 
-    let archive_name = archive_path.file_name()
+    let archive_name = archive_path
+        .file_name()
         .and_then(|n| n.to_str())
         .context("Invalid archive filename")?;
 
@@ -360,8 +368,7 @@ fn generate_checksum(archive_path: &Path, output: &Output) -> Result<PathBuf> {
     let checksum_path = PathBuf::from(format!("{}.sha256", archive_path.display()));
 
     let checksum_content = format!("{}  {}\n", hash_hex, archive_name);
-    fs::write(&checksum_path, &checksum_content)
-        .context("Failed to write checksum file")?;
+    fs::write(&checksum_path, &checksum_content).context("Failed to write checksum file")?;
 
     Ok(checksum_path)
 }
@@ -369,8 +376,7 @@ fn generate_checksum(archive_path: &Path, output: &Output) -> Result<PathBuf> {
 /// Run the dist command - build and package a release.
 pub async fn run(config: DistConfig, output: &Output) -> Result<i32> {
     // Ensure output directory exists
-    fs::create_dir_all(&config.output_dir)
-        .context("Failed to create output directory")?;
+    fs::create_dir_all(&config.output_dir).context("Failed to create output directory")?;
 
     // Get version
     let version = get_version(config.version.clone())?;
@@ -415,8 +421,7 @@ pub async fn run(config: DistConfig, output: &Output) -> Result<i32> {
     output.status("Checksum", &checksum_path.display().to_string());
 
     // Clean up staging directory
-    fs::remove_dir_all(&staging_dir)
-        .context("Failed to clean up staging directory")?;
+    fs::remove_dir_all(&staging_dir).context("Failed to clean up staging directory")?;
 
     output.status("Created", &archive_path.display().to_string());
 
@@ -424,7 +429,11 @@ pub async fn run(config: DistConfig, output: &Output) -> Result<i32> {
 }
 
 /// Generate Homebrew formula.
-pub fn generate_formula(version: Option<String>, output_file: Option<PathBuf>, output: &Output) -> Result<i32> {
+pub fn generate_formula(
+    version: Option<String>,
+    output_file: Option<PathBuf>,
+    output: &Output,
+) -> Result<i32> {
     let version = get_version(version)?;
 
     // Use a constant for the Ruby interpolation to avoid Rust lexer issues
@@ -490,10 +499,15 @@ end
 }
 
 /// Generate installation script.
-pub fn generate_install_script(version: Option<String>, output_file: Option<PathBuf>, output: &Output) -> Result<i32> {
+pub fn generate_install_script(
+    version: Option<String>,
+    output_file: Option<PathBuf>,
+    output: &Output,
+) -> Result<i32> {
     let version = get_version(version)?;
 
-    let script = format!(r#"#!/bin/sh
+    let script = format!(
+        r#"#!/bin/sh
 # hx installer script
 # Usage: curl -fsSL https://get.hx.dev | sh
 #    or: sh install.sh
@@ -675,7 +689,9 @@ main() {{
 }}
 
 main "$@"
-"#, version = version);
+"#,
+        version = version
+    );
 
     match output_file {
         Some(path) => {

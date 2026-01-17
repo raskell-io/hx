@@ -28,6 +28,8 @@ pub struct BuildOptions {
     pub package_count: Option<usize>,
     /// Project name (for cache tracking)
     pub project_name: Option<String>,
+    /// Additional bin directories to prepend to PATH (for hx-managed toolchains)
+    pub toolchain_bin_dirs: Vec<PathBuf>,
 }
 
 /// Result of a build operation.
@@ -54,10 +56,11 @@ pub async fn build(
     ensure_dir(&store_dir)?;
     ensure_dir(build_dir)?;
 
+    // Global options must come before the subcommand
     let mut args = vec![
+        format!("--store-dir={}", store_dir.display()),
         "build".to_string(),
         format!("--builddir={}", build_dir.display()),
-        format!("--store-dir={}", store_dir.display()),
     ];
 
     if options.release {
@@ -82,7 +85,10 @@ pub async fn build(
         None
     };
 
-    let runner = CommandRunner::new().with_working_dir(project_root);
+    let mut runner = CommandRunner::new().with_working_dir(project_root);
+    for bin_dir in &options.toolchain_bin_dirs {
+        runner = runner.with_ghc_bin(bin_dir);
+    }
     let cmd_output = runner.run("cabal", args.iter().map(|s| s.as_str())).await?;
 
     let result = parse_build_output(&cmd_output);
@@ -141,14 +147,16 @@ pub async fn test(
     build_dir: &Path,
     pattern: Option<&str>,
     package: Option<&str>,
+    toolchain_bin_dirs: &[PathBuf],
     output: &Output,
 ) -> Result<BuildResult> {
     let store_dir = cabal_store_dir()?;
 
+    // Global options must come before the subcommand
     let mut args = vec![
+        format!("--store-dir={}", store_dir.display()),
         "test".to_string(),
         format!("--builddir={}", build_dir.display()),
-        format!("--store-dir={}", store_dir.display()),
     ];
 
     // Add package filter for workspace tests
@@ -164,7 +172,10 @@ pub async fn test(
 
     let spinner = Spinner::new("Testing...");
 
-    let runner = CommandRunner::new().with_working_dir(project_root);
+    let mut runner = CommandRunner::new().with_working_dir(project_root);
+    for bin_dir in toolchain_bin_dirs {
+        runner = runner.with_ghc_bin(bin_dir);
+    }
     let cmd_output = runner.run("cabal", args.iter().map(|s| s.as_str())).await?;
 
     let result = parse_build_output(&cmd_output);
@@ -198,14 +209,16 @@ pub async fn run(
     build_dir: &Path,
     args: &[String],
     package: Option<&str>,
+    toolchain_bin_dirs: &[PathBuf],
     _output: &Output,
 ) -> Result<i32> {
     let store_dir = cabal_store_dir()?;
 
+    // Global options must come before the subcommand
     let mut cmd_args = vec![
+        format!("--store-dir={}", store_dir.display()),
         "run".to_string(),
         format!("--builddir={}", build_dir.display()),
-        format!("--store-dir={}", store_dir.display()),
     ];
 
     // Add package filter for workspace runs
@@ -221,7 +234,10 @@ pub async fn run(
 
     info!("Running cabal run in {}", project_root.display());
 
-    let runner = CommandRunner::new().with_working_dir(project_root);
+    let mut runner = CommandRunner::new().with_working_dir(project_root);
+    for bin_dir in toolchain_bin_dirs {
+        runner = runner.with_ghc_bin(bin_dir);
+    }
     let cmd_output = runner
         .run("cabal", cmd_args.iter().map(|s| s.as_str()))
         .await?;
@@ -238,21 +254,35 @@ pub async fn run(
 }
 
 /// Run cabal repl.
-pub async fn repl(project_root: &Path, build_dir: &Path) -> Result<i32> {
+pub async fn repl(
+    project_root: &Path,
+    build_dir: &Path,
+    toolchain_bin_dirs: &[PathBuf],
+) -> Result<i32> {
     let store_dir = cabal_store_dir()?;
 
+    // Global options must come before the subcommand
     let args = [
+        format!("--store-dir={}", store_dir.display()),
         "repl".to_string(),
         format!("--builddir={}", build_dir.display()),
-        format!("--store-dir={}", store_dir.display()),
     ];
 
     info!("Running cabal repl in {}", project_root.display());
 
-    // For repl, we need to run interactively
+    // Build PATH with toolchain bin dirs
+    let current_path = std::env::var("PATH").unwrap_or_default();
+    let mut new_path = current_path.clone();
+    for bin_dir in toolchain_bin_dirs.iter().rev() {
+        let bin_str = bin_dir.to_string_lossy();
+        new_path = format!("{}:{}", bin_str, new_path);
+    }
+
+    // For repl, we need to run interactively (no stdout/stderr capture)
     let status = std::process::Command::new("cabal")
         .args(args.iter().map(|s| s.as_str()))
         .current_dir(project_root)
+        .env("PATH", &new_path)
         .status()
         .map_err(|e| Error::Io {
             message: "failed to run cabal repl".to_string(),

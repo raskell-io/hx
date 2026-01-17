@@ -275,8 +275,9 @@ impl PackageCacheIndex {
             })?;
         }
 
-        let content = serde_json::to_string_pretty(self)
-            .map_err(|e| Error::config(format!("failed to serialize package cache index: {}", e)))?;
+        let content = serde_json::to_string_pretty(self).map_err(|e| {
+            Error::config(format!("failed to serialize package cache index: {}", e))
+        })?;
 
         std::fs::write(&path, content).map_err(|e| Error::Io {
             message: "failed to write package cache index".to_string(),
@@ -298,18 +299,19 @@ impl PackageCacheIndex {
     }
 
     /// Get a cached package by name and version for a specific GHC version.
-    pub fn get_package(&self, name: &str, version: &str, ghc_version: &str) -> Option<&PackageCacheEntry> {
-        self.entries.values().find(|e| {
-            e.name == name && e.version == version && e.ghc_version == ghc_version
-        })
+    pub fn get_package(
+        &self,
+        name: &str,
+        version: &str,
+        ghc_version: &str,
+    ) -> Option<&PackageCacheEntry> {
+        self.entries
+            .values()
+            .find(|e| e.name == name && e.version == version && e.ghc_version == ghc_version)
     }
 
     /// Record a successful package build.
-    pub fn record_package(
-        &mut self,
-        cache_key: String,
-        entry: PackageCacheEntry,
-    ) {
+    pub fn record_package(&mut self, cache_key: String, entry: PackageCacheEntry) {
         self.entries.insert(cache_key, entry);
     }
 
@@ -609,12 +611,8 @@ mod tests {
         assert_eq!(key1, key2);
 
         // Different deps should produce different keys
-        let key3 = calculate_package_cache_key(
-            "text",
-            "2.1.1",
-            "9.8.2",
-            &["base-4.18.0".to_string()],
-        );
+        let key3 =
+            calculate_package_cache_key("text", "2.1.1", "9.8.2", &["base-4.18.0".to_string()]);
         assert_ne!(key1, key3);
 
         // Different GHC version should produce different keys

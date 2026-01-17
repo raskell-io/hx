@@ -62,11 +62,7 @@ pub fn discover_plugins(
                 }
             }
             Err(e) => {
-                debug!(
-                    "Failed to glob plugins in {}: {}",
-                    base_path.display(),
-                    e
-                );
+                debug!("Failed to glob plugins in {}: {}", base_path.display(), e);
             }
         }
     }
@@ -113,7 +109,10 @@ pub fn create_plugins_dir(project_root: &Path) -> Result<PathBuf> {
     if !plugins_dir.exists() {
         std::fs::create_dir_all(&plugins_dir).map_err(|e| {
             PluginError::io(
-                format!("failed to create plugins directory: {}", plugins_dir.display()),
+                format!(
+                    "failed to create plugins directory: {}",
+                    plugins_dir.display()
+                ),
                 e,
             )
         })?;
@@ -137,8 +136,8 @@ impl PluginPaths {
     pub fn for_project(config: &PluginConfig, project_root: &Path) -> Self {
         let local = project_root.join(".hx").join("plugins");
 
-        let global = directories::BaseDirs::new()
-            .map(|dirs| dirs.config_dir().join("hx").join("plugins"));
+        let global =
+            directories::BaseDirs::new().map(|dirs| dirs.config_dir().join("hx").join("plugins"));
 
         let custom = config
             .paths

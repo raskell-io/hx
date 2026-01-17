@@ -4,10 +4,10 @@
 
 use crate::context::with_context;
 use crate::error::Result;
+use std::process::Command;
+use steel::SteelVal;
 use steel::steel_vm::engine::Engine;
 use steel::steel_vm::register_fn::RegisterFn;
-use steel::SteelVal;
-use std::process::Command;
 
 /// Register shell API functions.
 pub fn register(engine: &mut Engine) -> Result<()> {
@@ -31,17 +31,16 @@ fn run_command(cmd: String, args: Vec<SteelVal>) -> SteelVal {
     // Get environment variables from context
     let env_vars = with_context(|ctx| ctx.env_vars.clone()).unwrap_or_default();
 
-    let result = Command::new(&cmd)
-        .args(&args)
-        .envs(&env_vars)
-        .output();
+    let result = Command::new(&cmd).args(&args).envs(&env_vars).output();
 
     match result {
         Ok(output) => {
             // Return as association list: ((exit-code . N) (stdout . "...") (stderr . "..."))
             let exit_code = SteelVal::IntV(output.status.code().unwrap_or(-1) as isize);
-            let stdout = SteelVal::StringV(String::from_utf8_lossy(&output.stdout).to_string().into());
-            let stderr = SteelVal::StringV(String::from_utf8_lossy(&output.stderr).to_string().into());
+            let stdout =
+                SteelVal::StringV(String::from_utf8_lossy(&output.stdout).to_string().into());
+            let stderr =
+                SteelVal::StringV(String::from_utf8_lossy(&output.stderr).to_string().into());
 
             SteelVal::ListV(
                 vec![
@@ -52,16 +51,28 @@ fn run_command(cmd: String, args: Vec<SteelVal>) -> SteelVal {
                 .into(),
             )
         }
-        Err(e) => {
-            SteelVal::ListV(
-                vec![
-                    SteelVal::ListV(vec![SteelVal::SymbolV("exit-code".into()), SteelVal::IntV(-1)].into()),
-                    SteelVal::ListV(vec![SteelVal::SymbolV("stdout".into()), SteelVal::StringV("".into())].into()),
-                    SteelVal::ListV(vec![SteelVal::SymbolV("stderr".into()), SteelVal::StringV(e.to_string().into())].into()),
-                ]
-                .into(),
-            )
-        }
+        Err(e) => SteelVal::ListV(
+            vec![
+                SteelVal::ListV(
+                    vec![SteelVal::SymbolV("exit-code".into()), SteelVal::IntV(-1)].into(),
+                ),
+                SteelVal::ListV(
+                    vec![
+                        SteelVal::SymbolV("stdout".into()),
+                        SteelVal::StringV("".into()),
+                    ]
+                    .into(),
+                ),
+                SteelVal::ListV(
+                    vec![
+                        SteelVal::SymbolV("stderr".into()),
+                        SteelVal::StringV(e.to_string().into()),
+                    ]
+                    .into(),
+                ),
+            ]
+            .into(),
+        ),
     }
 }
 
@@ -110,10 +121,7 @@ fn run_silent(cmd: String, args: Vec<SteelVal>) -> SteelVal {
 
     let env_vars = with_context(|ctx| ctx.env_vars.clone()).unwrap_or_default();
 
-    let result = Command::new(&cmd)
-        .args(&args)
-        .envs(&env_vars)
-        .output();
+    let result = Command::new(&cmd).args(&args).envs(&env_vars).output();
 
     match result {
         Ok(output) => SteelVal::IntV(output.status.code().unwrap_or(-1) as isize),

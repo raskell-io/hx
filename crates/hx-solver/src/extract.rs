@@ -130,10 +130,7 @@ pub fn extract_package(
 ) -> Result<ExtractedPackage, ExtractError> {
     // Parse package name and version from tarball filename
     // Format: package-version.tar.gz
-    let filename = tarball
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("");
+    let filename = tarball.file_stem().and_then(|s| s.to_str()).unwrap_or("");
 
     // Remove .tar if present (for .tar.gz files, file_stem gives us foo-1.0.tar)
     let filename = filename.strip_suffix(".tar").unwrap_or(filename);
@@ -202,10 +199,11 @@ fn load_extracted_package(
     })?;
 
     // Read and parse the .cabal file
-    let cabal_content = fs::read_to_string(&cabal_file).map_err(|e| ExtractError::ReadCabalFile {
-        path: cabal_file.clone(),
-        source: e,
-    })?;
+    let cabal_content =
+        fs::read_to_string(&cabal_file).map_err(|e| ExtractError::ReadCabalFile {
+            path: cabal_file.clone(),
+            source: e,
+        })?;
 
     let build_info = parse_cabal_full(&cabal_content);
 

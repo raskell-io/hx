@@ -64,10 +64,7 @@ impl HxLanguageServer {
         };
 
         // Determine GHC flags
-        let ghc_version = workspace
-            .ghc_version
-            .as_deref()
-            .unwrap_or("9.8.0");
+        let ghc_version = workspace.ghc_version.as_deref().unwrap_or("9.8.0");
         let extra_flags = diagnostic_flags(ghc_version);
 
         // Build GHC command
@@ -80,7 +77,11 @@ impl HxLanguageServer {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        debug!("Running: ghc -fno-code {:?} {}", extra_flags, file.display());
+        debug!(
+            "Running: ghc -fno-code {:?} {}",
+            extra_flags,
+            file.display()
+        );
 
         match cmd.output().await {
             Ok(output) => {
@@ -109,9 +110,7 @@ impl HxLanguageServer {
             .map(|d| ghc_to_lsp_diagnostic(d))
             .collect();
 
-        self.client
-            .publish_diagnostics(uri, lsp_diags, None)
-            .await;
+        self.client.publish_diagnostics(uri, lsp_diags, None).await;
     }
 
     /// Handle a file being opened or saved.
@@ -302,11 +301,7 @@ fn ghc_to_lsp_diagnostic(diag: &GhcDiagnostic) -> Diagnostic {
 }
 
 /// Convert a quick fix to an LSP code action.
-fn quick_fix_to_code_action(
-    fix: &QuickFix,
-    uri: &Url,
-    diag: &GhcDiagnostic,
-) -> Option<CodeAction> {
+fn quick_fix_to_code_action(fix: &QuickFix, uri: &Url, diag: &GhcDiagnostic) -> Option<CodeAction> {
     // If there's a text edit, create a workspace edit
     let edit = fix.edit.as_ref().map(|text_edit| {
         let range = Range {
@@ -335,13 +330,14 @@ fn quick_fix_to_code_action(
     });
 
     // If there's a command, create a command action
-    let command = fix.command.as_ref().map(|cmd| {
-        tower_lsp::lsp_types::Command {
+    let command = fix
+        .command
+        .as_ref()
+        .map(|cmd| tower_lsp::lsp_types::Command {
             title: fix.title.clone(),
             command: "hx.runCommand".to_string(),
             arguments: Some(vec![serde_json::Value::String(cmd.clone())]),
-        }
-    });
+        });
 
     // Only create action if we have either an edit or a command
     if edit.is_none() && command.is_none() {

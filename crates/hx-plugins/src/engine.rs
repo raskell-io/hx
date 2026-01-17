@@ -96,10 +96,7 @@ impl SteelEngine {
         })?;
 
         self.engine.run(content).map_err(|e| {
-            PluginError::load(
-                path.to_path_buf(),
-                format!("Steel evaluation error: {}", e),
-            )
+            PluginError::load(path.to_path_buf(), format!("Steel evaluation error: {}", e))
         })?;
 
         Ok(())

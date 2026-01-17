@@ -1,8 +1,8 @@
 //! File system watching with debouncing.
 
-use notify_debouncer_mini::{new_debouncer, DebouncedEventKind, Debouncer};
+use notify_debouncer_mini::{DebouncedEventKind, Debouncer, new_debouncer};
 use std::path::PathBuf;
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{Receiver, channel};
 use std::time::Duration;
 use tracing::{debug, warn};
 

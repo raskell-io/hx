@@ -2,13 +2,13 @@
 //!
 //! Runs tests with coverage instrumentation and generates reports.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use hx_config::{find_project_root, Project};
-use hx_toolchain::{ensure_toolchain, AutoInstallPolicy, Toolchain};
+use hx_config::{Project, find_project_root};
+use hx_toolchain::{AutoInstallPolicy, Toolchain, ensure_toolchain};
 use hx_ui::{Output, Spinner};
 
 /// Coverage configuration.

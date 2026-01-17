@@ -84,7 +84,9 @@ pub async fn build_package(
 
     // Check if this package can be built natively
     if !package.can_build_native() {
-        let reason = package.skip_reason().unwrap_or_else(|| "unknown".to_string());
+        let reason = package
+            .skip_reason()
+            .unwrap_or_else(|| "unknown".to_string());
         return Err(Error::BuildFailed {
             errors: vec![format!("Cannot build {} natively: {}", name, reason)],
             fixes: vec![Fix::new("Use cabal to build this package instead")],
@@ -147,15 +149,8 @@ pub async fn build_package(
     let mut object_files = Vec::new();
 
     for module in &modules {
-        let result = compile_package_module(
-            module,
-            package,
-            lib_config,
-            config,
-            &hi_dir,
-            &o_dir,
-        )
-        .await;
+        let result =
+            compile_package_module(module, package, lib_config, config, &hi_dir, &o_dir).await;
 
         all_warnings.extend(result.warnings);
 
@@ -430,11 +425,7 @@ fn parse_ghc_output(stdout: &str, stderr: &str) -> (Vec<String>, Vec<String>) {
 }
 
 /// Create a static library from object files.
-async fn create_library(
-    lib_path: &Path,
-    object_files: &[PathBuf],
-    verbose: bool,
-) -> Result<()> {
+async fn create_library(lib_path: &Path, object_files: &[PathBuf], verbose: bool) -> Result<()> {
     if object_files.is_empty() {
         return Ok(());
     }

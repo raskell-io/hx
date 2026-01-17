@@ -76,10 +76,30 @@ pub async fn run(
 
     output.status("Running", run_target);
 
+    // Collect toolchain bin directories for PATH
+    let mut toolchain_bin_dirs = Vec::new();
+    if let Some(ghc_path) = toolchain.ghc.status.path() {
+        if let Some(parent) = ghc_path.parent() {
+            toolchain_bin_dirs.push(parent.to_path_buf());
+        }
+    }
+    if let Some(cabal_path) = toolchain.cabal.status.path() {
+        if let Some(parent) = cabal_path.parent() {
+            toolchain_bin_dirs.push(parent.to_path_buf());
+        }
+    }
+
     let build_dir = project.cabal_build_dir();
 
-    let exit_code =
-        cabal_build::run(&project.root, &build_dir, &args, package.as_deref(), output).await?;
+    let exit_code = cabal_build::run(
+        &project.root,
+        &build_dir,
+        &args,
+        package.as_deref(),
+        &toolchain_bin_dirs,
+        output,
+    )
+    .await?;
 
     // Run post-run hooks
     if let Some(ref mut h) = hooks {
@@ -96,16 +116,37 @@ pub async fn repl(policy: AutoInstallPolicy, output: &Output) -> Result<i32> {
     let project = Project::load(&project_root)?;
 
     // Check toolchain requirements
-    if let Err(e) = check_toolchain(&project, policy).await {
+    let toolchain = Toolchain::detect().await;
+    if let Err(e) = ensure_toolchain(
+        &toolchain,
+        project.manifest.toolchain.ghc.as_deref(),
+        project.manifest.toolchain.cabal.as_deref(),
+        policy,
+    )
+    .await
+    {
         output.print_error(&e);
         return Ok(4); // Toolchain error exit code
     }
 
     output.status("Starting", "REPL");
 
+    // Collect toolchain bin directories for PATH
+    let mut toolchain_bin_dirs = Vec::new();
+    if let Some(ghc_path) = toolchain.ghc.status.path() {
+        if let Some(parent) = ghc_path.parent() {
+            toolchain_bin_dirs.push(parent.to_path_buf());
+        }
+    }
+    if let Some(cabal_path) = toolchain.cabal.status.path() {
+        if let Some(parent) = cabal_path.parent() {
+            toolchain_bin_dirs.push(parent.to_path_buf());
+        }
+    }
+
     let build_dir = project.cabal_build_dir();
 
-    let exit_code = cabal_build::repl(&project.root, &build_dir).await?;
+    let exit_code = cabal_build::repl(&project.root, &build_dir, &toolchain_bin_dirs).await?;
     Ok(exit_code)
 }
 

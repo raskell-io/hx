@@ -561,6 +561,20 @@ pub async fn sync(force: bool, output: &Output) -> Result<i32> {
     // For now, just run a regular build since we have the freeze file
     let build_dir = project.cabal_build_dir();
 
+    // Detect toolchain for PATH setup
+    let toolchain = Toolchain::detect().await;
+    let mut toolchain_bin_dirs = Vec::new();
+    if let Some(ghc_path) = toolchain.ghc.status.path() {
+        if let Some(parent) = ghc_path.parent() {
+            toolchain_bin_dirs.push(parent.to_path_buf());
+        }
+    }
+    if let Some(cabal_path) = toolchain.cabal.status.path() {
+        if let Some(parent) = cabal_path.parent() {
+            toolchain_bin_dirs.push(parent.to_path_buf());
+        }
+    }
+
     let options = hx_cabal::BuildOptions {
         release: false,
         jobs: None,
@@ -571,6 +585,7 @@ pub async fn sync(force: bool, output: &Output) -> Result<i32> {
         ghc_version: None,
         package_count: None,
         project_name: None,
+        toolchain_bin_dirs,
     };
 
     match hx_cabal::build::build(&project.root, &build_dir, &options, output).await {

@@ -4,8 +4,8 @@
 //! to the hx toolchain directory.
 
 use crate::ghc::{
-    ghc_archive_filename, ghc_download_url, InstallSource, InstalledGhc, Platform,
-    ToolchainManifest, is_valid_version,
+    InstallSource, InstalledGhc, Platform, ToolchainManifest, ghc_archive_filename,
+    ghc_download_url, is_valid_version,
 };
 use futures_util::StreamExt;
 use hx_core::{CommandRunner, Error, Result};
@@ -69,9 +69,9 @@ pub async fn download_and_install_ghc(options: &DownloadOptions) -> Result<Insta
     }
 
     // Detect platform
-    let platform = options.platform.unwrap_or_else(|| {
-        Platform::current().expect("Unsupported platform")
-    });
+    let platform = options
+        .platform
+        .unwrap_or_else(|| Platform::current().expect("Unsupported platform"));
 
     // Check if already installed
     let manifest = ToolchainManifest::load(&options.toolchain_dir)?;
@@ -107,19 +107,33 @@ pub async fn download_and_install_ghc(options: &DownloadOptions) -> Result<Insta
 
     download_ghc_archive(&url, &archive_path, &options.version, options.timeout).await?;
 
-    // Extract the archive
-    extract_ghc_archive(&archive_path, &download_dir, &options.version)?;
+    // Use a temp directory for extraction and building to avoid spaces in paths
+    // (GHC's configure doesn't support paths with spaces)
+    let temp_dir = tempfile::Builder::new()
+        .prefix("hx-ghc-build-")
+        .tempdir()
+        .map_err(|e| Error::Io {
+            message: "Failed to create temp directory for GHC build".into(),
+            path: None,
+            source: e,
+        })?;
+
+    // Extract the archive to temp dir
+    extract_ghc_archive(&archive_path, temp_dir.path(), &options.version)?;
 
     // Run configure and make install
-    let extracted_dir = download_dir.join(format!("ghc-{}", options.version));
+    // The extracted directory includes the platform suffix (e.g., ghc-9.8.2-aarch64-apple-darwin)
+    let extracted_dir = temp_dir
+        .path()
+        .join(format!("ghc-{}-{}", options.version, platform.url_suffix()));
     install_ghc_bindist(&extracted_dir, &install_dir).await?;
 
     // Verify installation
     verify_ghc_installation(&install_dir, &options.version).await?;
 
     // Update manifest
-    let installed = InstalledGhc::new(&options.version, &install_dir)
-        .with_source(InstallSource::Direct);
+    let installed =
+        InstalledGhc::new(&options.version, &install_dir).with_source(InstallSource::Direct);
 
     let mut manifest = ToolchainManifest::load(&options.toolchain_dir)?;
     manifest.add_ghc(installed.clone());
@@ -130,8 +144,7 @@ pub async fn download_and_install_ghc(options: &DownloadOptions) -> Result<Insta
 
     manifest.save(&options.toolchain_dir)?;
 
-    // Clean up extracted directory (keep archive for potential reinstall)
-    let _ = fs::remove_dir_all(&extracted_dir);
+    // Temp directory is automatically cleaned up when dropped
 
     info!("GHC {} installed successfully", options.version);
 
@@ -142,12 +155,7 @@ pub async fn download_and_install_ghc(options: &DownloadOptions) -> Result<Insta
 }
 
 /// Download a GHC archive with progress display.
-async fn download_ghc_archive(
-    url: &str,
-    dest: &Path,
-    version: &str,
-    timeout: u64,
-) -> Result<()> {
+async fn download_ghc_archive(url: &str, dest: &Path, version: &str, timeout: u64) -> Result<()> {
     // Check if already downloaded
     if dest.exists() {
         debug!("Archive already downloaded: {}", dest.display());
@@ -162,9 +170,11 @@ async fn download_ghc_archive(
         .map_err(|e| Error::config(format!("Failed to create HTTP client: {}", e)))?;
 
     debug!("Downloading from {}", url);
-    let response = client.get(url).send().await.map_err(|e| {
-        Error::config(format!("Failed to download GHC {}: {}", version, e))
-    })?;
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| Error::config(format!("Failed to download GHC {}: {}", version, e)))?;
 
     if !response.status().is_success() {
         spinner.finish_error(format!("Failed to download GHC {}", version));
@@ -180,7 +190,10 @@ async fn download_ghc_archive(
 
     // Show progress bar if we know the size
     let progress = if total_size > 0 {
-        Some(Progress::new(total_size, format!("Downloading GHC {}", version)))
+        Some(Progress::new(
+            total_size,
+            format!("Downloading GHC {}", version),
+        ))
     } else {
         None
     };
@@ -197,9 +210,7 @@ async fn download_ghc_archive(
     let mut downloaded: u64 = 0;
 
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| {
-            Error::config(format!("Download interrupted: {}", e))
-        })?;
+        let chunk = chunk.map_err(|e| Error::config(format!("Download interrupted: {}", e)))?;
         file.write_all(&chunk).map_err(|e| Error::Io {
             message: "Failed to write download data".into(),
             path: Some(temp_path.clone()),
@@ -212,7 +223,11 @@ async fn download_ghc_archive(
     }
 
     if let Some(pb) = progress {
-        pb.finish(format!("Downloaded GHC {} ({:.1} MB)", version, downloaded as f64 / 1_000_000.0));
+        pb.finish(format!(
+            "Downloaded GHC {} ({:.1} MB)",
+            version,
+            downloaded as f64 / 1_000_000.0
+        ));
     }
 
     // Rename temp file to final location
@@ -229,7 +244,11 @@ async fn download_ghc_archive(
 fn extract_ghc_archive(archive_path: &Path, dest_dir: &Path, version: &str) -> Result<()> {
     let spinner = Spinner::new(format!("Extracting GHC {}...", version));
 
-    debug!("Extracting {} to {}", archive_path.display(), dest_dir.display());
+    debug!(
+        "Extracting {} to {}",
+        archive_path.display(),
+        dest_dir.display()
+    );
 
     let file = File::open(archive_path).map_err(|e| Error::Io {
         message: "Failed to open archive".into(),
@@ -281,10 +300,7 @@ async fn install_ghc_bindist(extracted_dir: &Path, install_dir: &Path) -> Result
     }
 
     let output = runner
-        .run(
-            "./configure",
-            ["--prefix", install_dir.to_str().unwrap()],
-        )
+        .run("./configure", ["--prefix", install_dir.to_str().unwrap()])
         .await?;
 
     if !output.success() {
@@ -303,9 +319,7 @@ async fn install_ghc_bindist(extracted_dir: &Path, install_dir: &Path) -> Result
     // Run make install
     let spinner = Spinner::new("Installing GHC (this may take a few minutes)...");
 
-    let output = runner
-        .run("make", ["install"])
-        .await?;
+    let output = runner.run("make", ["install"]).await?;
 
     if !output.success() {
         spinner.finish_error("Installation failed");
@@ -352,17 +366,17 @@ async fn verify_ghc_installation(install_dir: &Path, expected_version: &str) -> 
         );
     }
 
-    debug!("Verified GHC {} at {}", installed_version, ghc_path.display());
+    debug!(
+        "Verified GHC {} at {}",
+        installed_version,
+        ghc_path.display()
+    );
     Ok(())
 }
 
 /// Get the GHC binary name for the current platform.
 fn ghc_binary_name() -> &'static str {
-    if cfg!(windows) {
-        "ghc.exe"
-    } else {
-        "ghc"
-    }
+    if cfg!(windows) { "ghc.exe" } else { "ghc" }
 }
 
 /// Remove an installed GHC version.

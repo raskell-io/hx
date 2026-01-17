@@ -61,35 +61,37 @@ pub fn global_config_dir() -> Result<PathBuf> {
 
 /// Get the toolchain directory for hx-managed installations.
 ///
-/// - Linux: `~/.local/share/hx/toolchains`
-/// - macOS: `~/Library/Application Support/hx/toolchains`
-/// - Windows: `%APPDATA%\hx\data\toolchains`
+/// Uses `~/.hx/toolchains` on all platforms. This avoids paths with spaces
+/// which cause issues with GHC's build system (especially on macOS where
+/// the standard data directory contains "Application Support").
 ///
 /// Structure:
 /// ```text
-/// toolchains/
+/// ~/.hx/toolchains/
 ///   ghc/
 ///     9.8.2/bin/ghc, ghc-pkg, ...
 ///     9.6.4/...
+///   cabal/
+///     3.12.1.0/bin/cabal
+///   downloads/
+///     ghc-9.8.2-aarch64-apple-darwin.tar.xz
 ///   manifest.json
 /// ```
 pub fn toolchain_dir() -> Result<PathBuf> {
-    let dirs = ProjectDirs::from("io", "raskell", "hx")
-        .ok_or_else(|| Error::config("could not determine home directory for toolchains"))?;
-    Ok(dirs.data_dir().join("toolchains"))
+    let home = directories::BaseDirs::new()
+        .ok_or_else(|| Error::config("could not determine home directory"))?;
+    Ok(home.home_dir().join(".hx").join("toolchains"))
 }
 
 /// Get the bin directory for hx-managed tool symlinks.
 ///
-/// - Linux: `~/.local/share/hx/bin`
-/// - macOS: `~/Library/Application Support/hx/bin`
-/// - Windows: `%APPDATA%\hx\data\bin`
+/// Uses `~/.hx/bin` on all platforms.
 ///
 /// This directory can be added to PATH for direct access to hx-managed tools.
 pub fn toolchain_bin_dir() -> Result<PathBuf> {
-    let dirs = ProjectDirs::from("io", "raskell", "hx")
-        .ok_or_else(|| Error::config("could not determine home directory for toolchain bin"))?;
-    Ok(dirs.data_dir().join("bin"))
+    let home = directories::BaseDirs::new()
+        .ok_or_else(|| Error::config("could not determine home directory"))?;
+    Ok(home.home_dir().join(".hx").join("bin"))
 }
 
 /// Ensure a directory exists.

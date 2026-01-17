@@ -35,7 +35,7 @@ pub use context::{BuildContext, PluginContext, TestContext};
 pub use engine::{PluginSystem, SteelEngine};
 pub use error::{PluginError, Result};
 pub use hooks::{HookEvent, HookResult};
-pub use loader::{discover_plugins, find_plugin, DiscoveredPlugin, PluginPaths};
+pub use loader::{DiscoveredPlugin, PluginPaths, discover_plugins, find_plugin};
 
 use std::path::Path;
 

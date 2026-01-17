@@ -135,6 +135,19 @@ pub async fn run(
         output.status("Building", build_target);
     }
 
+    // Collect toolchain bin directories for PATH
+    let mut toolchain_bin_dirs = Vec::new();
+    if let Some(ghc_path) = toolchain.ghc.status.path() {
+        if let Some(parent) = ghc_path.parent() {
+            toolchain_bin_dirs.push(parent.to_path_buf());
+        }
+    }
+    if let Some(cabal_path) = toolchain.cabal.status.path() {
+        if let Some(parent) = cabal_path.parent() {
+            toolchain_bin_dirs.push(parent.to_path_buf());
+        }
+    }
+
     let options = BuildOptions {
         release,
         jobs,
@@ -145,6 +158,7 @@ pub async fn run(
         ghc_version: ghc_version.clone(),
         package_count: Some(package_count),
         project_name: Some(project.name().to_string()),
+        toolchain_bin_dirs,
     };
 
     let build_dir = project.cabal_build_dir();
@@ -287,6 +301,19 @@ pub async fn test(
 
     output.status("Testing", test_target);
 
+    // Collect toolchain bin directories for PATH
+    let mut toolchain_bin_dirs = Vec::new();
+    if let Some(ghc_path) = toolchain.ghc.status.path() {
+        if let Some(parent) = ghc_path.parent() {
+            toolchain_bin_dirs.push(parent.to_path_buf());
+        }
+    }
+    if let Some(cabal_path) = toolchain.cabal.status.path() {
+        if let Some(parent) = cabal_path.parent() {
+            toolchain_bin_dirs.push(parent.to_path_buf());
+        }
+    }
+
     let build_dir = project.cabal_build_dir();
 
     match cabal_build::test(
@@ -294,6 +321,7 @@ pub async fn test(
         &build_dir,
         pattern.as_deref(),
         package.as_deref(),
+        &toolchain_bin_dirs,
         output,
     )
     .await

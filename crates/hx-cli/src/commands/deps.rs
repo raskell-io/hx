@@ -299,7 +299,10 @@ fn generate_tree(
         let version = graph.packages.get(*dep).map(|v| v.as_str()).unwrap_or("?");
         let highlight_marker = if highlights.contains(*dep) { " *" } else { "" };
 
-        result.push_str(&format!("{}{} {}{}\n", prefix, dep, version, highlight_marker));
+        result.push_str(&format!(
+            "{}{} {}{}\n",
+            prefix, dep, version, highlight_marker
+        ));
 
         // Print transitive dependencies if depth allows
         if (max_depth == 0 || max_depth > 1)
@@ -334,7 +337,10 @@ fn print_tree_deps(
         return;
     }
 
-    let mut sorted_deps: Vec<_> = deps.iter().filter(|d| graph.packages.contains_key(*d)).collect();
+    let mut sorted_deps: Vec<_> = deps
+        .iter()
+        .filter(|d| graph.packages.contains_key(*d))
+        .collect();
     sorted_deps.sort();
 
     let dep_count = sorted_deps.len();
@@ -382,7 +388,10 @@ fn generate_list(graph: &DepGraph, highlights: &HashSet<String>) -> String {
         } else {
             ""
         };
-        result.push_str(&format!("{} {}{}{}\n", name, version, direct_marker, marker));
+        result.push_str(&format!(
+            "{} {}{}{}\n",
+            name, version, direct_marker, marker
+        ));
     }
 
     result
@@ -407,7 +416,10 @@ fn generate_json(graph: &DepGraph) -> String {
         json.push_str(&format!("      \"name\": \"{}\",\n", name));
         json.push_str(&format!("      \"version\": \"{}\",\n", version));
         json.push_str(&format!("      \"direct\": {},\n", is_direct));
-        json.push_str(&format!("      \"dependencies\": [{}]\n", deps_json.join(", ")));
+        json.push_str(&format!(
+            "      \"dependencies\": [{}]\n",
+            deps_json.join(", ")
+        ));
         json.push_str(&format!(
             "    }}{}",
             if i < pkg_count - 1 { ",\n" } else { "\n" }

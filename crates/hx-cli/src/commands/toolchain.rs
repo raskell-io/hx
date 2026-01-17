@@ -5,8 +5,8 @@ use anyhow::Result;
 use hx_cache::toolchain_dir;
 use hx_config::{Manifest, find_project_root};
 use hx_toolchain::{
-    GhcSource, InstallStrategy, SmartInstallOptions, Toolchain, ToolchainManifest,
-    create_symlinks, install, known_versions, remove_ghc, set_active, RECOMMENDED_GHC_VERSION,
+    GhcSource, InstallStrategy, RECOMMENDED_GHC_VERSION, SmartInstallOptions, Toolchain,
+    ToolchainManifest, create_symlinks, install, known_versions, remove_ghc, set_active,
 };
 use hx_ui::{Output, Style};
 
@@ -96,12 +96,12 @@ async fn status(output: &Output) -> Result<i32> {
             if !manifest.ghc.is_empty() {
                 output.header("hx-managed GHC versions");
                 for installed in &manifest.ghc {
-                    let active_marker = if manifest.active_ghc.as_deref() == Some(&installed.version)
-                    {
-                        " (active)"
-                    } else {
-                        ""
-                    };
+                    let active_marker =
+                        if manifest.active_ghc.as_deref() == Some(&installed.version) {
+                            " (active)"
+                        } else {
+                            ""
+                        };
                     output.list_item(
                         &installed.version,
                         &format!("{}{}", installed.install_path.display(), active_marker),
@@ -163,7 +163,11 @@ async fn list(available: bool, installed_only: bool, output: &Output) -> Result<
                 };
                 output.list_item(
                     &format!("{}{}", ghc.version, active_marker),
-                    &format!("installed {} via {}", ghc.installed_at.format("%Y-%m-%d"), ghc.source),
+                    &format!(
+                        "installed {} via {}",
+                        ghc.installed_at.format("%Y-%m-%d"),
+                        ghc.source
+                    ),
                 );
             }
         }
@@ -283,11 +287,7 @@ async fn install_ghc(
         return Ok(2);
     }
 
-    if success {
-        Ok(0)
-    } else {
-        Ok(4)
-    }
+    if success { Ok(0) } else { Ok(4) }
 }
 
 async fn remove(version: &str, yes: bool, output: &Output) -> Result<i32> {

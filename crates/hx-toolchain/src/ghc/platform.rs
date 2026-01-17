@@ -114,7 +114,10 @@ mod tests {
     fn test_url_suffix() {
         assert_eq!(Platform::X86_64Linux.url_suffix(), "x86_64-unknown-linux");
         assert_eq!(Platform::Aarch64Darwin.url_suffix(), "aarch64-apple-darwin");
-        assert_eq!(Platform::X86_64Windows.url_suffix(), "x86_64-unknown-mingw32");
+        assert_eq!(
+            Platform::X86_64Windows.url_suffix(),
+            "x86_64-unknown-mingw32"
+        );
     }
 
     #[test]

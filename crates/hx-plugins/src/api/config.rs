@@ -4,10 +4,10 @@
 
 use crate::context::{with_context, with_context_mut};
 use crate::error::Result;
+use std::env;
+use steel::SteelVal;
 use steel::steel_vm::engine::Engine;
 use steel::steel_vm::register_fn::RegisterFn;
-use steel::SteelVal;
-use std::env;
 
 /// Register config API functions.
 pub fn register(engine: &mut Engine) -> Result<()> {

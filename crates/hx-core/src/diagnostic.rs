@@ -536,18 +536,11 @@ mod tests {
     fn test_diagnostic_report() {
         let mut report = DiagnosticReport::new();
 
+        report.add(GhcDiagnostic::error("Error 1").with_span(SourceSpan::from_point("a.hs", 1, 1)));
         report.add(
-            GhcDiagnostic::error("Error 1")
-                .with_span(SourceSpan::from_point("a.hs", 1, 1)),
+            GhcDiagnostic::warning("Warning 1").with_span(SourceSpan::from_point("a.hs", 2, 1)),
         );
-        report.add(
-            GhcDiagnostic::warning("Warning 1")
-                .with_span(SourceSpan::from_point("a.hs", 2, 1)),
-        );
-        report.add(
-            GhcDiagnostic::error("Error 2")
-                .with_span(SourceSpan::from_point("b.hs", 1, 1)),
-        );
+        report.add(GhcDiagnostic::error("Error 2").with_span(SourceSpan::from_point("b.hs", 1, 1)));
         report.add(GhcDiagnostic::error("General error"));
 
         assert_eq!(report.error_count(), 3);
@@ -572,8 +565,8 @@ mod tests {
         let diag1 = GhcDiagnostic::warning("Defined but not used: 'x'");
         assert!(diag1.is_unused());
 
-        let diag2 = GhcDiagnostic::warning("Import is redundant")
-            .with_warning_flag("-Wunused-imports");
+        let diag2 =
+            GhcDiagnostic::warning("Import is redundant").with_warning_flag("-Wunused-imports");
         assert!(diag2.is_unused());
 
         let diag3 = GhcDiagnostic::error("Type mismatch");

@@ -7,7 +7,10 @@
 //! - Arrays: merged with higher precedence items placed earlier
 //! - `Option<T>`: first `Some` value wins
 
-use crate::{BuildConfig, FormatConfig, LintConfig, Manifest, PluginConfig, PluginHookConfig, ProjectConfig, ToolchainConfig};
+use crate::{
+    BuildConfig, FormatConfig, LintConfig, Manifest, PluginConfig, PluginHookConfig, ProjectConfig,
+    ToolchainConfig,
+};
 
 /// Trait for combining configuration values.
 ///

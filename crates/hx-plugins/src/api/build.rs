@@ -5,9 +5,9 @@
 
 use crate::context::with_context;
 use crate::error::Result;
+use steel::SteelVal;
 use steel::steel_vm::engine::Engine;
 use steel::steel_vm::register_fn::RegisterFn;
-use steel::SteelVal;
 
 /// Register build context API functions.
 pub fn register(engine: &mut Engine) -> Result<()> {
@@ -127,7 +127,9 @@ fn test_count() -> SteelVal {
             vec![
                 SteelVal::ListV(vec![SteelVal::SymbolV("passed".into()), SteelVal::IntV(0)].into()),
                 SteelVal::ListV(vec![SteelVal::SymbolV("failed".into()), SteelVal::IntV(0)].into()),
-                SteelVal::ListV(vec![SteelVal::SymbolV("skipped".into()), SteelVal::IntV(0)].into()),
+                SteelVal::ListV(
+                    vec![SteelVal::SymbolV("skipped".into()), SteelVal::IntV(0)].into(),
+                ),
             ]
             .into(),
         )

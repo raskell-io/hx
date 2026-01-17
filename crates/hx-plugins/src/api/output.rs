@@ -4,9 +4,9 @@
 
 use crate::context::with_context;
 use crate::error::Result;
+use steel::SteelVal;
 use steel::steel_vm::engine::Engine;
 use steel::steel_vm::register_fn::RegisterFn;
-use steel::SteelVal;
 
 /// Register output API functions.
 pub fn register(engine: &mut Engine) -> Result<()> {

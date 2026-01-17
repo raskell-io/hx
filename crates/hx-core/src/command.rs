@@ -62,12 +62,21 @@ impl CommandRunner {
         self
     }
 
-    /// Configure PATH to use a specific GHC installation.
+    /// Configure PATH to use a specific toolchain bin directory.
     ///
     /// Prepends the given bin directory to PATH, ensuring tools from that
-    /// directory are found first.
+    /// directory are found first. Can be called multiple times to add
+    /// multiple bin directories.
     pub fn with_ghc_bin(mut self, bin_dir: impl AsRef<Path>) -> Self {
-        let current_path = std::env::var("PATH").unwrap_or_default();
+        // Check if we already have a PATH in our env list
+        let current_path = self
+            .env
+            .iter()
+            .rev()
+            .find(|(k, _)| k == "PATH")
+            .map(|(_, v)| v.clone())
+            .unwrap_or_else(|| std::env::var("PATH").unwrap_or_default());
+
         let bin_str = bin_dir.as_ref().to_string_lossy();
 
         #[cfg(windows)]

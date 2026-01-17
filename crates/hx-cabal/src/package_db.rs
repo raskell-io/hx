@@ -372,9 +372,10 @@ async fn find_ghc_pkg(ghc_version: &str) -> Result<PathBuf> {
     Err(Error::ToolchainMissing {
         tool: format!("ghc-pkg (for GHC {})", ghc_version),
         source: None,
-        fixes: vec![
-            Fix::with_command("Install GHC via ghcup", format!("ghcup install ghc {}", ghc_version)),
-        ],
+        fixes: vec![Fix::with_command(
+            "Install GHC via ghcup",
+            format!("ghcup install ghc {}", ghc_version),
+        )],
     })
 }
 
@@ -393,9 +394,7 @@ async fn which_async(name: &str) -> Result<PathBuf> {
         })?;
 
     if output.status.success() {
-        let path = String::from_utf8_lossy(&output.stdout)
-            .trim()
-            .to_string();
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if !path.is_empty() {
             return Ok(PathBuf::from(path));
         }

@@ -205,7 +205,9 @@ pub async fn run(cli: Cli) -> Result<i32> {
         Some(Commands::Plugins { command }) => match command {
             PluginsCommands::List => plugins::list(&output).await,
             PluginsCommands::Status => plugins::status(&output).await,
-            PluginsCommands::Run { script, args } => plugins::run_script(script, args, &output).await,
+            PluginsCommands::Run { script, args } => {
+                plugins::run_script(script, args, &output).await
+            }
         },
         Some(Commands::Coverage {
             html,
@@ -236,26 +238,26 @@ pub async fn run(cli: Cli) -> Result<i32> {
             strip,
             completions,
             version,
-        }) => {
-            match command {
-                Some(DistCommands::Formula { version, output: out_file }) => {
-                    dist::generate_formula(version, out_file, &output)
-                }
-                Some(DistCommands::InstallScript { version, output: out_file }) => {
-                    dist::generate_install_script(version, out_file, &output)
-                }
-                None => {
-                    let config = dist::DistConfig {
-                        target,
-                        output_dir,
-                        strip,
-                        include_completions: completions,
-                        version,
-                    };
-                    dist::run(config, &output).await
-                }
+        }) => match command {
+            Some(DistCommands::Formula {
+                version,
+                output: out_file,
+            }) => dist::generate_formula(version, out_file, &output),
+            Some(DistCommands::InstallScript {
+                version,
+                output: out_file,
+            }) => dist::generate_install_script(version, out_file, &output),
+            None => {
+                let config = dist::DistConfig {
+                    target,
+                    output_dir,
+                    strip,
+                    include_completions: completions,
+                    version,
+                };
+                dist::run(config, &output).await
             }
-        }
+        },
         None => {
             // No command - show help
             use clap::CommandFactory;

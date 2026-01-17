@@ -22,6 +22,13 @@ pub mod package_db;
 pub use build::{BuildOptions, BuildResult};
 pub use edit::{CabalEditError, add_dependency, remove_dependency};
 pub use fetch::{FetchOptions, FetchResult};
+pub use full_native::{
+    FullNativeBuildOptions, FullNativeBuildResult, FullNativeBuilder, is_pre_installed,
+    pre_installed_packages,
+};
+pub use ghc_diagnostics::{
+    diagnostic_flags, parse_ghc_json, parse_ghc_text, supports_json_diagnostics,
+};
 pub use native::{
     BuildState, GhcConfig, ModuleCompileResult, ModuleState, NativeBuildOptions, NativeBuildResult,
     NativeBuilder, PackageInfo, collect_extra_libraries, collect_hs_libraries,
@@ -30,10 +37,3 @@ pub use native::{
 };
 pub use package_build::{PackageBuildConfig, PackageBuildResult, build_package};
 pub use package_db::{PackageDb, clear_package_db, default_cache_dir};
-pub use full_native::{
-    FullNativeBuildOptions, FullNativeBuildResult, FullNativeBuilder, is_pre_installed,
-    pre_installed_packages,
-};
-pub use ghc_diagnostics::{
-    diagnostic_flags, parse_ghc_json, parse_ghc_text, supports_json_diagnostics,
-};

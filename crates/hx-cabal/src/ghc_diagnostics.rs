@@ -4,7 +4,9 @@
 //! - JSON format (GHC 9.0+ with `-fdiagnostics-json`)
 //! - Text format (fallback for older GHC versions)
 
-use hx_core::{DiagnosticReport, DiagnosticSeverity, GhcDiagnostic, QuickFix, SourceSpan, TextEdit};
+use hx_core::{
+    DiagnosticReport, DiagnosticSeverity, GhcDiagnostic, QuickFix, SourceSpan, TextEdit,
+};
 use regex::Regex;
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -92,13 +94,15 @@ pub fn parse_ghc_json(output: &str) -> DiagnosticReport {
 }
 
 fn convert_json_diagnostic(json: GhcJsonDiagnostic) -> GhcDiagnostic {
-    let span = json.span.map(|s| SourceSpan::new(
-        PathBuf::from(&s.file),
-        s.start_line,
-        s.start_col,
-        s.end_line,
-        s.end_col,
-    ));
+    let span = json.span.map(|s| {
+        SourceSpan::new(
+            PathBuf::from(&s.file),
+            s.start_line,
+            s.start_col,
+            s.end_line,
+            s.end_col,
+        )
+    });
 
     let severity = match json.severity.to_lowercase().as_str() {
         "error" | "sorryerror" => DiagnosticSeverity::Error,
@@ -167,7 +171,8 @@ pub fn parse_ghc_text(output: &str) -> DiagnosticReport {
             let file = PathBuf::from(&caps[1]);
             let start_line: u32 = caps[2].parse().unwrap_or(1);
             let start_col: u32 = caps[3].parse().unwrap_or(1);
-            let end_col: u32 = caps.get(4)
+            let end_col: u32 = caps
+                .get(4)
                 .and_then(|m| m.as_str().parse().ok())
                 .unwrap_or(start_col + 1);
 
@@ -181,7 +186,9 @@ pub fn parse_ghc_text(output: &str) -> DiagnosticReport {
             let message = caps[7].to_string();
 
             current_diagnostic = Some(GhcDiagnostic {
-                span: Some(SourceSpan::new(file, start_line, start_col, start_line, end_col)),
+                span: Some(SourceSpan::new(
+                    file, start_line, start_col, start_line, end_col,
+                )),
                 severity,
                 code: None,
                 warning_flag,
@@ -256,25 +263,30 @@ fn generate_quick_fixes(
     // Pattern: "The import of '...' is redundant"
     if message.contains("is redundant") && message.contains("import") {
         if let Some(span) = span {
-            fixes.push(QuickFix::with_edit(
-                "Remove redundant import".to_string(),
-                TextEdit::delete(span.clone()),
-            ).preferred());
+            fixes.push(
+                QuickFix::with_edit(
+                    "Remove redundant import".to_string(),
+                    TextEdit::delete(span.clone()),
+                )
+                .preferred(),
+            );
         }
     }
 
     // Pattern: "Defined but not used"
     if message.contains("Defined but not used:") {
         if let Some(var_name) = extract_identifier(message) {
-            fixes.push(QuickFix::suggestion(
-                format!("Prefix with underscore: _{}", var_name),
-            ));
+            fixes.push(QuickFix::suggestion(format!(
+                "Prefix with underscore: _{}",
+                var_name
+            )));
         }
         if let Some(flag) = warning_flag {
             let flag_name = flag.trim_start_matches("-W");
-            fixes.push(QuickFix::suggestion(
-                format!("Add pragma: {{-# OPTIONS_GHC -Wno-{} #-}}", flag_name),
-            ));
+            fixes.push(QuickFix::suggestion(format!(
+                "Add pragma: {{-# OPTIONS_GHC -Wno-{} #-}}",
+                flag_name
+            )));
         }
     }
 
@@ -288,9 +300,10 @@ fn generate_quick_fixes(
     // Pattern: "No instance for"
     if message.contains("No instance for") {
         if let Some(constraint) = extract_parenthesized(message) {
-            fixes.push(QuickFix::suggestion(
-                format!("Add constraint '{}' to type signature", constraint),
-            ));
+            fixes.push(QuickFix::suggestion(format!(
+                "Add constraint '{}' to type signature",
+                constraint
+            )));
         }
     }
 
@@ -394,11 +407,7 @@ fn module_to_package(module: &str) -> String {
     }
 
     // Default: lowercase first component
-    module
-        .split('.')
-        .next()
-        .unwrap_or(module)
-        .to_lowercase()
+    module.split('.').next().unwrap_or(module).to_lowercase()
 }
 
 // =============================================================================
@@ -454,7 +463,10 @@ mod tests {
 
     #[test]
     fn test_extract_quoted() {
-        assert_eq!(extract_quoted("Variable 'foo' not found"), Some("foo".to_string()));
+        assert_eq!(
+            extract_quoted("Variable 'foo' not found"),
+            Some("foo".to_string())
+        );
         assert_eq!(extract_quoted("No quotes here"), None);
     }
 
@@ -535,14 +547,24 @@ src/B.hs:2:3: warning: Unused variable"#;
     fn test_quick_fixes_variable_not_in_scope() {
         let fixes = generate_quick_fixes("Variable not in scope: foo", &None, &None);
         assert!(!fixes.is_empty());
-        assert!(fixes.iter().any(|f| f.command.as_ref().map(|c| c.contains("search")).unwrap_or(false)));
+        assert!(fixes.iter().any(|f| {
+            f.command
+                .as_ref()
+                .map(|c| c.contains("search"))
+                .unwrap_or(false)
+        }));
     }
 
     #[test]
     fn test_quick_fixes_module_not_found() {
         let fixes = generate_quick_fixes("Could not find module 'Data.Text'", &None, &None);
         assert!(!fixes.is_empty());
-        assert!(fixes.iter().any(|f| f.command.as_ref().map(|c| c.contains("hx add")).unwrap_or(false)));
+        assert!(fixes.iter().any(|f| {
+            f.command
+                .as_ref()
+                .map(|c| c.contains("hx add"))
+                .unwrap_or(false)
+        }));
     }
 
     #[test]

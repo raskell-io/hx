@@ -4,11 +4,11 @@
 
 use crate::context::with_context;
 use crate::error::Result;
-use steel::steel_vm::engine::Engine;
-use steel::steel_vm::register_fn::RegisterFn;
-use steel::SteelVal;
 use std::fs;
 use std::path::PathBuf;
+use steel::SteelVal;
+use steel::steel_vm::engine::Engine;
+use steel::steel_vm::register_fn::RegisterFn;
 
 /// Register filesystem API functions.
 pub fn register(engine: &mut Engine) -> Result<()> {
@@ -36,8 +36,7 @@ fn write_file(path: String, content: String) -> std::result::Result<SteelVal, St
 
     // Create parent directories if needed
     if let Some(parent) = resolved_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create directory: {}", e))?;
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
     }
 
     fs::write(&resolved_path, content)

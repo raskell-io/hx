@@ -4,10 +4,10 @@
 //! dependencies using direct GHC invocation instead of relying on cabal.
 
 use crate::native::{GhcConfig, NativeBuildOptions, NativeBuildResult, NativeBuilder};
-use crate::package_build::{build_package, PackageBuildConfig};
+use crate::package_build::{PackageBuildConfig, build_package};
 use crate::package_db::PackageDb;
 use hx_core::{Error, Fix, Result};
-use hx_solver::{extract_package, BuildPlan, BuildStyle, BuildUnit, FetchResult};
+use hx_solver::{BuildPlan, BuildStyle, BuildUnit, FetchResult, extract_package};
 use hx_ui::Output;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -135,11 +135,13 @@ impl FullNativeBuilder {
                 BuildStyle::Cached => {
                     // Check if we have a cached version
                     let pkg_key = format!("{}-{}", unit.name, unit.version);
-                    if self.package_db.has_package(&unit.name, &unit.version.to_string()) {
+                    if self
+                        .package_db
+                        .has_package(&unit.name, &unit.version.to_string())
+                    {
                         debug!("Skipping cached package: {}", pkg_key);
                         result.packages_skipped += 1;
-                        self.built_packages
-                            .insert(unit.name.clone(), pkg_key);
+                        self.built_packages.insert(unit.name.clone(), pkg_key);
                     } else {
                         // Need to rebuild
                         if let Err(e) = self
@@ -230,7 +232,10 @@ impl FullNativeBuilder {
             message: format!("package not fetched: {}", pkg_key),
             path: None,
             source: None,
-            fixes: vec![Fix::with_command("Fetch packages first", "hx lock && hx fetch")],
+            fixes: vec![Fix::with_command(
+                "Fetch packages first",
+                "hx lock && hx fetch",
+            )],
         })?;
 
         // Extract the package
@@ -244,11 +249,10 @@ impl FullNativeBuilder {
 
         // Check if this package can be built natively
         if !extracted.can_build_native() {
-            let reason = extracted.skip_reason().unwrap_or_else(|| "unknown".to_string());
-            warn!(
-                "Skipping {} {}: {}",
-                unit.name, unit.version, reason
-            );
+            let reason = extracted
+                .skip_reason()
+                .unwrap_or_else(|| "unknown".to_string());
+            warn!("Skipping {} {}: {}", unit.name, unit.version, reason);
             result
                 .skipped_packages
                 .push((pkg_key.clone(), reason.clone()));
@@ -281,10 +285,7 @@ impl FullNativeBuilder {
         // Configure the build
         let build_config = PackageBuildConfig {
             ghc: self.ghc.clone(),
-            build_dir: self
-                .cache_dir
-                .join("builds")
-                .join(&pkg_key),
+            build_dir: self.cache_dir.join("builds").join(&pkg_key),
             install_dir: self
                 .cache_dir
                 .join(format!("ghc-{}", self.ghc.version))
@@ -301,10 +302,7 @@ impl FullNativeBuilder {
         if !build_result.success {
             return Err(Error::BuildFailed {
                 errors: build_result.errors.clone(),
-                fixes: vec![Fix::with_command(
-                    "See full output",
-                    "hx build --verbose",
-                )],
+                fixes: vec![Fix::with_command("See full output", "hx build --verbose")],
             });
         }
 
@@ -323,10 +321,7 @@ impl FullNativeBuilder {
 
         info!(
             "Built {} {} ({} modules in {:?})",
-            unit.name,
-            unit.version,
-            build_result.modules_compiled,
-            build_result.duration
+            unit.name, unit.version, build_result.modules_compiled, build_result.duration
         );
 
         Ok(())

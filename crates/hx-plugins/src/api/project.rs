@@ -4,9 +4,9 @@
 
 use crate::context::with_context;
 use crate::error::Result;
+use steel::SteelVal;
 use steel::steel_vm::engine::Engine;
 use steel::steel_vm::register_fn::RegisterFn;
-use steel::SteelVal;
 
 /// Register project API functions.
 pub fn register(engine: &mut Engine) -> Result<()> {
@@ -25,10 +25,8 @@ fn project_name() -> SteelVal {
 
 /// Get the project root directory.
 fn project_root() -> SteelVal {
-    with_context(|ctx| {
-        SteelVal::StringV(ctx.project_root.to_string_lossy().to_string().into())
-    })
-    .unwrap_or(SteelVal::BoolV(false))
+    with_context(|ctx| SteelVal::StringV(ctx.project_root.to_string_lossy().to_string().into()))
+        .unwrap_or(SteelVal::BoolV(false))
 }
 
 /// Get the GHC version.

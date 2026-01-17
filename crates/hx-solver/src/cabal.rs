@@ -202,7 +202,13 @@ pub fn parse_cabal_full(content: &str) -> PackageBuildInfo {
         // Check for section headers
         if let Some(section) = parse_section_header(trimmed) {
             // Flush any buffered field
-            flush_field(&mut field_buffer, &current_section, &mut info, &mut current_library, &mut current_executable);
+            flush_field(
+                &mut field_buffer,
+                &current_section,
+                &mut info,
+                &mut current_library,
+                &mut current_executable,
+            );
 
             // Save current section data
             match current_section {
@@ -231,7 +237,13 @@ pub fn parse_cabal_full(content: &str) -> PackageBuildInfo {
         // Check if this is a new field or continuation
         if let Some((key, value)) = parse_field(line) {
             // Flush previous field
-            flush_field(&mut field_buffer, &current_section, &mut info, &mut current_library, &mut current_executable);
+            flush_field(
+                &mut field_buffer,
+                &current_section,
+                &mut info,
+                &mut current_library,
+                &mut current_executable,
+            );
             // Start new field
             field_buffer.start(key, value);
         } else if line.starts_with(' ') || line.starts_with('\t') {
@@ -241,7 +253,13 @@ pub fn parse_cabal_full(content: &str) -> PackageBuildInfo {
     }
 
     // Flush final field
-    flush_field(&mut field_buffer, &current_section, &mut info, &mut current_library, &mut current_executable);
+    flush_field(
+        &mut field_buffer,
+        &current_section,
+        &mut info,
+        &mut current_library,
+        &mut current_executable,
+    );
 
     // Save final section
     match current_section {
@@ -293,7 +311,10 @@ impl FieldBuffer {
     fn take(&mut self) -> Option<(String, String)> {
         if self.active {
             self.active = false;
-            Some((std::mem::take(&mut self.key), std::mem::take(&mut self.value)))
+            Some((
+                std::mem::take(&mut self.key),
+                std::mem::take(&mut self.value),
+            ))
         } else {
             None
         }
@@ -690,7 +711,10 @@ executable myapp
         assert_eq!(lib.exposed_modules, vec!["MyLib", "MyLib.Internal"]);
         assert_eq!(lib.other_modules, vec!["MyLib.Utils"]);
         assert_eq!(lib.build_depends.len(), 2);
-        assert_eq!(lib.default_extensions, vec!["OverloadedStrings", "DeriveFunctor"]);
+        assert_eq!(
+            lib.default_extensions,
+            vec!["OverloadedStrings", "DeriveFunctor"]
+        );
         assert_eq!(lib.ghc_options, vec!["-Wall", "-Werror"]);
         assert_eq!(lib.default_language, Some("GHC2021".to_string()));
 
@@ -793,7 +817,11 @@ library
 
     #[test]
     fn test_parse_module_list() {
-        let modules = parse_module_list("Data.Text, Data.Text.Lazy,\n                    Data.Text.Internal");
-        assert_eq!(modules, vec!["Data.Text", "Data.Text.Lazy", "Data.Text.Internal"]);
+        let modules =
+            parse_module_list("Data.Text, Data.Text.Lazy,\n                    Data.Text.Internal");
+        assert_eq!(
+            modules,
+            vec!["Data.Text", "Data.Text.Lazy", "Data.Text.Internal"]
+        );
     }
 }
