@@ -191,7 +191,7 @@ mod tests {
 
     #[test]
     fn test_version_ordering() {
-        let mut versions = vec![
+        let mut versions = [
             GhcVersion::new("9.6.4"),
             GhcVersion::new("9.8.2"),
             GhcVersion::new("9.10.1"),

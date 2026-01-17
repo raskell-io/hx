@@ -151,8 +151,8 @@ mod tests {
     fn test_server_state_workspaces() {
         let state = ServerState::new();
 
-        let ws1 = state.add_workspace(PathBuf::from("/project1"));
-        let ws2 = state.add_workspace(PathBuf::from("/project2"));
+        let _ws1 = state.add_workspace(PathBuf::from("/project1"));
+        let _ws2 = state.add_workspace(PathBuf::from("/project2"));
 
         assert!(state.get_workspace(&PathBuf::from("/project1")).is_some());
         assert!(state.get_workspace(&PathBuf::from("/project2")).is_some());

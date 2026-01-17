@@ -187,7 +187,7 @@ mod tests {
 
     #[test]
     fn test_version_ordering() {
-        let mut versions = vec![
+        let mut versions = [
             CabalVersion::new("3.10.3.0"),
             CabalVersion::new("3.12.1.0"),
             CabalVersion::new("3.8.1.0"),
