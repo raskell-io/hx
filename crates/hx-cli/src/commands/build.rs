@@ -4,7 +4,7 @@ use anyhow::Result;
 use hx_cabal::build::{self as cabal_build, BuildOptions};
 use hx_cabal::native::{GhcConfig, NativeBuildOptions, NativeBuilder, packages_from_lockfile};
 use hx_cache::{BuildState, StoreIndex, compute_source_fingerprint, save_source_fingerprint};
-use hx_config::{Project, find_project_root};
+use hx_config::{CompilerBackend, Project, find_project_root};
 use hx_lock::Lockfile;
 use hx_plugins::HookEvent;
 use hx_toolchain::{AutoInstallPolicy, Toolchain, ensure_toolchain};
@@ -21,12 +21,21 @@ pub async fn run(
     target: Option<String>,
     package: Option<String>,
     native: bool,
+    backend_override: Option<CompilerBackend>,
     policy: AutoInstallPolicy,
     output: &Output,
 ) -> Result<i32> {
     // Find project root
     let project_root = find_project_root(".")?;
     let project = Project::load(&project_root)?;
+
+    // Determine compiler backend (CLI override > config > default)
+    let backend = backend_override.unwrap_or(project.manifest.compiler.backend);
+
+    // If BHC is requested, use the BHC backend
+    if backend == CompilerBackend::Bhc {
+        return run_bhc_build(&project, release, jobs, target, output).await;
+    }
 
     // Check toolchain requirements and get toolchain info
     let mut toolchain = Toolchain::detect().await;
@@ -244,12 +253,21 @@ pub async fn test(
     pattern: Option<String>,
     package: Option<String>,
     target: Option<String>,
+    backend_override: Option<CompilerBackend>,
     policy: AutoInstallPolicy,
     output: &Output,
 ) -> Result<i32> {
     // Find project root
     let project_root = find_project_root(".")?;
     let project = Project::load(&project_root)?;
+
+    // Determine compiler backend (CLI override > config > default)
+    let backend = backend_override.unwrap_or(project.manifest.compiler.backend);
+
+    // BHC test support would go here
+    if backend == CompilerBackend::Bhc {
+        output.warn("BHC test support is not yet implemented, falling back to GHC");
+    }
 
     // Check toolchain requirements
     let mut toolchain = Toolchain::detect().await;
@@ -512,5 +530,116 @@ fn format_build_duration(duration: std::time::Duration) -> String {
         let mins = (secs / 60.0).floor();
         let remaining_secs = secs - (mins * 60.0);
         format!("{}m {:.1}s", mins as u64, remaining_secs)
+    }
+}
+
+/// Run a build using the BHC backend.
+async fn run_bhc_build(
+    project: &Project,
+    release: bool,
+    jobs: Option<usize>,
+    target: Option<String>,
+    output: &Output,
+) -> Result<i32> {
+    use hx_bhc::{BhcBackend, generate_bhc_manifest};
+    use hx_compiler::{BuildOptions as CompilerBuildOptions, CompilerBackend as Backend};
+
+    output.status("Building", &format!("{} (BHC)", project.name()));
+
+    // Generate bhc.toml from hx.toml
+    match generate_bhc_manifest(&project.root, &project.manifest) {
+        Ok(path) => {
+            output.verbose(&format!("Generated BHC manifest at {}", path.display()));
+        }
+        Err(e) => {
+            output.error(&format!("Failed to generate BHC manifest: {}", e));
+            return Ok(3); // Config error
+        }
+    }
+
+    // Create BHC backend with project configuration
+    let bhc_config = &project.manifest.compiler.bhc;
+    let backend = BhcBackend::new().with_config(bhc_config.clone());
+
+    // Check if BHC is available
+    let status = backend.detect().await;
+    match status {
+        Ok(hx_compiler::CompilerStatus::Available { version, .. }) => {
+            output.verbose(&format!("BHC version: {}", version));
+        }
+        Ok(hx_compiler::CompilerStatus::NotInstalled) => {
+            output.error("BHC is not installed");
+            output.info("Install BHC with: hx toolchain install --bhc latest");
+            return Ok(4); // Toolchain error
+        }
+        Ok(hx_compiler::CompilerStatus::VersionMismatch {
+            required,
+            installed,
+        }) => {
+            output.warn(&format!(
+                "BHC version mismatch: required {}, installed {}",
+                required, installed
+            ));
+        }
+        Err(e) => {
+            output.error(&format!("Failed to detect BHC: {}", e));
+            return Ok(4);
+        }
+    }
+
+    // Build options
+    let build_options = CompilerBuildOptions {
+        release,
+        optimization: if release {
+            Some(2)
+        } else {
+            Some(project.manifest.build.optimization)
+        },
+        jobs,
+        target,
+        package: None,
+        verbose: output.is_verbose(),
+        extra_flags: project.manifest.build.ghc_flags.clone(),
+        src_dirs: project
+            .manifest
+            .build
+            .src_dirs
+            .iter()
+            .map(PathBuf::from)
+            .collect(),
+        werror: project.manifest.build.werror,
+    };
+
+    let start = std::time::Instant::now();
+
+    match backend.build(&project.root, &build_options, output).await {
+        Ok(result) => {
+            let duration = start.elapsed();
+            if result.success {
+                output.status("Finished", &format!("BHC build in {}", format_build_duration(duration)));
+
+                // Show warnings if any
+                if !result.warnings.is_empty() {
+                    output.warn(&format!("{} warning(s)", result.warnings.len()));
+                    if output.is_verbose() {
+                        for warning in &result.warnings {
+                            output.info(&warning.to_string());
+                        }
+                    }
+                }
+
+                Ok(0)
+            } else {
+                output.error(&format!("Build failed with {} error(s)", result.errors.len()));
+                for error in &result.errors {
+                    eprintln!("{}", error);
+                }
+                Ok(5)
+            }
+        }
+        Err(e) => {
+            output.error(&format!("BHC build failed: {}", e));
+            Ok(5)
+        }
     }
 }

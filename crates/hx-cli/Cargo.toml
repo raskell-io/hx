@@ -27,6 +27,8 @@ hx-warnings.workspace = true
 hx-solver.workspace = true
 hx-lsp.workspace = true
 hx-plugins.workspace = true
+hx-compiler.workspace = true
+hx-bhc.workspace = true
 
 clap.workspace = true
 clap_complete.workspace = true

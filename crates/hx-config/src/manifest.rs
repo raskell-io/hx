@@ -67,6 +67,128 @@ pub struct ToolchainConfig {
     pub hls: Option<String>,
 }
 
+/// The compiler backend to use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CompilerBackend {
+    /// GHC (Glasgow Haskell Compiler) - the standard Haskell compiler.
+    #[default]
+    Ghc,
+    /// BHC (Basel Haskell Compiler) - alternative compiler with tensor optimizations.
+    Bhc,
+}
+
+impl CompilerBackend {
+    /// Get the string representation.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CompilerBackend::Ghc => "ghc",
+            CompilerBackend::Bhc => "bhc",
+        }
+    }
+}
+
+impl std::fmt::Display for CompilerBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl std::str::FromStr for CompilerBackend {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "ghc" => Ok(CompilerBackend::Ghc),
+            "bhc" => Ok(CompilerBackend::Bhc),
+            _ => Err(format!("unknown compiler backend: {}", s)),
+        }
+    }
+}
+
+/// BHC profile for optimization.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BhcProfile {
+    /// Default profile - balanced optimizations.
+    #[default]
+    Default,
+    /// Server profile - optimized for server workloads.
+    Server,
+    /// Numeric profile - optimized for numeric/scientific computing.
+    Numeric,
+    /// Edge profile - optimized for edge/embedded deployments.
+    Edge,
+}
+
+impl BhcProfile {
+    /// Get the string representation.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            BhcProfile::Default => "default",
+            BhcProfile::Server => "server",
+            BhcProfile::Numeric => "numeric",
+            BhcProfile::Edge => "edge",
+        }
+    }
+}
+
+/// BHC-specific configuration.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct BhcConfig {
+    /// Optimization profile.
+    #[serde(default)]
+    pub profile: BhcProfile,
+    /// Emit kernel performance report.
+    #[serde(default)]
+    pub emit_kernel_report: bool,
+    /// Cross-compilation target.
+    pub target: Option<String>,
+    /// Enable tensor fusion optimizations.
+    #[serde(default)]
+    pub tensor_fusion: bool,
+}
+
+/// GHC-specific configuration.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct GhcConfig {
+    /// GHC version to use (moved from [toolchain]).
+    pub version: Option<String>,
+    /// Enable profiling.
+    #[serde(default)]
+    pub profiling: bool,
+    /// Enable split sections for smaller binaries.
+    #[serde(default)]
+    pub split_sections: bool,
+}
+
+/// Compiler configuration section.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompilerConfig {
+    /// Which compiler backend to use.
+    #[serde(default)]
+    pub backend: CompilerBackend,
+    /// Compiler version (applies to selected backend).
+    pub version: Option<String>,
+    /// BHC-specific configuration.
+    #[serde(default)]
+    pub bhc: BhcConfig,
+    /// GHC-specific configuration.
+    #[serde(default)]
+    pub ghc: GhcConfig,
+}
+
+impl Default for CompilerConfig {
+    fn default() -> Self {
+        Self {
+            backend: CompilerBackend::Ghc,
+            version: None,
+            bhc: BhcConfig::default(),
+            ghc: GhcConfig::default(),
+        }
+    }
+}
+
 /// Stackage snapshot configuration section.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StackageConfig {
@@ -249,6 +371,10 @@ pub struct Manifest {
     #[serde(default)]
     pub toolchain: ToolchainConfig,
 
+    /// Compiler backend configuration
+    #[serde(default)]
+    pub compiler: CompilerConfig,
+
     /// Stackage snapshot configuration
     #[serde(default)]
     pub stackage: StackageConfig,
@@ -307,6 +433,7 @@ impl Manifest {
                 resolver: default_resolver(),
             },
             toolchain: ToolchainConfig::default(),
+            compiler: CompilerConfig::default(),
             stackage: StackageConfig::default(),
             build: BuildConfig::default(),
             format: FormatConfig::default(),
@@ -329,6 +456,8 @@ impl Manifest {
             project: self.project,
             // Merge toolchain (project takes precedence)
             toolchain: self.toolchain.combine(global.toolchain.clone()),
+            // Compiler config is project-specific (no global merging)
+            compiler: self.compiler,
             // Stackage config is project-specific only
             stackage: self.stackage,
             // Merge build (project takes precedence)
@@ -393,5 +522,93 @@ hlint = true
         let parsed = Manifest::parse(&toml).unwrap();
         assert_eq!(parsed.project.name, "test");
         assert_eq!(parsed.project.kind, ProjectKind::Lib);
+    }
+
+    #[test]
+    fn test_parse_compiler_ghc() {
+        let toml = r#"
+[project]
+name = "myapp"
+
+[compiler]
+backend = "ghc"
+version = "9.8.2"
+
+[compiler.ghc]
+profiling = true
+"#;
+        let manifest = Manifest::parse(toml).unwrap();
+        assert_eq!(manifest.compiler.backend, CompilerBackend::Ghc);
+        assert_eq!(manifest.compiler.version, Some("9.8.2".to_string()));
+        assert!(manifest.compiler.ghc.profiling);
+    }
+
+    #[test]
+    fn test_parse_compiler_bhc() {
+        let toml = r#"
+[project]
+name = "myapp"
+
+[compiler]
+backend = "bhc"
+version = "0.1.0"
+
+[compiler.bhc]
+profile = "numeric"
+emit_kernel_report = true
+tensor_fusion = true
+"#;
+        let manifest = Manifest::parse(toml).unwrap();
+        assert_eq!(manifest.compiler.backend, CompilerBackend::Bhc);
+        assert_eq!(manifest.compiler.version, Some("0.1.0".to_string()));
+        assert_eq!(manifest.compiler.bhc.profile, BhcProfile::Numeric);
+        assert!(manifest.compiler.bhc.emit_kernel_report);
+        assert!(manifest.compiler.bhc.tensor_fusion);
+    }
+
+    #[test]
+    fn test_compiler_backend_default() {
+        let toml = r#"
+[project]
+name = "myapp"
+"#;
+        let manifest = Manifest::parse(toml).unwrap();
+        // Default should be GHC
+        assert_eq!(manifest.compiler.backend, CompilerBackend::Ghc);
+    }
+
+    #[test]
+    fn test_compiler_backend_from_str() {
+        assert_eq!("ghc".parse::<CompilerBackend>().unwrap(), CompilerBackend::Ghc);
+        assert_eq!("GHC".parse::<CompilerBackend>().unwrap(), CompilerBackend::Ghc);
+        assert_eq!("bhc".parse::<CompilerBackend>().unwrap(), CompilerBackend::Bhc);
+        assert_eq!("BHC".parse::<CompilerBackend>().unwrap(), CompilerBackend::Bhc);
+        assert!("unknown".parse::<CompilerBackend>().is_err());
+    }
+
+    #[test]
+    fn test_bhc_profile_parsing() {
+        let toml = r#"
+[project]
+name = "myapp"
+
+[compiler]
+backend = "bhc"
+
+[compiler.bhc]
+profile = "server"
+"#;
+        let manifest = Manifest::parse(toml).unwrap();
+        assert_eq!(manifest.compiler.bhc.profile, BhcProfile::Server);
+
+        let toml_edge = r#"
+[project]
+name = "myapp"
+
+[compiler.bhc]
+profile = "edge"
+"#;
+        let manifest_edge = Manifest::parse(toml_edge).unwrap();
+        assert_eq!(manifest_edge.compiler.bhc.profile, BhcProfile::Edge);
     }
 }

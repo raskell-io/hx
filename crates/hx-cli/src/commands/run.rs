@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use hx_cabal::build as cabal_build;
-use hx_config::{Project, find_project_root};
+use hx_config::{CompilerBackend, Project, find_project_root};
 use hx_plugins::HookEvent;
 use hx_toolchain::{AutoInstallPolicy, Toolchain, ensure_toolchain};
 use hx_ui::Output;
@@ -14,12 +14,21 @@ pub async fn run(
     args: Vec<String>,
     package: Option<String>,
     target: Option<String>,
+    backend_override: Option<CompilerBackend>,
     policy: AutoInstallPolicy,
     output: &Output,
 ) -> Result<i32> {
     // Find project root
     let project_root = find_project_root(".")?;
     let project = Project::load(&project_root)?;
+
+    // Determine compiler backend (CLI override > config > default)
+    let backend = backend_override.unwrap_or(project.manifest.compiler.backend);
+
+    // BHC run support would go here
+    if backend == CompilerBackend::Bhc {
+        output.warn("BHC run support is not yet fully implemented, falling back to GHC");
+    }
 
     // Check toolchain requirements
     let mut toolchain = Toolchain::detect().await;

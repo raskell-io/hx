@@ -96,6 +96,10 @@ pub enum Commands {
         /// Use native GHC build (experimental)
         #[arg(long)]
         native: bool,
+
+        /// Compiler backend to use (ghc or bhc)
+        #[arg(long, value_parser = parse_compiler_backend)]
+        backend: Option<hx_config::CompilerBackend>,
     },
 
     /// Run tests
@@ -111,6 +115,10 @@ pub enum Commands {
         /// Target triple for cross-compilation
         #[arg(long)]
         target: Option<String>,
+
+        /// Compiler backend to use (ghc or bhc)
+        #[arg(long, value_parser = parse_compiler_backend)]
+        backend: Option<hx_config::CompilerBackend>,
     },
 
     /// Run the project
@@ -126,13 +134,21 @@ pub enum Commands {
         /// Target triple for cross-compilation
         #[arg(long)]
         target: Option<String>,
+
+        /// Compiler backend to use (ghc or bhc)
+        #[arg(long, value_parser = parse_compiler_backend)]
+        backend: Option<hx_config::CompilerBackend>,
     },
 
     /// Start a REPL
     Repl,
 
     /// Type-check the project (fast build)
-    Check,
+    Check {
+        /// Compiler backend to use (ghc or bhc)
+        #[arg(long, value_parser = parse_compiler_backend)]
+        backend: Option<hx_config::CompilerBackend>,
+    },
 
     /// Format source code
     Fmt {
@@ -1080,4 +1096,9 @@ pub enum DistCommands {
         #[arg(long, short)]
         output: Option<std::path::PathBuf>,
     },
+}
+
+/// Parse compiler backend from string.
+fn parse_compiler_backend(s: &str) -> Result<hx_config::CompilerBackend, String> {
+    s.parse()
 }

@@ -1,13 +1,15 @@
 //! Toolchain detection and management for hx.
 //!
 //! This crate handles:
-//! - Detecting GHC, Cabal, GHCup, and HLS
+//! - Detecting GHC, Cabal, GHCup, HLS, and BHC
 //! - Parsing tool versions
 //! - Installing toolchains via ghcup or direct download
 //! - Checking toolchain requirements and auto-installing
 //! - Direct GHC and Cabal binary downloads (no ghcup dependency required)
 //! - Per-project toolchain version management
+//! - BHC (Basel Haskell Compiler) detection and management
 
+pub mod bhc;
 pub mod cabal;
 pub mod check;
 pub mod detect;
@@ -33,4 +35,12 @@ pub use ghc::{
 pub use install::{
     InstallStrategy, SmartCabalInstallOptions, SmartInstallOptions, install_cabal_smart,
     install_ghc_smart,
+};
+pub use bhc::{
+    BhcError, BhcVersion, InstalledBhc, KNOWN_BHC_VERSIONS, RECOMMENDED_BHC_VERSION,
+    bhc_download_url, bhc_install_dir, current_platform as bhc_current_platform,
+    detect as detect_bhc, is_known_version as is_known_bhc_version,
+    is_valid_version as is_valid_bhc_version, known_versions as known_bhc_versions,
+    list_installed as list_installed_bhc, remove_bhc, set_active as set_active_bhc,
+    version_install_path as bhc_version_install_path,
 };

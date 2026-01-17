@@ -8,7 +8,9 @@
 //! - Parallel package fetching
 //! - Native GHC build orchestration
 //! - GHC diagnostic parsing for LSP
+//! - GHC compiler backend abstraction
 
+pub mod backend;
 pub mod build;
 pub mod edit;
 pub mod fetch;
@@ -22,6 +24,7 @@ pub mod preprocessor;
 pub mod server;
 pub mod setup;
 
+pub use backend::GhcBackend;
 pub use build::{BuildOptions, BuildResult};
 pub use edit::{CabalEditError, add_dependency, remove_dependency};
 pub use fetch::{FetchOptions, FetchResult};

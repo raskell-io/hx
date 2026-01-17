@@ -8,8 +8,8 @@
 //! - `Option<T>`: first `Some` value wins
 
 use crate::{
-    BuildConfig, FormatConfig, LintConfig, Manifest, PluginConfig, PluginHookConfig, ProjectConfig,
-    StackageConfig, ToolchainConfig,
+    BhcConfig, BuildConfig, CompilerConfig, FormatConfig, GhcConfig, LintConfig, Manifest,
+    PluginConfig, PluginHookConfig, ProjectConfig, StackageConfig, ToolchainConfig,
 };
 
 /// Trait for combining configuration values.
@@ -45,6 +45,7 @@ impl Combine for Manifest {
         Self {
             project: self.project.combine(other.project),
             toolchain: self.toolchain.combine(other.toolchain),
+            compiler: self.compiler.combine(other.compiler),
             stackage: self.stackage.combine(other.stackage),
             build: self.build.combine(other.build),
             format: self.format.combine(other.format),
@@ -82,6 +83,38 @@ impl Combine for ToolchainConfig {
             ghc: self.ghc.combine(other.ghc),
             cabal: self.cabal.combine(other.cabal),
             hls: self.hls.combine(other.hls),
+        }
+    }
+}
+
+impl Combine for CompilerConfig {
+    fn combine(self, other: Self) -> Self {
+        Self {
+            backend: self.backend, // Prefer self's backend
+            version: self.version.combine(other.version),
+            bhc: self.bhc.combine(other.bhc),
+            ghc: self.ghc.combine(other.ghc),
+        }
+    }
+}
+
+impl Combine for BhcConfig {
+    fn combine(self, other: Self) -> Self {
+        Self {
+            profile: self.profile, // Prefer self
+            emit_kernel_report: self.emit_kernel_report || other.emit_kernel_report,
+            target: self.target.combine(other.target),
+            tensor_fusion: self.tensor_fusion || other.tensor_fusion,
+        }
+    }
+}
+
+impl Combine for GhcConfig {
+    fn combine(self, other: Self) -> Self {
+        Self {
+            version: self.version.combine(other.version),
+            profiling: self.profiling || other.profiling,
+            split_sections: self.split_sections || other.split_sections,
         }
     }
 }

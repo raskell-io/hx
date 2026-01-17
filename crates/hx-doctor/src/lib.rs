@@ -1,11 +1,12 @@
 //! Diagnostic checks and fix suggestions for hx.
 //!
 //! This crate provides the `hx doctor` functionality to diagnose
-//! toolchain and project issues.
+//! toolchain and project issues, including BHC (Basel Haskell Compiler)
+//! when configured.
 
-use hx_config::MANIFEST_FILENAME;
+use hx_config::{CompilerBackend, MANIFEST_FILENAME};
 use hx_core::error::Fix;
-use hx_toolchain::{Toolchain, install::ghcup_install_command};
+use hx_toolchain::{Toolchain, detect_bhc, install::ghcup_install_command};
 use hx_ui::{Output, Style};
 use std::path::Path;
 use std::process::Command;
@@ -133,6 +134,9 @@ pub async fn run_checks(project_dir: Option<&Path>) -> DoctorReport {
 
     // Check HLS
     check_hls(&toolchain, &mut report);
+
+    // Check BHC if configured
+    check_bhc(project_dir, &mut report);
 
     // Check native dependencies (platform-specific)
     check_native_deps(&mut report);
@@ -277,6 +281,53 @@ fn check_hls(toolchain: &Toolchain, report: &mut DoctorReport) {
                 report.add(diag);
             }
         }
+    }
+}
+
+fn check_bhc(project_dir: Option<&Path>, report: &mut DoctorReport) {
+    // Check if project uses BHC backend
+    let uses_bhc = project_dir
+        .and_then(|dir| hx_config::Project::load(dir).ok())
+        .map(|project| project.manifest.compiler.backend == CompilerBackend::Bhc)
+        .unwrap_or(false);
+
+    // Check BHC installation
+    if let Some(bhc) = detect_bhc() {
+        report.add(Diagnostic::info(format!("bhc: {}", bhc.version)));
+
+        // If project uses BHC, also check compatibility
+        if uses_bhc {
+            if let Some(dir) = project_dir
+                && let Ok(project) = hx_config::Project::load(dir)
+                && let Some(ref required) = project.manifest.compiler.version
+            {
+                if &bhc.version != required {
+                    report.add(
+                        Diagnostic::warning(format!(
+                            "BHC version mismatch: required {}, found {}",
+                            required, bhc.version
+                        ))
+                        .with_fix(Fix::with_command(
+                            format!("Install BHC {}", required),
+                            format!("hx toolchain install --bhc {}", required),
+                        )),
+                    );
+                }
+            }
+        }
+    } else if uses_bhc {
+        // BHC is required but not installed
+        report.add(
+            Diagnostic::error("BHC not found (required by project)").with_fix(Fix::with_command(
+                "Install BHC",
+                "hx toolchain install --bhc latest",
+            )),
+        );
+    } else {
+        // BHC is optional - just note it's not installed
+        report.add(Diagnostic::info(
+            "bhc: not installed (optional - install for alternative compiler backend)",
+        ));
     }
 }
 

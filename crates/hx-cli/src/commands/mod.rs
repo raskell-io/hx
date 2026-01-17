@@ -85,21 +85,24 @@ pub async fn run(cli: Cli) -> Result<i32> {
             target,
             package,
             native,
-        }) => build::run(release, jobs, target, package, native, policy, &output).await,
+            backend,
+        }) => build::run(release, jobs, target, package, native, backend, policy, &output).await,
         Some(Commands::Test {
             pattern,
             package,
             target,
-        }) => build::test(pattern, package, target, policy, &output).await,
+            backend,
+        }) => build::test(pattern, package, target, backend, policy, &output).await,
         Some(Commands::Run {
             args,
             package,
             target,
-        }) => run::run(args, package, target, policy, &output).await,
+            backend,
+        }) => run::run(args, package, target, backend, policy, &output).await,
         Some(Commands::Repl) => run::repl(policy, &output).await,
-        Some(Commands::Check) => {
+        Some(Commands::Check { backend }) => {
             // Check is just a fast build
-            build::run(false, None, None, None, false, policy, &output).await
+            build::run(false, None, None, None, false, backend, policy, &output).await
         }
         Some(Commands::Fmt { check }) => fmt::run(check, &output).await,
         Some(Commands::Lint { fix }) => lint::run(fix, &output).await,

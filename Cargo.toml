@@ -15,6 +15,8 @@ members = [
     "crates/hx-solver",
     "crates/hx-lsp",
     "crates/hx-plugins",
+    "crates/hx-compiler",
+    "crates/hx-bhc",
 ]
 
 [workspace.package]
@@ -93,6 +95,11 @@ hx-warnings = { path = "crates/hx-warnings" }
 hx-solver = { path = "crates/hx-solver" }
 hx-lsp = { path = "crates/hx-lsp" }
 hx-plugins = { path = "crates/hx-plugins" }
+hx-compiler = { path = "crates/hx-compiler" }
+hx-bhc = { path = "crates/hx-bhc" }
+
+# Async trait
+async-trait = "0.1"
 
 # Testing
 tempfile = "3"
