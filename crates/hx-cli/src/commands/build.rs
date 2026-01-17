@@ -355,19 +355,6 @@ pub async fn test(
     }
 }
 
-/// Check toolchain requirements and install if needed.
-async fn check_toolchain(project: &Project, policy: AutoInstallPolicy) -> hx_core::Result<()> {
-    let toolchain = Toolchain::detect().await;
-
-    ensure_toolchain(
-        &toolchain,
-        project.manifest.toolchain.ghc.as_deref(),
-        project.manifest.toolchain.cabal.as_deref(),
-        policy,
-    )
-    .await
-}
-
 /// Run native GHC build (experimental).
 async fn run_native_build(
     project: &Project,

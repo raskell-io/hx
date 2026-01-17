@@ -1,4 +1,9 @@
 //! File system watching with debouncing.
+//!
+//! This module provides infrastructure for file watching that will be used
+//! by the LSP server and watch mode features.
+
+#![allow(dead_code)]
 
 use notify_debouncer_mini::{DebouncedEventKind, Debouncer, new_debouncer};
 use std::path::PathBuf;

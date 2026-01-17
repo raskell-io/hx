@@ -159,16 +159,3 @@ pub async fn repl(policy: AutoInstallPolicy, output: &Output) -> Result<i32> {
     let exit_code = cabal_build::repl(&project.root, &build_dir, &toolchain_bin_dirs).await?;
     Ok(exit_code)
 }
-
-/// Check toolchain requirements and install if needed.
-async fn check_toolchain(project: &Project, policy: AutoInstallPolicy) -> hx_core::Result<()> {
-    let toolchain = Toolchain::detect().await;
-
-    ensure_toolchain(
-        &toolchain,
-        project.manifest.toolchain.ghc.as_deref(),
-        project.manifest.toolchain.cabal.as_deref(),
-        policy,
-    )
-    .await
-}

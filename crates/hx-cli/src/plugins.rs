@@ -4,7 +4,7 @@
 
 use hx_config::Project;
 use hx_plugins::{
-    BuildContext, HookEvent, HookResult, PluginConfig, PluginContext, PluginManager, TestContext,
+    BuildContext, HookEvent, PluginConfig, PluginContext, PluginManager, TestContext,
 };
 use hx_ui::Output;
 use std::time::Duration;
@@ -162,22 +162,6 @@ impl PluginHooks {
                     false
                 }
             }
-        }
-    }
-}
-
-/// Extension trait for Output to display hook results.
-pub trait HookOutput {
-    fn hook_status(&self, event: HookEvent, result: &HookResult);
-}
-
-impl HookOutput for Output {
-    fn hook_status(&self, event: HookEvent, result: &HookResult) {
-        let event_name = event.config_key();
-        if result.success {
-            self.verbose(&format!("[{}] completed successfully", event_name));
-        } else if let Some(ref err) = result.error {
-            self.warn(&format!("[{}] failed: {}", event_name, err));
         }
     }
 }
