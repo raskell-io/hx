@@ -48,7 +48,7 @@ hx new hello && cd hello && hx run
 | `hx add <pkg>` / `hx remove <pkg>` | P0 | Medium | ✅ |
 | Auto-detect and install GHC on first run | P0 | Done | ✅ |
 | `hx upgrade` self-update | P0 | Low | ✅ |
-| Shell completions auto-install | P1 | Low | TODO |
+| Shell completions auto-install | P1 | Low | ✅ |
 | `hx init` without flags (smart defaults) | P1 | Low | TODO |
 | Global config (`~/.hx/config.toml`) | P1 | Medium | TODO |
 
