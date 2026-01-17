@@ -45,7 +45,7 @@ hx doctor
 
 ```bash
 # Create a new project
-hx init --bin --name myapp
+hx init myapp
 cd myapp
 
 # Build and run
@@ -65,8 +65,8 @@ hx watch
 ### Project Management
 
 ```bash
-hx init                      # Initialize a new project
-hx init --bin                # Create an executable project
+hx init                      # Initialize in current directory
+hx init myapp                # Create myapp/ and initialize
 hx init --lib                # Create a library project
 hx init --ci                 # Include GitHub Actions workflow
 
