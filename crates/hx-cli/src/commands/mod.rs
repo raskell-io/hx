@@ -107,6 +107,7 @@ pub async fn run(cli: Cli) -> Result<i32> {
         }) => deps::add(&package, constraint.as_deref(), dev, &output).await,
         Some(Commands::Rm { package }) => deps::remove(&package, &output).await,
         Some(Commands::Why { package }) => deps::why(&package, &output).await,
+        Some(Commands::Outdated { direct, all }) => deps::outdated(direct, all, &output).await,
         Some(Commands::Completions { shell }) => completions::run(shell),
         Some(Commands::Upgrade {
             check,

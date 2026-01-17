@@ -212,6 +212,17 @@ pub enum Commands {
         package: String,
     },
 
+    /// Check for outdated dependencies
+    Outdated {
+        /// Only show direct dependencies
+        #[arg(long)]
+        direct: bool,
+
+        /// Show all updates (including pre-release)
+        #[arg(long)]
+        all: bool,
+    },
+
     /// Generate shell completions
     Completions {
         /// Shell to generate completions for

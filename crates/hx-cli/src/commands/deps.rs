@@ -428,6 +428,227 @@ fn find_dependency_paths(
     paths
 }
 
+/// Check for outdated dependencies.
+pub async fn outdated(direct_only: bool, _show_all: bool, output: &Output) -> Result<i32> {
+    // Find project root
+    let project_root = match find_project_root(".") {
+        Ok(root) => root,
+        Err(_) => {
+            output.error("Not in an hx project (no hx.toml found)");
+            output.info("Run `hx init` to create a new project first.");
+            return Ok(3);
+        }
+    };
+
+    let project = Project::load(&project_root)?;
+
+    // Load lockfile to get current versions
+    let lockfile_path = project.lockfile_path();
+    let lockfile = match Lockfile::from_file(&lockfile_path) {
+        Ok(lf) => lf,
+        Err(_) => {
+            output.error("No lockfile found");
+            output.info("Run `hx lock` to generate a lockfile first.");
+            return Ok(3);
+        }
+    };
+
+    if lockfile.packages.is_empty() {
+        output.info("No dependencies in lockfile.");
+        return Ok(0);
+    }
+
+    // Get direct dependencies from .cabal file
+    let cabal_file = find_cabal_file(&project_root);
+    let direct_deps = if let Some(cabal_path) = cabal_file {
+        parse_direct_deps(&cabal_path)
+    } else {
+        project.manifest.dependencies.keys().cloned().collect()
+    };
+
+    // Load Hackage index
+    let index_path = match best_index_path() {
+        Some(path) => path,
+        None => {
+            output.error("Hackage index not found");
+            output.info("Run `cabal update` to download the package index.");
+            return Ok(1);
+        }
+    };
+
+    output.status("Checking", "for outdated dependencies...");
+
+    let locked_names: Vec<String> = lockfile.packages.iter().map(|p| p.name.clone()).collect();
+
+    let options = IndexOptions {
+        filter_packages: locked_names,
+        skip_errors: true,
+        show_progress: false,
+        ..Default::default()
+    };
+
+    let index = match load_index(&index_path, &options) {
+        Ok(idx) => idx,
+        Err(e) => {
+            output.error(&format!("Failed to load Hackage index: {}", e));
+            return Ok(1);
+        }
+    };
+
+    // Compare versions and collect outdated packages
+    let mut outdated_packages: Vec<OutdatedPackage> = Vec::new();
+
+    for pkg in &lockfile.packages {
+        // Skip if we only want direct dependencies and this isn't one
+        if direct_only && !direct_deps.contains(&pkg.name) {
+            continue;
+        }
+
+        if let Some(index_pkg) = index.packages.get(&pkg.name) {
+            // Get the latest version from the index
+            if let Some(latest_version) = index_pkg.versions_descending().first() {
+                let current: Option<hx_solver::Version> = pkg.version.parse().ok();
+
+                if let Some(ref current_v) = current {
+                    if *latest_version > current_v {
+                        let update_type = categorize_update(current_v, latest_version);
+                        outdated_packages.push(OutdatedPackage {
+                            name: pkg.name.clone(),
+                            current: pkg.version.clone(),
+                            latest: latest_version.to_string(),
+                            update_type,
+                            is_direct: direct_deps.contains(&pkg.name),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // Display results
+    if outdated_packages.is_empty() {
+        output.status("Up to date", "All dependencies are at their latest versions.");
+        return Ok(0);
+    }
+
+    // Sort: direct deps first, then by name
+    outdated_packages.sort_by(|a, b| {
+        match (a.is_direct, b.is_direct) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.cmp(&b.name),
+        }
+    });
+
+    // Calculate column widths for alignment
+    let max_name_len = outdated_packages.iter().map(|p| p.name.len()).max().unwrap_or(0);
+    let max_current_len = outdated_packages.iter().map(|p| p.current.len()).max().unwrap_or(0);
+    let max_latest_len = outdated_packages.iter().map(|p| p.latest.len()).max().unwrap_or(0);
+
+    println!();
+    println!(
+        "{:<width_name$}  {:<width_curr$}  →  {:<width_lat$}  Type",
+        "Package",
+        "Current",
+        "Latest",
+        width_name = max_name_len,
+        width_curr = max_current_len,
+        width_lat = max_latest_len,
+    );
+    println!(
+        "{:-<width_name$}  {:-<width_curr$}     {:-<width_lat$}  -----",
+        "",
+        "",
+        "",
+        width_name = max_name_len,
+        width_curr = max_current_len,
+        width_lat = max_latest_len,
+    );
+
+    for pkg in &outdated_packages {
+        let type_str = match pkg.update_type {
+            UpdateType::Major => "major",
+            UpdateType::Minor => "minor",
+            UpdateType::Patch => "patch",
+        };
+        let direct_marker = if pkg.is_direct { " (direct)" } else { "" };
+
+        println!(
+            "{:<width_name$}  {:<width_curr$}  →  {:<width_lat$}  {}{}",
+            pkg.name,
+            pkg.current,
+            pkg.latest,
+            type_str,
+            direct_marker,
+            width_name = max_name_len,
+            width_curr = max_current_len,
+            width_lat = max_latest_len,
+        );
+    }
+
+    println!();
+
+    // Summary
+    let major_count = outdated_packages.iter().filter(|p| matches!(p.update_type, UpdateType::Major)).count();
+    let minor_count = outdated_packages.iter().filter(|p| matches!(p.update_type, UpdateType::Minor)).count();
+    let patch_count = outdated_packages.iter().filter(|p| matches!(p.update_type, UpdateType::Patch)).count();
+
+    output.info(&format!(
+        "Found {} outdated package(s): {} major, {} minor, {} patch",
+        outdated_packages.len(),
+        major_count,
+        minor_count,
+        patch_count
+    ));
+
+    // Show update hints
+    if !outdated_packages.is_empty() {
+        let direct_outdated: Vec<_> = outdated_packages.iter().filter(|p| p.is_direct).collect();
+        if !direct_outdated.is_empty() {
+            output.info("To update a dependency, run: hx add <package>");
+        }
+    }
+
+    Ok(0)
+}
+
+/// Information about an outdated package.
+struct OutdatedPackage {
+    name: String,
+    current: String,
+    latest: String,
+    update_type: UpdateType,
+    is_direct: bool,
+}
+
+/// Type of version update.
+#[derive(Debug, Clone, Copy)]
+enum UpdateType {
+    Major,
+    Minor,
+    Patch,
+}
+
+/// Categorize the type of update between two versions.
+fn categorize_update(current: &hx_solver::Version, latest: &hx_solver::Version) -> UpdateType {
+    let current_parts: Vec<u32> = current.to_string().split('.').filter_map(|s| s.parse().ok()).collect();
+    let latest_parts: Vec<u32> = latest.to_string().split('.').filter_map(|s| s.parse().ok()).collect();
+
+    let current_major = current_parts.first().copied().unwrap_or(0);
+    let current_minor = current_parts.get(1).copied().unwrap_or(0);
+
+    let latest_major = latest_parts.first().copied().unwrap_or(0);
+    let latest_minor = latest_parts.get(1).copied().unwrap_or(0);
+
+    if latest_major > current_major {
+        UpdateType::Major
+    } else if latest_minor > current_minor {
+        UpdateType::Minor
+    } else {
+        UpdateType::Patch
+    }
+}
+
 /// Show dependency graph.
 pub async fn graph(
     format: GraphFormat,
