@@ -522,6 +522,27 @@ mod tests {
         assert_eq!(config.src_dirs, vec![PathBuf::from("src")]);
         assert!(config.packages.is_empty());
         assert_eq!(config.idle_timeout_ms, 0);
+        assert!(config.package_dbs.is_empty());
+        assert!(config.extensions.is_empty());
+        assert!(config.ghci_options.is_empty());
+        assert_eq!(config.ghc_path, PathBuf::from("ghci"));
+    }
+
+    #[test]
+    fn test_server_config_custom() {
+        let config = ServerConfig {
+            src_dirs: vec![PathBuf::from("src"), PathBuf::from("lib")],
+            package_dbs: vec![PathBuf::from("/path/to/db")],
+            packages: vec!["base".to_string(), "text".to_string()],
+            ghc_path: PathBuf::from("/usr/bin/ghci"),
+            idle_timeout_ms: 60000,
+            extensions: vec!["OverloadedStrings".to_string()],
+            ghci_options: vec!["-Wall".to_string()],
+        };
+        assert_eq!(config.src_dirs.len(), 2);
+        assert_eq!(config.packages.len(), 2);
+        assert_eq!(config.idle_timeout_ms, 60000);
+        assert_eq!(config.extensions.len(), 1);
     }
 
     #[test]
@@ -529,6 +550,19 @@ mod tests {
         let project = PathBuf::from("/home/user/project");
         let socket = server_socket_path(&project);
         assert_eq!(socket, PathBuf::from("/home/user/project/.hx/server.sock"));
+    }
+
+    #[test]
+    fn test_server_socket_path_nested() {
+        let project = PathBuf::from("/a/b/c/d/project");
+        let socket = server_socket_path(&project);
+        assert_eq!(socket, PathBuf::from("/a/b/c/d/project/.hx/server.sock"));
+    }
+
+    #[test]
+    fn test_is_server_running_no_socket() {
+        // Non-existent path should return false
+        assert!(!is_server_running(Path::new("/nonexistent/path")));
     }
 
     #[test]
@@ -548,6 +582,30 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_module_name_qualified() {
+        assert_eq!(
+            CompilationServer::extract_module_name("[1 of 10] Compiling Control.Monad.Trans.State"),
+            Some("Control.Monad.Trans.State".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_module_name_with_brackets() {
+        assert_eq!(
+            CompilationServer::extract_module_name("[15 of 20] Compiling Foo.Bar ( src/Foo/Bar.hs, interpreted )"),
+            Some("Foo.Bar".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_module_name_single_module() {
+        assert_eq!(
+            CompilationServer::extract_module_name("[1 of 1] Compiling Main"),
+            Some("Main".to_string())
+        );
+    }
+
+    #[test]
     fn test_server_status_default() {
         let status = ServerStatus {
             running: false,
@@ -557,5 +615,129 @@ mod tests {
             module_names: Vec::new(),
         };
         assert!(!status.running);
+        assert_eq!(status.loaded_modules, 0);
+        assert!(status.ghc_version.is_none());
+        assert!(status.module_names.is_empty());
+    }
+
+    #[test]
+    fn test_server_status_running() {
+        let status = ServerStatus {
+            running: true,
+            loaded_modules: 5,
+            idle_time: Duration::from_secs(30),
+            ghc_version: Some("GHCi, version 9.8.2".to_string()),
+            module_names: vec!["Main".to_string(), "Lib".to_string()],
+        };
+        assert!(status.running);
+        assert_eq!(status.loaded_modules, 5);
+        assert!(status.ghc_version.is_some());
+        assert_eq!(status.module_names.len(), 2);
+    }
+
+    #[test]
+    fn test_reload_result_success() {
+        let result = ReloadResult {
+            success: true,
+            modules_recompiled: vec!["Main".to_string(), "Lib".to_string()],
+            duration: Duration::from_millis(150),
+            errors: Vec::new(),
+            warnings: vec!["unused import".to_string()],
+        };
+        assert!(result.success);
+        assert_eq!(result.modules_recompiled.len(), 2);
+        assert!(result.errors.is_empty());
+        assert_eq!(result.warnings.len(), 1);
+    }
+
+    #[test]
+    fn test_reload_result_failure() {
+        let result = ReloadResult {
+            success: false,
+            modules_recompiled: vec!["Main".to_string()],
+            duration: Duration::from_millis(50),
+            errors: vec!["type error".to_string(), "scope error".to_string()],
+            warnings: Vec::new(),
+        };
+        assert!(!result.success);
+        assert_eq!(result.errors.len(), 2);
+    }
+
+    #[test]
+    fn test_type_check_result_success() {
+        let result = TypeCheckResult {
+            success: true,
+            errors: Vec::new(),
+            warnings: Vec::new(),
+            duration: Duration::from_millis(20),
+        };
+        assert!(result.success);
+        assert!(result.errors.is_empty());
+        assert!(result.warnings.is_empty());
+    }
+
+    #[test]
+    fn test_type_check_result_with_warnings() {
+        let result = TypeCheckResult {
+            success: true,
+            errors: Vec::new(),
+            warnings: vec!["unused variable 'x'".to_string()],
+            duration: Duration::from_millis(25),
+        };
+        assert!(result.success);
+        assert_eq!(result.warnings.len(), 1);
+    }
+
+    #[test]
+    fn test_type_check_result_failure() {
+        let result = TypeCheckResult {
+            success: false,
+            errors: vec!["Type mismatch".to_string()],
+            warnings: Vec::new(),
+            duration: Duration::from_millis(30),
+        };
+        assert!(!result.success);
+        assert_eq!(result.errors.len(), 1);
+    }
+
+    #[test]
+    fn test_reload_result_clone() {
+        let result = ReloadResult {
+            success: true,
+            modules_recompiled: vec!["Test".to_string()],
+            duration: Duration::from_millis(100),
+            errors: Vec::new(),
+            warnings: Vec::new(),
+        };
+        let cloned = result.clone();
+        assert_eq!(cloned.success, result.success);
+        assert_eq!(cloned.modules_recompiled, result.modules_recompiled);
+    }
+
+    #[test]
+    fn test_server_status_clone() {
+        let status = ServerStatus {
+            running: true,
+            loaded_modules: 3,
+            idle_time: Duration::from_secs(10),
+            ghc_version: Some("9.8.2".to_string()),
+            module_names: vec!["A".to_string(), "B".to_string()],
+        };
+        let cloned = status.clone();
+        assert_eq!(cloned.running, status.running);
+        assert_eq!(cloned.loaded_modules, status.loaded_modules);
+        assert_eq!(cloned.module_names, status.module_names);
+    }
+
+    #[test]
+    fn test_server_config_clone() {
+        let config = ServerConfig {
+            src_dirs: vec![PathBuf::from("src")],
+            packages: vec!["base".to_string()],
+            ..Default::default()
+        };
+        let cloned = config.clone();
+        assert_eq!(cloned.src_dirs, config.src_dirs);
+        assert_eq!(cloned.packages, config.packages);
     }
 }

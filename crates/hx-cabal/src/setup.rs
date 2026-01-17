@@ -173,10 +173,16 @@ pub async fn compile_setup(
 
     // Find Setup.hs file
     let setup_file = find_setup_file(package_dir).ok_or_else(|| Error::BuildFailed {
-        errors: vec!["No Setup.hs or Setup.lhs found in package directory".to_string()],
-        fixes: vec![Fix::new(
-            "Create a Setup.hs file with 'import Distribution.Simple; main = defaultMain'",
+        errors: vec![format!(
+            "No Setup.hs or Setup.lhs found in package directory: {}",
+            package_dir.display()
         )],
+        fixes: vec![
+            Fix::new("Create a Setup.hs file with:"),
+            Fix::new("  import Distribution.Simple"),
+            Fix::new("  main = defaultMain"),
+            Fix::new("Or use 'build-type: Simple' in your .cabal file to avoid custom setup"),
+        ],
     })?;
 
     info!("Compiling {}", setup_file.display());
@@ -384,7 +390,16 @@ pub async fn build_with_setup(
     let configure_result = run_configure(setup_exe, package_dir, configure_flags, options.verbose).await?;
     if !configure_result.success {
         result.success = false;
-        result.errors.push(format!("configure failed: {}", configure_result.stderr));
+        let stderr = configure_result.stderr.trim();
+        if stderr.is_empty() {
+            result.errors.push(format!(
+                "Setup configure failed with exit code {}",
+                configure_result.exit_code
+            ));
+        } else {
+            result.errors.push(format!("Setup configure failed:\n  {}", stderr.replace('\n', "\n  ")));
+        }
+        result.errors.push("hint: Check that all dependencies are installed".to_string());
         result.duration = start.elapsed();
         return Ok(result);
     }
@@ -394,7 +409,16 @@ pub async fn build_with_setup(
     let build_result = run_build(setup_exe, package_dir, build_flags, options.verbose).await?;
     if !build_result.success {
         result.success = false;
-        result.errors.push(format!("build failed: {}", build_result.stderr));
+        let stderr = build_result.stderr.trim();
+        if stderr.is_empty() {
+            result.errors.push(format!(
+                "Setup build failed with exit code {}",
+                build_result.exit_code
+            ));
+        } else {
+            result.errors.push(format!("Setup build failed:\n  {}", stderr.replace('\n', "\n  ")));
+        }
+        result.errors.push("hint: Run 'hx build --verbose' for full compiler output".to_string());
         result.duration = start.elapsed();
         return Ok(result);
     }
@@ -405,7 +429,16 @@ pub async fn build_with_setup(
         let copy_result = run_copy(setup_exe, package_dir, copy_flags, options.verbose).await?;
         if !copy_result.success {
             result.success = false;
-            result.errors.push(format!("copy failed: {}", copy_result.stderr));
+            let stderr = copy_result.stderr.trim();
+            if stderr.is_empty() {
+                result.errors.push(format!(
+                    "Setup copy failed with exit code {}",
+                    copy_result.exit_code
+                ));
+            } else {
+                result.errors.push(format!("Setup copy failed:\n  {}", stderr.replace('\n', "\n  ")));
+            }
+            result.errors.push("hint: Check destination directory permissions".to_string());
             result.duration = start.elapsed();
             return Ok(result);
         }
@@ -417,7 +450,16 @@ pub async fn build_with_setup(
         let register_result = run_register(setup_exe, package_dir, Some(db), options.verbose).await?;
         if !register_result.success {
             result.success = false;
-            result.errors.push(format!("register failed: {}", register_result.stderr));
+            let stderr = register_result.stderr.trim();
+            if stderr.is_empty() {
+                result.errors.push(format!(
+                    "Setup register failed with exit code {}",
+                    register_result.exit_code
+                ));
+            } else {
+                result.errors.push(format!("Setup register failed:\n  {}", stderr.replace('\n', "\n  ")));
+            }
+            result.errors.push("hint: Check package database permissions".to_string());
             result.duration = start.elapsed();
             return Ok(result);
         }
@@ -473,6 +515,7 @@ fn parse_ghc_output(stdout: &str, stderr: &str) -> (Vec<String>, Vec<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
 
     #[test]
     fn test_configure_flags_to_args() {
@@ -490,6 +533,35 @@ mod tests {
     }
 
     #[test]
+    fn test_configure_flags_all_options() {
+        let flags = ConfigureFlags {
+            prefix: Some(PathBuf::from("/opt")),
+            libdir: Some(PathBuf::from("/opt/lib")),
+            bindir: Some(PathBuf::from("/opt/bin")),
+            datadir: Some(PathBuf::from("/opt/share")),
+            package_db: Some(PathBuf::from("/opt/db")),
+            with_ghc: Some(PathBuf::from("/opt/ghc")),
+            extra_flags: vec!["--extra1".to_string(), "--extra2".to_string()],
+        };
+
+        let args = flags.to_args();
+        assert_eq!(args.len(), 8);
+        assert!(args.contains(&"--prefix=/opt".to_string()));
+        assert!(args.contains(&"--bindir=/opt/bin".to_string()));
+        assert!(args.contains(&"--datadir=/opt/share".to_string()));
+        assert!(args.contains(&"--package-db=/opt/db".to_string()));
+        assert!(args.contains(&"--extra1".to_string()));
+        assert!(args.contains(&"--extra2".to_string()));
+    }
+
+    #[test]
+    fn test_configure_flags_empty() {
+        let flags = ConfigureFlags::default();
+        let args = flags.to_args();
+        assert!(args.is_empty());
+    }
+
+    #[test]
     fn test_build_flags_to_args() {
         let flags = BuildFlags {
             jobs: Some(4),
@@ -499,6 +571,23 @@ mod tests {
         let args = flags.to_args();
         assert!(args.contains(&"-j4".to_string()));
         assert!(args.contains(&"--verbose".to_string()));
+    }
+
+    #[test]
+    fn test_build_flags_empty() {
+        let flags = BuildFlags::default();
+        let args = flags.to_args();
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    fn test_build_flags_only_jobs() {
+        let flags = BuildFlags {
+            jobs: Some(8),
+            extra_flags: Vec::new(),
+        };
+        let args = flags.to_args();
+        assert_eq!(args, vec!["-j8".to_string()]);
     }
 
     #[test]
@@ -513,11 +602,63 @@ mod tests {
     }
 
     #[test]
-    fn test_find_setup_file() {
-        // This test would need a temporary directory with a Setup.hs file
-        // For now, just test that it returns None for a non-existent path
+    fn test_copy_flags_empty() {
+        let flags = CopyFlags::default();
+        let args = flags.to_args();
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    fn test_copy_flags_with_extras() {
+        let flags = CopyFlags {
+            destdir: Some(PathBuf::from("/staging")),
+            extra_flags: vec!["--verbose".to_string()],
+        };
+        let args = flags.to_args();
+        assert_eq!(args.len(), 2);
+        assert!(args.contains(&"--destdir=/staging".to_string()));
+        assert!(args.contains(&"--verbose".to_string()));
+    }
+
+    #[test]
+    fn test_find_setup_file_nonexistent() {
         let result = find_setup_file(Path::new("/nonexistent/path"));
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_setup_file_with_setup_hs() {
+        let temp = TempDir::new().unwrap();
+        let setup_hs = temp.path().join("Setup.hs");
+        std::fs::write(&setup_hs, "import Distribution.Simple; main = defaultMain").unwrap();
+
+        let result = find_setup_file(temp.path());
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), setup_hs);
+    }
+
+    #[test]
+    fn test_find_setup_file_with_setup_lhs() {
+        let temp = TempDir::new().unwrap();
+        let setup_lhs = temp.path().join("Setup.lhs");
+        std::fs::write(&setup_lhs, "> import Distribution.Simple\n> main = defaultMain").unwrap();
+
+        let result = find_setup_file(temp.path());
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), setup_lhs);
+    }
+
+    #[test]
+    fn test_find_setup_file_prefers_hs_over_lhs() {
+        let temp = TempDir::new().unwrap();
+        let setup_hs = temp.path().join("Setup.hs");
+        let setup_lhs = temp.path().join("Setup.lhs");
+        std::fs::write(&setup_hs, "import Distribution.Simple").unwrap();
+        std::fs::write(&setup_lhs, "> import Distribution.Simple").unwrap();
+
+        let result = find_setup_file(temp.path());
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), setup_hs); // .hs preferred over .lhs
     }
 
     #[test]
@@ -526,5 +667,146 @@ mod tests {
         assert!(options.package_dbs.is_empty());
         assert!(options.setup_depends.is_empty());
         assert!(!options.verbose);
+        assert_eq!(options.ghc_path, PathBuf::new());
+        assert_eq!(options.build_dir, PathBuf::new());
+    }
+
+    #[test]
+    fn test_setup_compile_result_fields() {
+        let result = SetupCompileResult {
+            executable_path: PathBuf::from("/path/to/Setup"),
+            success: true,
+            duration: Duration::from_millis(500),
+            errors: Vec::new(),
+            warnings: vec!["some warning".to_string()],
+        };
+        assert!(result.success);
+        assert_eq!(result.executable_path, PathBuf::from("/path/to/Setup"));
+        assert_eq!(result.warnings.len(), 1);
+        assert!(result.errors.is_empty());
+    }
+
+    #[test]
+    fn test_setup_run_result_fields() {
+        let result = SetupRunResult {
+            success: false,
+            exit_code: 1,
+            stdout: "output".to_string(),
+            stderr: "error".to_string(),
+            duration: Duration::from_millis(100),
+        };
+        assert!(!result.success);
+        assert_eq!(result.exit_code, 1);
+        assert_eq!(result.stdout, "output");
+        assert_eq!(result.stderr, "error");
+    }
+
+    #[test]
+    fn test_custom_build_result_fields() {
+        let result = CustomBuildResult {
+            success: true,
+            duration: Duration::from_secs(10),
+            setup_compiled: true,
+            configured: true,
+            built: true,
+            copied: true,
+            registered: true,
+            errors: Vec::new(),
+            warnings: Vec::new(),
+        };
+        assert!(result.success);
+        assert!(result.setup_compiled);
+        assert!(result.configured);
+        assert!(result.built);
+        assert!(result.copied);
+        assert!(result.registered);
+    }
+
+    #[test]
+    fn test_custom_build_result_partial_failure() {
+        let result = CustomBuildResult {
+            success: false,
+            duration: Duration::from_secs(5),
+            setup_compiled: true,
+            configured: true,
+            built: false,
+            copied: false,
+            registered: false,
+            errors: vec!["Build failed".to_string()],
+            warnings: Vec::new(),
+        };
+        assert!(!result.success);
+        assert!(result.setup_compiled);
+        assert!(result.configured);
+        assert!(!result.built);
+        assert!(!result.copied);
+        assert_eq!(result.errors.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_ghc_output_empty() {
+        let (warnings, errors) = parse_ghc_output("", "");
+        assert!(warnings.is_empty());
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_parse_ghc_output_errors() {
+        let stderr = r#"
+src/Lib.hs:10:5: error:
+    Variable not in scope: foo
+src/Main.hs:20:10: error:
+    Could not match expected type
+"#;
+        let (warnings, errors) = parse_ghc_output("", stderr);
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 2);
+        assert!(errors[0].contains("error:"));
+    }
+
+    #[test]
+    fn test_parse_ghc_output_warnings() {
+        let stderr = r#"
+src/Lib.hs:5:1: warning:
+    Unused variable 'x'
+src/Main.hs:15:1: warning:
+    Missing type signature
+"#;
+        let (warnings, errors) = parse_ghc_output("", stderr);
+        assert_eq!(warnings.len(), 2);
+        assert!(errors.is_empty());
+        assert!(warnings[0].contains("warning:"));
+    }
+
+    #[test]
+    fn test_parse_ghc_output_mixed() {
+        let stderr = r#"
+src/Lib.hs:5:1: warning: Unused import
+src/Lib.hs:10:5: error: Type mismatch
+src/Main.hs:15:1: warning: Missing signature
+"#;
+        let (warnings, errors) = parse_ghc_output("", stderr);
+        assert_eq!(warnings.len(), 2);
+        assert_eq!(errors.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_ghc_output_capitalized() {
+        let stderr = r#"
+src/Lib.hs:10:5: Error: Something wrong
+src/Main.hs:15:1: Warning: Some warning
+"#;
+        let (warnings, errors) = parse_ghc_output("", stderr);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(errors.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_ghc_output_combines_stdout_stderr() {
+        let stdout = "src/Lib.hs:5:1: warning: From stdout";
+        let stderr = "src/Main.hs:10:1: error: From stderr";
+        let (warnings, errors) = parse_ghc_output(stdout, stderr);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(errors.len(), 1);
     }
 }

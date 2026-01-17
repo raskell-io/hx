@@ -169,7 +169,23 @@ hx v0.1.0 is shippable when:
   - [x] Pre-installed package detection
   - [x] Package cache with content-addressed keys
 - [x] Drop cabal as runtime dependency for simple builds
-- [x] Constraints: Custom Setup.hs and preprocessors (alex/happy) require cabal fallback
+
+### Native Build Advanced Features ✅
+- [x] Preprocessor integration
+  - [x] Alex lexer generator (.x → .hs)
+  - [x] Happy parser generator (.y/.ly → .hs)
+  - [x] hsc2hs C FFI bindings (.hsc → .hs)
+  - [x] Automatic detection and invocation before compilation
+  - [x] Support in both project and dependency builds
+- [x] Custom Setup.hs support
+  - [x] Parse custom-setup stanza from .cabal files
+  - [x] Compile Setup.hs with setup-depends
+  - [x] Execute Setup configure/build/copy/register
+  - [x] Integration with FullNativeBuilder
+- [x] Persistent compilation server
+  - [x] `hx server start|stop|status|restart` commands
+  - [x] GHCi-based incremental reloading
+  - [x] Sub-second rebuild potential via :reload
 
 ### Watch Mode ✅
 - [x] `hx watch` for auto-rebuild on file changes
@@ -317,6 +333,11 @@ hx dist formula [--version <ver>] [--output <file>]
 hx dist install-script [--version <ver>] [--output <file>]
 
 hx coverage [--html] [--open] [--output <dir>] [--threshold <pct>] [--json]
+
+hx server start
+hx server stop
+hx server status
+hx server restart
 
 hx completions <shell>
 hx upgrade [--check]

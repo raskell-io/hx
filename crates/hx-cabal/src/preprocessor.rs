@@ -224,16 +224,64 @@ pub async fn check_availability(
 
     if !missing.is_empty() {
         let missing_names: Vec<_> = missing.iter().map(|p| p.executable()).collect();
+        let file_types: Vec<_> = missing
+            .iter()
+            .flat_map(|p| p.extensions().iter().map(|e| format!(".{}", e)))
+            .collect();
+
+        // Build a helpful message about what files require these tools
+        let files_requiring: Vec<String> = missing
+            .iter()
+            .filter_map(|p| {
+                let files = match p {
+                    Preprocessor::Alex => &needed.alex_files,
+                    Preprocessor::Happy => &needed.happy_files,
+                    Preprocessor::Hsc2hs => &needed.hsc_files,
+                };
+                if files.is_empty() {
+                    None
+                } else {
+                    Some(format!(
+                        "{}: {} file(s)",
+                        p.executable(),
+                        files.len()
+                    ))
+                }
+            })
+            .collect();
+
+        let mut fixes = vec![
+            Fix::with_command(
+                "Install missing preprocessors with cabal",
+                format!("cabal install {}", missing_names.join(" ")),
+            ),
+        ];
+
+        // Add platform-specific installation hints
+        #[cfg(target_os = "macos")]
+        fixes.push(Fix::with_command(
+            "Or install via Homebrew",
+            format!("brew install ghc  # includes {}", missing_names.join(", ")),
+        ));
+
+        #[cfg(target_os = "linux")]
+        fixes.push(Fix::new(
+            "Or install via your system package manager (e.g., apt install alex happy)",
+        ));
+
+        fixes.push(Fix::new(format!(
+            "These tools are needed to compile {} files",
+            file_types.join(", ")
+        )));
+
         return Err(Error::ToolchainMissing {
-            tool: missing_names.join(", "),
+            tool: format!(
+                "{} (required for {})",
+                missing_names.join(", "),
+                files_requiring.join(", ")
+            ),
             source: None,
-            fixes: vec![
-                Fix::with_command(
-                    "Install missing preprocessors with cabal",
-                    format!("cabal install {}", missing_names.join(" ")),
-                ),
-                Fix::new("Or install via your system package manager"),
-            ],
+            fixes,
         });
     }
 
@@ -473,13 +521,61 @@ pub async fn preprocess_all(
     }
 
     if had_errors {
-        let error_count = results.iter().filter(|r| !r.success).count();
-        return Err(Error::BuildFailed {
-            errors: vec![format!("{} preprocessor(s) failed", error_count)],
-            fixes: vec![Fix::with_command(
-                "Run with verbose output for details",
+        let failed_results: Vec<_> = results.iter().filter(|r| !r.success).collect();
+        let error_count = failed_results.len();
+
+        // Collect detailed error information
+        let mut detailed_errors = Vec::new();
+        for result in &failed_results {
+            let file_name = result
+                .input_path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| result.input_path.display().to_string());
+
+            if result.errors.is_empty() {
+                detailed_errors.push(format!("{}: preprocessing failed", file_name));
+            } else {
+                for err in &result.errors {
+                    detailed_errors.push(format!("{}: {}", file_name, err));
+                }
+            }
+        }
+
+        // Limit to first 5 errors to avoid overwhelming output
+        let shown_errors: Vec<_> = detailed_errors.iter().take(5).cloned().collect();
+        let hidden_count = detailed_errors.len().saturating_sub(5);
+
+        let mut errors = shown_errors;
+        if hidden_count > 0 {
+            errors.push(format!("... and {} more error(s)", hidden_count));
+        }
+
+        // Build actionable fixes based on failure type
+        let mut fixes = vec![
+            Fix::with_command(
+                "Run with verbose output for full details",
                 "hx build --verbose",
+            ),
+        ];
+
+        // Check if any hsc2hs files failed (common issue: missing C headers)
+        let hsc_failed = failed_results
+            .iter()
+            .any(|r| r.input_path.extension().is_some_and(|e| e == "hsc"));
+        if hsc_failed {
+            fixes.push(Fix::new(
+                "For hsc2hs errors: ensure required C headers and libraries are installed",
+            ));
+        }
+
+        return Err(Error::BuildFailed {
+            errors: vec![format!(
+                "{} preprocessor file(s) failed to compile:\n  {}",
+                error_count,
+                errors.join("\n  ")
             )],
+            fixes,
         });
     }
 
@@ -688,5 +784,142 @@ mod tests {
         assert_eq!(format!("{}", Preprocessor::Alex), "alex");
         assert_eq!(format!("{}", Preprocessor::Happy), "happy");
         assert_eq!(format!("{}", Preprocessor::Hsc2hs), "hsc2hs");
+    }
+
+    #[test]
+    fn test_preprocessor_executable() {
+        assert_eq!(Preprocessor::Alex.executable(), "alex");
+        assert_eq!(Preprocessor::Happy.executable(), "happy");
+        assert_eq!(Preprocessor::Hsc2hs.executable(), "hsc2hs");
+    }
+
+    #[test]
+    fn test_preprocessor_extensions() {
+        assert_eq!(Preprocessor::Alex.extensions(), &["x"]);
+        assert_eq!(Preprocessor::Happy.extensions(), &["y", "ly"]);
+        assert_eq!(Preprocessor::Hsc2hs.extensions(), &["hsc"]);
+    }
+
+    #[test]
+    fn test_preprocessor_sources_all_files() {
+        let sources = PreprocessorSources {
+            alex_files: vec![PathBuf::from("a.x")],
+            happy_files: vec![PathBuf::from("b.y")],
+            hsc_files: vec![PathBuf::from("c.hsc")],
+        };
+
+        let all: Vec<_> = sources.all_files().collect();
+        assert_eq!(all.len(), 3);
+    }
+
+    #[test]
+    fn test_detect_preprocessors_in_temp_dir() {
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        // Create test files
+        std::fs::write(temp_dir.path().join("Lexer.x"), "-- alex file").unwrap();
+        std::fs::write(temp_dir.path().join("Parser.y"), "-- happy file").unwrap();
+        std::fs::create_dir(temp_dir.path().join("subdir")).unwrap();
+        std::fs::write(temp_dir.path().join("subdir/FFI.hsc"), "-- hsc2hs file").unwrap();
+
+        let sources = detect_preprocessors(&[temp_dir.path().to_path_buf()]);
+
+        assert_eq!(sources.alex_files.len(), 1);
+        assert_eq!(sources.happy_files.len(), 1);
+        assert_eq!(sources.hsc_files.len(), 1);
+    }
+
+    #[test]
+    fn test_detect_preprocessors_empty_dir() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let sources = detect_preprocessors(&[temp_dir.path().to_path_buf()]);
+        assert!(sources.is_empty());
+    }
+
+    #[test]
+    fn test_detect_preprocessors_nonexistent_dir() {
+        let sources = detect_preprocessors(&[PathBuf::from("/nonexistent/path")]);
+        assert!(sources.is_empty());
+    }
+
+    #[test]
+    fn test_compute_output_path_nested() {
+        let input = PathBuf::from("src/Data/Internal/Lexer.x");
+        let output_dir = PathBuf::from("dist/generated");
+        let output = compute_output_path(&input, &output_dir, "hs");
+        assert_eq!(
+            output,
+            PathBuf::from("dist/generated/src/Data/Internal/Lexer.hs")
+        );
+    }
+
+    #[test]
+    fn test_compute_output_path_root_file() {
+        let input = PathBuf::from("Main.x");
+        let output_dir = PathBuf::from("generated");
+        let output = compute_output_path(&input, &output_dir, "hs");
+        assert_eq!(output, PathBuf::from("generated/Main.hs"));
+    }
+
+    #[test]
+    fn test_parse_preprocessor_output_mixed() {
+        let stderr = r#"
+Warning: unused rule
+error: undefined symbol 'foo'
+Warning: deprecated feature
+Cannot find module
+"#;
+        let stdout = "Processing file...";
+
+        let (warnings, errors) = parse_preprocessor_output(stderr, stdout);
+        assert_eq!(warnings.len(), 2);
+        assert_eq!(errors.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_preprocessor_output_empty() {
+        let (warnings, errors) = parse_preprocessor_output("", "");
+        assert!(warnings.is_empty());
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_parse_build_tools_with_version_constraints() {
+        let tools = vec![
+            "alex >= 3.0".to_string(),
+            "happy:happy >= 1.19 && < 2.0".to_string(),
+            "hsc2hs".to_string(),
+        ];
+
+        let preprocessors = parse_build_tools(&tools);
+        assert_eq!(preprocessors.len(), 3);
+        assert!(preprocessors.contains(&Preprocessor::Alex));
+        assert!(preprocessors.contains(&Preprocessor::Happy));
+        assert!(preprocessors.contains(&Preprocessor::Hsc2hs));
+    }
+
+    #[test]
+    fn test_preprocessor_config_default() {
+        let config = PreprocessorConfig::default();
+        assert!(config.include_dirs.is_empty());
+        assert!(config.cpp_defines.is_empty());
+        assert!(!config.verbose);
+    }
+
+    #[test]
+    fn test_preprocess_result_fields() {
+        let result = PreprocessResult {
+            input_path: PathBuf::from("test.x"),
+            output_path: PathBuf::from("test.hs"),
+            success: true,
+            module_name: Some("Test".to_string()),
+            errors: vec![],
+            warnings: vec!["warning".to_string()],
+            duration: std::time::Duration::from_millis(100),
+        };
+
+        assert!(result.success);
+        assert_eq!(result.module_name, Some("Test".to_string()));
+        assert_eq!(result.warnings.len(), 1);
     }
 }
