@@ -649,6 +649,279 @@ fn categorize_update(current: &hx_solver::Version, latest: &hx_solver::Version) 
     }
 }
 
+/// Update dependencies to their latest versions.
+pub async fn update(
+    packages: Vec<String>,
+    direct_only: bool,
+    dry_run: bool,
+    allow_major: bool,
+    output: &Output,
+) -> Result<i32> {
+    // Find project root
+    let project_root = match find_project_root(".") {
+        Ok(root) => root,
+        Err(e) => {
+            output.error(&format!("Failed to find project root: {}", e));
+            return Ok(1);
+        }
+    };
+
+    let project = Project::load(&project_root)?;
+
+    // Load lockfile
+    let lockfile_path = project.lockfile_path();
+    let lockfile = match Lockfile::from_file(&lockfile_path) {
+        Ok(lf) => lf,
+        Err(_) => {
+            output.error("No lockfile found");
+            output.info("Run `hx lock` to generate a lockfile first.");
+            return Ok(1);
+        }
+    };
+
+    if lockfile.packages.is_empty() {
+        output.info("No dependencies in lockfile.");
+        return Ok(0);
+    }
+
+    // Get direct dependencies from .cabal file
+    let cabal_file = find_cabal_file(&project_root);
+    let direct_deps = if let Some(ref cabal_path) = cabal_file {
+        parse_direct_deps(cabal_path)
+    } else {
+        project.manifest.dependencies.keys().cloned().collect()
+    };
+
+    // Load Hackage index
+    let index_path = match best_index_path() {
+        Some(path) => path,
+        None => {
+            output.error("Hackage index not found");
+            output.info("Run `cabal update` to download the package index.");
+            return Ok(1);
+        }
+    };
+
+    output.status("Checking", "for updates...");
+
+    let locked_names: Vec<String> = lockfile.packages.iter().map(|p| p.name.clone()).collect();
+
+    let options = IndexOptions {
+        filter_packages: locked_names,
+        skip_errors: true,
+        show_progress: false,
+        ..Default::default()
+    };
+
+    let index = match load_index(&index_path, &options) {
+        Ok(idx) => idx,
+        Err(e) => {
+            output.error(&format!("Failed to load Hackage index: {}", e));
+            return Ok(1);
+        }
+    };
+
+    // Find packages to update
+    let mut updates: Vec<UpdateInfo> = Vec::new();
+
+    for pkg in &lockfile.packages {
+        // Skip if specific packages requested and this isn't one of them
+        if !packages.is_empty() && !packages.iter().any(|p| p.eq_ignore_ascii_case(&pkg.name)) {
+            continue;
+        }
+
+        let is_direct = direct_deps.contains(&pkg.name);
+
+        // Skip transitive deps if --direct flag is set
+        if direct_only && !is_direct {
+            continue;
+        }
+
+        // Check for newer version
+        if let Some(index_pkg) = index.packages.get(&pkg.name) {
+            if let Some(latest_version) = index_pkg.versions_descending().first() {
+                let current: Option<hx_solver::Version> = pkg.version.parse().ok();
+
+                if let Some(ref current_v) = current {
+                    if *latest_version > current_v {
+                        let update_type = categorize_update(current_v, latest_version);
+
+                        // Skip major updates unless --major flag is set
+                        if matches!(update_type, UpdateType::Major) && !allow_major {
+                            continue;
+                        }
+
+                        updates.push(UpdateInfo {
+                            name: pkg.name.clone(),
+                            current: pkg.version.clone(),
+                            latest: latest_version.to_string(),
+                            update_type,
+                            is_direct,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    if updates.is_empty() {
+        output.status("Up to date", "All dependencies are at their latest versions.");
+        return Ok(0);
+    }
+
+    // Sort updates: direct deps first, then by name
+    updates.sort_by(|a, b| {
+        match (a.is_direct, b.is_direct) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.cmp(&b.name),
+        }
+    });
+
+    if dry_run {
+        output.status("Dry run", "showing what would be updated");
+        println!();
+
+        for update in &updates {
+            let type_str = match update.update_type {
+                UpdateType::Major => "major",
+                UpdateType::Minor => "minor",
+                UpdateType::Patch => "patch",
+            };
+            let direct_marker = if update.is_direct { " (direct)" } else { "" };
+            println!(
+                "  {} {} → {} ({}{})",
+                update.name, update.current, update.latest, type_str, direct_marker
+            );
+        }
+
+        println!();
+        output.info(&format!("Would update {} package(s)", updates.len()));
+        output.info("Run without --dry-run to apply updates");
+        return Ok(0);
+    }
+
+    // Apply updates
+    output.status("Updating", &format!("{} package(s)", updates.len()));
+
+    let mut updated_count = 0;
+
+    // Update cabal file if we have one
+    if let Some(ref cabal_path) = cabal_file {
+        let mut cabal_content = std::fs::read_to_string(cabal_path)?;
+
+        for update in &updates {
+            // Only update direct dependencies in cabal file
+            if update.is_direct {
+                // Update version constraint in cabal file
+                let updated = update_dependency_version(&mut cabal_content, &update.name, &update.latest);
+                if updated {
+                    output.info(&format!(
+                        "  {} {} → {}",
+                        update.name, update.current, update.latest
+                    ));
+                    updated_count += 1;
+                }
+            }
+        }
+
+        // Write updated cabal file
+        if updated_count > 0 {
+            std::fs::write(cabal_path, &cabal_content)?;
+        }
+    }
+
+    // Also update hx.toml if it has dependencies
+    let hx_toml_path = project_root.join("hx.toml");
+    if hx_toml_path.exists() {
+        let hx_content = std::fs::read_to_string(&hx_toml_path)?;
+        let mut hx_updated = hx_content.clone();
+
+        for update in &updates {
+            if update.is_direct {
+                // Try to update in hx.toml
+                update_hx_toml_dep(&mut hx_updated, &update.name, &update.latest);
+            }
+        }
+
+        if hx_updated != hx_content {
+            std::fs::write(&hx_toml_path, &hx_updated)?;
+        }
+    }
+
+    println!();
+    output.status("Updated", &format!("{} package(s)", updated_count));
+    output.info("Run `hx lock` to regenerate the lockfile");
+
+    Ok(0)
+}
+
+/// Information about a package update.
+struct UpdateInfo {
+    name: String,
+    current: String,
+    latest: String,
+    update_type: UpdateType,
+    is_direct: bool,
+}
+
+/// Update a dependency version in the cabal file content.
+fn update_dependency_version(content: &mut String, package: &str, new_version: &str) -> bool {
+    // Pattern: package >=x.y.z or package ^>=x.y.z or package ==x.y.z
+    // We'll update to ^>=new_version (compatible version)
+    let patterns = [
+        format!(r"(\b{}\s*)(>=\s*[\d.]+)", regex::escape(package)),
+        format!(r"(\b{}\s*)(\^>=\s*[\d.]+)", regex::escape(package)),
+        format!(r"(\b{}\s*)(==\s*[\d.]+)", regex::escape(package)),
+        format!(r"(\b{}\s*)(>\s*[\d.]+)", regex::escape(package)),
+        format!(r"(\b{}\s*)(<\s*[\d.]+)", regex::escape(package)),
+    ];
+
+    for pattern in &patterns {
+        if let Ok(re) = regex::Regex::new(pattern) {
+            if re.is_match(content) {
+                let replacement = format!("${{1}}^>={}", new_version);
+                *content = re.replace(content, replacement.as_str()).to_string();
+                return true;
+            }
+        }
+    }
+
+    // If no version constraint, try to add one after bare package name
+    // Match package name at word boundary followed by comma or newline
+    let bare_pattern = format!(r"(\b{})(\s*,|\s*\n)", regex::escape(package));
+    if let Ok(re) = regex::Regex::new(&bare_pattern) {
+        if re.is_match(content) {
+            let replacement = format!("${{1}} ^>={}${{2}}", new_version);
+            *content = re.replace(content, replacement.as_str()).to_string();
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Update a dependency in hx.toml.
+fn update_hx_toml_dep(content: &mut String, package: &str, new_version: &str) {
+    // Simple pattern matching for hx.toml dependency entries
+    // Format: package = ">=x.y.z" or package = "^>=x.y.z"
+    let patterns = [
+        format!(r#"({}\s*=\s*")(>=[\d.]+)""#, regex::escape(package)),
+        format!(r#"({}\s*=\s*")(\^>=[\d.]+)""#, regex::escape(package)),
+        format!(r#"({}\s*=\s*")(==[\d.]+)""#, regex::escape(package)),
+    ];
+
+    for pattern in &patterns {
+        if let Ok(re) = regex::Regex::new(pattern) {
+            if re.is_match(content) {
+                let replacement = format!(r#"${{1}}^>={}""#, new_version);
+                *content = re.replace(content, replacement.as_str()).to_string();
+                return;
+            }
+        }
+    }
+}
+
 /// Show dependency graph.
 pub async fn graph(
     format: GraphFormat,

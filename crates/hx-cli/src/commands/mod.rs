@@ -108,6 +108,12 @@ pub async fn run(cli: Cli) -> Result<i32> {
         Some(Commands::Rm { package }) => deps::remove(&package, &output).await,
         Some(Commands::Why { package }) => deps::why(&package, &output).await,
         Some(Commands::Outdated { direct, all }) => deps::outdated(direct, all, &output).await,
+        Some(Commands::Update {
+            packages,
+            direct,
+            dry_run,
+            major,
+        }) => deps::update(packages, direct, dry_run, major, &output).await,
         Some(Commands::Completions { shell }) => completions::run(shell),
         Some(Commands::Upgrade {
             check,

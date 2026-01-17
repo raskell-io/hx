@@ -223,6 +223,24 @@ pub enum Commands {
         all: bool,
     },
 
+    /// Update dependencies to latest versions
+    Update {
+        /// Package(s) to update (updates all if not specified)
+        packages: Vec<String>,
+
+        /// Only update direct dependencies
+        #[arg(long)]
+        direct: bool,
+
+        /// Show what would be updated without making changes
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Allow major version updates
+        #[arg(long)]
+        major: bool,
+    },
+
     /// Generate shell completions
     Completions {
         /// Shell to generate completions for

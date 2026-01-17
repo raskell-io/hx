@@ -51,6 +51,7 @@ tar.workspace = true
 flate2.workspace = true
 zip.workspace = true
 hex.workspace = true
+regex = "1.10"
 
 [dev-dependencies]
 tempfile.workspace = true
