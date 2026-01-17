@@ -24,7 +24,7 @@ The fundamental issue: hx orchestrates Cabal, it doesn't replace it.
 | **Zero config** | Just works | Just works | Needs hx.toml |
 | **Error UX** | Exceptional | Exceptional | Good |
 | **Ecosystem** | crates.io native | PyPI native | Hackage wrapper |
-| **Add deps** | `cargo add` | `uv add` | Manual edit |
+| **Add deps** | `cargo add` | `uv add` | `hx add` ✅ |
 | **Offline** | Cached builds | Cached | Partial |
 | **Hermetic** | Via lockfile | Via lockfile | Partial |
 | **Cross-compile** | Built-in | N/A | Missing |
@@ -45,9 +45,9 @@ hx new hello && cd hello && hx run
 
 | Feature | Priority | Effort | Status |
 |---------|----------|--------|--------|
-| `hx add <pkg>` / `hx remove <pkg>` | P0 | Medium | TODO |
+| `hx add <pkg>` / `hx remove <pkg>` | P0 | Medium | ✅ |
 | Auto-detect and install GHC on first run | P0 | Done | ✅ |
-| `hx upgrade` self-update | P0 | Low | TODO |
+| `hx upgrade` self-update | P0 | Low | ✅ |
 | Shell completions auto-install | P1 | Low | TODO |
 | `hx init` without flags (smart defaults) | P1 | Low | TODO |
 | Global config (`~/.hx/config.toml`) | P1 | Medium | TODO |
@@ -71,9 +71,11 @@ hx new hello && cd hello && hx run
 | Feature | Impact | Effort | Status |
 |---------|--------|--------|--------|
 | `hx publish` with 2FA/token auth | High | Medium | Basic ✅ |
-| `hx info <pkg>` - package details | Medium | Low | TODO |
-| `hx outdated` - check for updates | Medium | Low | TODO |
-| `hx why <pkg>` - why is this dep here? | Medium | Low | TODO |
+| `hx info <pkg>` - package details | Medium | Low | ✅ |
+| `hx outdated` - check for updates | Medium | Low | ✅ |
+| `hx why <pkg>` - why is this dep here? | Medium | Low | ✅ |
+| `hx update` - update dependencies | Medium | Low | ✅ |
+| `hx tree` / `hx list` - dependency views | Low | Low | ✅ |
 | Revision support in lockfile | Medium | Medium | TODO |
 | Stackage snapshot support | Medium | Medium | TODO |
 
@@ -116,9 +118,9 @@ hx new hello && cd hello && hx run
 
 ---
 
-## Quick Wins (High Impact, Low Effort)
+## Quick Wins (High Impact, Low Effort) ✅ ALL COMPLETE
 
-### 1. `hx add` / `hx remove`
+### 1. `hx add` / `hx remove` ✅
 
 ```bash
 # Add dependency (edit hx.toml + .cabal + run lock)
@@ -127,13 +129,7 @@ hx add text ">=2.0"
 hx remove old-dep
 ```
 
-**Implementation**:
-- Parse current hx.toml and .cabal
-- Add/remove from [dependencies] section
-- Update .cabal build-depends
-- Run `hx lock` automatically
-
-### 2. `hx why <pkg>`
+### 2. `hx why <pkg>` ✅
 
 ```bash
 hx why bytestring
@@ -142,12 +138,7 @@ hx why bytestring
 #   └── text 2.1 (direct)
 ```
 
-**Implementation**:
-- Walk dependency graph from lockfile
-- Find all paths to the queried package
-- Display as tree
-
-### 3. `hx outdated`
+### 3. `hx outdated` ✅
 
 ```bash
 hx outdated
@@ -155,12 +146,7 @@ hx outdated
 # text     2.1     → 2.1.1    (patch)
 ```
 
-**Implementation**:
-- Compare lockfile versions to Hackage latest
-- Categorize: major/minor/patch
-- Show upgrade commands
-
-### 4. `hx info <pkg>`
+### 4. `hx info <pkg>` ✅
 
 ```bash
 hx info aeson
@@ -171,10 +157,14 @@ hx info aeson
 # Homepage: https://github.com/haskell/aeson
 ```
 
-**Implementation**:
-- Query Hackage index
-- Parse .cabal metadata
-- Format nicely
+### 5. `hx update` ✅
+
+```bash
+hx update                # Update all (minor/patch only)
+hx update --major        # Allow major updates
+hx update aeson text     # Update specific packages
+hx update --dry-run      # Preview changes
+```
 
 ---
 
@@ -227,7 +217,7 @@ git clone <repo> && cd <repo> && hx build
 
 ## Priority Order
 
-1. **`hx add/remove`** - Biggest UX gap vs cargo
+1. ~~**`hx add/remove`** - Biggest UX gap vs cargo~~ ✅ DONE
 2. **Native build production-ready** - Biggest speed opportunity
 3. **Remote build cache** - Biggest CI/team value
 4. **Cross-compilation** - Unique differentiator
@@ -240,7 +230,7 @@ git clone <repo> && cd <repo> && hx build
 |--------|---------|--------|
 | Fresh build (medium project) | ~60s | <30s |
 | Incremental build (1 file) | ~5s | <1s |
-| `hx add <pkg>` | N/A | <2s |
+| `hx add <pkg>` | ✅ ~1s | <2s |
 | First-run setup | ~5min | <1min |
 | CI build (cached) | ~3min | <30s |
 
@@ -249,16 +239,16 @@ git clone <repo> && cd <repo> && hx build
 ## Reference: cargo/uv Feature Lists
 
 ### cargo features we should match
-- `cargo add/remove`
-- `cargo update`
-- `cargo tree`
+- `cargo add/remove` ✅ `hx add/rm`
+- `cargo update` ✅ `hx update`
+- `cargo tree` ✅ `hx tree`
 - `cargo vendor`
-- `cargo fetch`
+- `cargo fetch` ✅ `hx fetch`
 - `cargo package`
 - `cargo login/logout`
 - `cargo owner`
 - `cargo yank`
-- `cargo search`
+- `cargo search` ✅ `hx search`
 - `cargo install` (global binaries)
 - `cargo uninstall`
 - Build scripts (build.rs equivalent)
@@ -268,11 +258,11 @@ git clone <repo> && cd <repo> && hx build
 
 ### uv features we should match
 - Lightning fast resolution
-- Lock file with hashes
-- `uv add/remove`
-- `uv sync`
+- Lock file with hashes ✅ `hx lock`
+- `uv add/remove` ✅ `hx add/rm`
+- `uv sync` ✅ `hx sync`
 - `uv run` (isolated execution)
 - `uv tool` (global tools)
-- Python version management (≈ GHC version management ✅)
+- Python version management ✅ `hx toolchain`
 - Cache sharing
 - Offline mode
