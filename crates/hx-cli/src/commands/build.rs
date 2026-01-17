@@ -373,11 +373,19 @@ async fn run_native_build(
         .map(|v| v.to_string())
         .unwrap_or_default();
 
-    // Auto-detect GHC config with package databases
-    let mut ghc_config = match GhcConfig::detect().await {
+    // Get GHC path from detected toolchain
+    let ghc_path = toolchain
+        .ghc
+        .status
+        .path()
+        .cloned()
+        .unwrap_or_else(|| PathBuf::from("ghc"));
+
+    // Auto-detect GHC config with package databases using the detected path
+    let mut ghc_config = match GhcConfig::detect_with_path(&ghc_path).await {
         Ok(config) => config,
         Err(_) => GhcConfig {
-            ghc_path: PathBuf::from("ghc"),
+            ghc_path,
             version: ghc_version.clone(),
             package_dbs: vec![],
             packages: vec![],

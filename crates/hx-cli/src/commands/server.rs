@@ -1,9 +1,10 @@
 //! Server command implementation.
 
 use anyhow::Result;
-use hx_cabal::server::{CompilationServer, ServerConfig, is_server_running, server_socket_path};
 use hx_cabal::native::GhcConfig;
-use hx_config::{Project, find_project_root};
+use hx_cabal::server::{is_server_running, server_socket_path, CompilationServer, ServerConfig};
+use hx_config::{find_project_root, Project};
+use hx_toolchain::Toolchain;
 use hx_ui::Output;
 use std::path::PathBuf;
 
@@ -24,8 +25,17 @@ pub async fn start(output: &Output) -> Result<i32> {
 
     output.status("Starting", "compilation server");
 
-    // Detect GHC
-    let ghc_config = match GhcConfig::detect().await {
+    // Detect toolchain to get the correct GHC path
+    let toolchain = Toolchain::detect().await;
+    let ghc_path = toolchain
+        .ghc
+        .status
+        .path()
+        .cloned()
+        .unwrap_or_else(|| PathBuf::from("ghc"));
+
+    // Detect GHC config using the detected path
+    let ghc_config = match GhcConfig::detect_with_path(&ghc_path).await {
         Ok(config) => config,
         Err(e) => {
             output.error(&format!("Failed to detect GHC: {}", e));

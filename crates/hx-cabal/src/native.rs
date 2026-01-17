@@ -412,6 +412,7 @@ impl BuildState {
         deps: &[String],
         ghc_version: &str,
         flags_hash: &str,
+        output_dir: &Path,
     ) -> bool {
         // Rebuild if GHC version changed
         if self.ghc_version != ghc_version {
@@ -433,6 +434,21 @@ impl BuildState {
                 return true;
             }
         };
+
+        // Check if output files exist (in case build dir was cleaned)
+        let obj_path = output_dir
+            .join("o")
+            .join(format!("{}.o", module_name.replace('.', "/")));
+        let hi_path = output_dir
+            .join("hi")
+            .join(format!("{}.hi", module_name.replace('.', "/")));
+        if !obj_path.exists() || !hi_path.exists() {
+            debug!(
+                "Module {} needs rebuild: output files missing",
+                module_name
+            );
+            return true;
+        }
 
         // Check if source file changed
         match compute_file_hash(source_path) {
@@ -553,8 +569,14 @@ impl Default for GhcConfig {
 impl GhcConfig {
     /// Create a new GHC config, detecting version from PATH.
     pub async fn detect() -> Result<Self> {
+        Self::detect_with_path(&PathBuf::from("ghc")).await
+    }
+
+    /// Create a new GHC config with a specific GHC path.
+    pub async fn detect_with_path(ghc_path: &Path) -> Result<Self> {
         let runner = CommandRunner::new();
-        let output = runner.run("ghc", ["--numeric-version"]).await?;
+        let ghc_str = ghc_path.display().to_string();
+        let output = runner.run(ghc_str.as_str(), ["--numeric-version"]).await?;
 
         if !output.success() {
             return Err(Error::ToolchainMissing {
@@ -570,7 +592,7 @@ impl GhcConfig {
         let package_dbs = detect_package_dbs(&version).await;
 
         Ok(Self {
-            ghc_path: PathBuf::from("ghc"),
+            ghc_path: ghc_path.to_path_buf(),
             version,
             package_dbs,
             packages: Vec::new(),
@@ -977,7 +999,14 @@ impl NativeBuilder {
                     .get(*name)
                     .map(|d| d.as_slice())
                     .unwrap_or(&[]);
-                build_state.needs_rebuild(name, &info.path, deps, &self.ghc.version, &flags_hash)
+                build_state.needs_rebuild(
+                    name,
+                    &info.path,
+                    deps,
+                    &self.ghc.version,
+                    &flags_hash,
+                    &output_dir,
+                )
             })
             .map(|(name, _)| name.clone())
             .collect();
@@ -1214,9 +1243,11 @@ impl NativeBuilder {
         };
 
         // Collect all object files from local modules
+        // Object files are in the "o" subdirectory (set by -odir flag during compilation)
+        let obj_dir = output_dir.join("o");
         let mut object_files = Vec::new();
         for module_name in graph.modules.keys() {
-            let obj_file = output_dir.join(format!("{}.o", module_name.replace('.', "/")));
+            let obj_file = obj_dir.join(format!("{}.o", module_name.replace('.', "/")));
             if obj_file.exists() {
                 object_files.push(obj_file);
             }
@@ -1319,9 +1350,11 @@ impl NativeBuilder {
         };
 
         // Collect all object files from local modules
+        // Object files are in the "o" subdirectory (set by -odir flag during compilation)
+        let obj_dir = output_dir.join("o");
         let mut object_files = Vec::new();
         for module_name in graph.modules.keys() {
-            let obj_file = output_dir.join(format!("{}.o", module_name.replace('.', "/")));
+            let obj_file = obj_dir.join(format!("{}.o", module_name.replace('.', "/")));
             if obj_file.exists() {
                 object_files.push(obj_file);
             }

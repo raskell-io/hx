@@ -204,7 +204,7 @@ impl CompilationServer {
         // Configure for non-interactive use
         cmd.arg("-ignore-dot-ghci");
         cmd.arg("-fno-ghci-history");
-        cmd.arg("-v0"); // Minimal output
+        // Note: Don't use -v0 as it suppresses the prompt which we need to detect readiness
 
         // Set up pipes
         cmd.stdin(Stdio::piped());
@@ -242,7 +242,7 @@ impl CompilationServer {
         };
 
         // Wait for GHCi to be ready and get version
-        process.ghc_version = Self::read_ghci_prompt(&mut process.stdout)?;
+        process.ghc_version = Self::read_ghci_version(&mut process.stdout)?;
 
         *self.inner.lock().await = Some(process);
 
@@ -250,13 +250,16 @@ impl CompilationServer {
         Ok(())
     }
 
-    /// Read until we see the GHCi prompt.
-    fn read_ghci_prompt(stdout: &mut BufReader<ChildStdout>) -> Result<Option<String>> {
+    /// Read GHCi startup output to detect version.
+    /// Note: We can't easily wait for the prompt since it doesn't end with a newline.
+    /// Instead, we read lines until we see the version info.
+    fn read_ghci_version(stdout: &mut BufReader<ChildStdout>) -> Result<Option<String>> {
         let mut version = None;
         let mut line = String::new();
 
-        // Read lines until we see Prelude> or Main> or similar
-        loop {
+        // Read lines looking for version info
+        // We'll read at most a few lines since GHCi startup is fast
+        for _ in 0..10 {
             line.clear();
             match stdout.read_line(&mut line) {
                 Ok(0) => break, // EOF
@@ -266,10 +269,7 @@ impl CompilationServer {
                     // Check for version info
                     if trimmed.starts_with("GHCi, version") {
                         version = Some(trimmed.to_string());
-                    }
-
-                    // Check for prompt
-                    if trimmed.ends_with(">") {
+                        // Version line found, GHCi should be ready
                         break;
                     }
                 }
