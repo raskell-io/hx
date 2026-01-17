@@ -922,6 +922,164 @@ fn update_hx_toml_dep(content: &mut String, package: &str, new_version: &str) {
     }
 }
 
+/// Show package information from Hackage.
+pub async fn info(package: &str, show_versions: bool, output: &Output) -> Result<i32> {
+    // Load Hackage index
+    let index_path = match best_index_path() {
+        Some(path) => path,
+        None => {
+            output.error("Hackage index not found");
+            output.info("Run `cabal update` to download the package index.");
+            return Ok(1);
+        }
+    };
+
+    output.status("Looking up", package);
+
+    let options = IndexOptions {
+        filter_packages: vec![package.to_string()],
+        skip_errors: true,
+        show_progress: false,
+        ..Default::default()
+    };
+
+    let index = match load_index(&index_path, &options) {
+        Ok(idx) => idx,
+        Err(e) => {
+            output.error(&format!("Failed to load Hackage index: {}", e));
+            return Ok(1);
+        }
+    };
+
+    // Find the package
+    let pkg = match index.packages.get(package) {
+        Some(p) => p,
+        None => {
+            output.error(&format!("Package '{}' not found in Hackage index", package));
+            output.info("Try running `hx search` to find similar packages.");
+            return Ok(1);
+        }
+    };
+
+    // Get versions
+    let versions = pkg.versions_descending();
+    let latest_version = versions.first().copied();
+
+    println!();
+    println!("  {} {}", package, latest_version.map(|v| v.to_string()).unwrap_or_default());
+    println!();
+
+    // Try to fetch additional metadata from Hackage
+    if let Some(metadata) = fetch_hackage_metadata(package).await {
+        if let Some(synopsis) = &metadata.synopsis {
+            if !synopsis.is_empty() {
+                println!("  {}", synopsis);
+                println!();
+            }
+        }
+
+        if let Some(license) = &metadata.license {
+            println!("  License:     {}", license);
+        }
+        if let Some(author) = &metadata.author {
+            if !author.is_empty() {
+                println!("  Author:      {}", author);
+            }
+        }
+        if let Some(maintainer) = &metadata.maintainer {
+            if !maintainer.is_empty() {
+                println!("  Maintainer:  {}", maintainer);
+            }
+        }
+        if let Some(homepage) = &metadata.homepage {
+            if !homepage.is_empty() {
+                println!("  Homepage:    {}", homepage);
+            }
+        }
+        println!("  Hackage:     https://hackage.haskell.org/package/{}", package);
+        println!();
+    } else {
+        println!("  Hackage:     https://hackage.haskell.org/package/{}", package);
+        println!();
+    }
+
+    // Show dependencies for latest version
+    if let Some(latest) = latest_version {
+        if let Some(pv) = pkg.get_version(latest) {
+            if !pv.dependencies.is_empty() {
+                println!("  Dependencies ({}):", pv.dependencies.len());
+                for dep in &pv.dependencies {
+                    println!("    - {}", dep.name);
+                }
+                println!();
+            }
+        }
+    }
+
+    // Show versions
+    if show_versions {
+        println!("  All versions ({}):", versions.len());
+        for (i, v) in versions.iter().enumerate() {
+            if i < 20 {
+                println!("    {}", v);
+            } else {
+                println!("    ... and {} more", versions.len() - 20);
+                break;
+            }
+        }
+        println!();
+    } else if versions.len() > 1 {
+        let recent: Vec<_> = versions.iter().take(5).collect();
+        println!("  Recent versions: {}", recent.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", "));
+        if versions.len() > 5 {
+            println!("  ({} total, use --versions to see all)", versions.len());
+        }
+        println!();
+    }
+
+    Ok(0)
+}
+
+/// Metadata fetched from Hackage.
+#[derive(Debug, Default)]
+struct HackageMetadata {
+    synopsis: Option<String>,
+    license: Option<String>,
+    author: Option<String>,
+    maintainer: Option<String>,
+    homepage: Option<String>,
+}
+
+/// Fetch package metadata from Hackage API.
+async fn fetch_hackage_metadata(package: &str) -> Option<HackageMetadata> {
+    let url = format!("https://hackage.haskell.org/package/{}/{}.cabal", package, package);
+
+    let response = reqwest::get(&url).await.ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+
+    let content = response.text().await.ok()?;
+    let mut metadata = HackageMetadata::default();
+
+    for line in content.lines() {
+        let line = line.trim();
+        if let Some(value) = line.strip_prefix("synopsis:") {
+            metadata.synopsis = Some(value.trim().to_string());
+        } else if let Some(value) = line.strip_prefix("license:") {
+            metadata.license = Some(value.trim().to_string());
+        } else if let Some(value) = line.strip_prefix("author:") {
+            metadata.author = Some(value.trim().to_string());
+        } else if let Some(value) = line.strip_prefix("maintainer:") {
+            metadata.maintainer = Some(value.trim().to_string());
+        } else if let Some(value) = line.strip_prefix("homepage:") {
+            metadata.homepage = Some(value.trim().to_string());
+        }
+    }
+
+    Some(metadata)
+}
+
 /// Show dependency graph.
 pub async fn graph(
     format: GraphFormat,

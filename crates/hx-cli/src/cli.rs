@@ -212,6 +212,16 @@ pub enum Commands {
         package: String,
     },
 
+    /// Show package information from Hackage
+    Info {
+        /// Package name
+        package: String,
+
+        /// Show all available versions
+        #[arg(long)]
+        versions: bool,
+    },
+
     /// Check for outdated dependencies
     Outdated {
         /// Only show direct dependencies
