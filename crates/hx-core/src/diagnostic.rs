@@ -460,7 +460,7 @@ impl DiagnosticReport {
         self.general.clear();
     }
 
-    /// Convert errors to Vec<String> for compatibility.
+    /// Convert errors to `Vec<String>` for compatibility.
     pub fn errors_as_strings(&self) -> Vec<String> {
         self.iter()
             .filter(|d| d.is_error())
@@ -468,7 +468,7 @@ impl DiagnosticReport {
             .collect()
     }
 
-    /// Convert warnings to Vec<String> for compatibility.
+    /// Convert warnings to `Vec<String>` for compatibility.
     pub fn warnings_as_strings(&self) -> Vec<String> {
         self.iter()
             .filter(|d| d.severity == DiagnosticSeverity::Warning)

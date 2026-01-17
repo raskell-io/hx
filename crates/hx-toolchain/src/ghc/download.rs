@@ -123,9 +123,10 @@ pub async fn download_and_install_ghc(options: &DownloadOptions) -> Result<Insta
 
     // Run configure and make install
     // The extracted directory includes the platform suffix (e.g., ghc-9.8.2-aarch64-apple-darwin)
-    let extracted_dir = temp_dir
-        .path()
-        .join(format!("ghc-{}-{}", options.version, platform.url_suffix()));
+    let extracted_dir =
+        temp_dir
+            .path()
+            .join(format!("ghc-{}-{}", options.version, platform.url_suffix()));
     install_ghc_bindist(&extracted_dir, &install_dir).await?;
 
     // Verify installation

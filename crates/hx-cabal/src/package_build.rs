@@ -145,11 +145,7 @@ pub async fn build_package(
     let mut all_errors = Vec::new();
 
     // Compile C sources if present
-    let c_sources: Vec<PathBuf> = lib_config
-        .c_sources
-        .iter()
-        .map(PathBuf::from)
-        .collect();
+    let c_sources: Vec<PathBuf> = lib_config.c_sources.iter().map(PathBuf::from).collect();
 
     let mut c_object_files = Vec::new();
     let c_sources_compiled = c_sources.len();
@@ -236,7 +232,9 @@ pub async fn build_package(
         }
 
         // Check preprocessor availability (fail gracefully if missing)
-        match crate::preprocessor::check_availability(&preproc_sources, Some(&config.ghc.ghc_path)).await {
+        match crate::preprocessor::check_availability(&preproc_sources, Some(&config.ghc.ghc_path))
+            .await
+        {
             Ok(available) => {
                 let gen_dir = pkg_build_dir.join("generated");
                 let preproc_config = crate::preprocessor::PreprocessorConfig {
@@ -288,10 +286,7 @@ pub async fn build_package(
             Err(e) => {
                 // Log warning but continue - some packages list build-tools they don't actually need
                 if config.verbose {
-                    output.warn(&format!(
-                        "Preprocessors not available for {}: {}",
-                        name, e
-                    ));
+                    output.warn(&format!("Preprocessors not available for {}: {}", name, e));
                 }
             }
         }

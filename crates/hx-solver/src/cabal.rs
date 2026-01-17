@@ -896,7 +896,10 @@ library
         assert_eq!(info.build_type, BuildType::Custom);
         assert!(!info.is_simple_build());
 
-        let setup = info.custom_setup.as_ref().expect("custom_setup should be present");
+        let setup = info
+            .custom_setup
+            .as_ref()
+            .expect("custom_setup should be present");
         assert_eq!(setup.setup_depends.len(), 3);
         assert!(setup.setup_depends.iter().any(|d| d.name == "base"));
         assert!(setup.setup_depends.iter().any(|d| d.name == "Cabal"));

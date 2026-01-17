@@ -443,10 +443,7 @@ impl BuildState {
             .join("hi")
             .join(format!("{}.hi", module_name.replace('.', "/")));
         if !obj_path.exists() || !hi_path.exists() {
-            debug!(
-                "Module {} needs rebuild: output files missing",
-                module_name
-            );
+            debug!("Module {} needs rebuild: output files missing", module_name);
             return true;
         }
 
@@ -897,7 +894,9 @@ impl NativeBuilder {
             );
 
             // Check preprocessor availability
-            let available = crate::preprocessor::check_availability(&preproc_sources, Some(&self.ghc.ghc_path)).await?;
+            let available =
+                crate::preprocessor::check_availability(&preproc_sources, Some(&self.ghc.ghc_path))
+                    .await?;
 
             // Configure preprocessing
             let generated_dir = project_root.join(&options.output_dir).join("generated");
@@ -1702,9 +1701,9 @@ impl CCompilerConfig {
         Err(Error::ToolchainMissing {
             tool: "cc".to_string(),
             source: None,
-            fixes: vec![
-                hx_core::Fix::new("Install a C compiler (gcc, clang, or cc)"),
-            ],
+            fixes: vec![hx_core::Fix::new(
+                "Install a C compiler (gcc, clang, or cc)",
+            )],
         })
     }
 }

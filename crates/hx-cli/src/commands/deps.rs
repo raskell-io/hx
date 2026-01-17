@@ -13,12 +13,7 @@ use std::io::Write;
 use std::path::Path;
 
 /// Add a dependency to the project.
-pub async fn add(
-    package: &str,
-    version: Option<&str>,
-    _dev: bool,
-    output: &Output,
-) -> Result<i32> {
+pub async fn add(package: &str, version: Option<&str>, _dev: bool, output: &Output) -> Result<i32> {
     // Find project root
     let project_root = match find_project_root(".") {
         Ok(root) => root,
@@ -63,7 +58,9 @@ pub async fn add(
             let manifest_path = project_root.join("hx.toml");
             if let Ok(mut manifest) = Manifest::from_file(&manifest_path) {
                 let version_str = version.unwrap_or("*").to_string();
-                manifest.dependencies.insert(package.to_string(), version_str);
+                manifest
+                    .dependencies
+                    .insert(package.to_string(), version_str);
                 if let Err(e) = manifest.to_file(&manifest_path) {
                     output.warn(&format!("Failed to update hx.toml: {}", e));
                 }
@@ -527,23 +524,36 @@ pub async fn outdated(direct_only: bool, _show_all: bool, output: &Output) -> Re
 
     // Display results
     if outdated_packages.is_empty() {
-        output.status("Up to date", "All dependencies are at their latest versions.");
+        output.status(
+            "Up to date",
+            "All dependencies are at their latest versions.",
+        );
         return Ok(0);
     }
 
     // Sort: direct deps first, then by name
-    outdated_packages.sort_by(|a, b| {
-        match (a.is_direct, b.is_direct) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.cmp(&b.name),
-        }
+    outdated_packages.sort_by(|a, b| match (a.is_direct, b.is_direct) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.cmp(&b.name),
     });
 
     // Calculate column widths for alignment
-    let max_name_len = outdated_packages.iter().map(|p| p.name.len()).max().unwrap_or(0);
-    let max_current_len = outdated_packages.iter().map(|p| p.current.len()).max().unwrap_or(0);
-    let max_latest_len = outdated_packages.iter().map(|p| p.latest.len()).max().unwrap_or(0);
+    let max_name_len = outdated_packages
+        .iter()
+        .map(|p| p.name.len())
+        .max()
+        .unwrap_or(0);
+    let max_current_len = outdated_packages
+        .iter()
+        .map(|p| p.current.len())
+        .max()
+        .unwrap_or(0);
+    let max_latest_len = outdated_packages
+        .iter()
+        .map(|p| p.latest.len())
+        .max()
+        .unwrap_or(0);
 
     println!();
     println!(
@@ -589,9 +599,18 @@ pub async fn outdated(direct_only: bool, _show_all: bool, output: &Output) -> Re
     println!();
 
     // Summary
-    let major_count = outdated_packages.iter().filter(|p| matches!(p.update_type, UpdateType::Major)).count();
-    let minor_count = outdated_packages.iter().filter(|p| matches!(p.update_type, UpdateType::Minor)).count();
-    let patch_count = outdated_packages.iter().filter(|p| matches!(p.update_type, UpdateType::Patch)).count();
+    let major_count = outdated_packages
+        .iter()
+        .filter(|p| matches!(p.update_type, UpdateType::Major))
+        .count();
+    let minor_count = outdated_packages
+        .iter()
+        .filter(|p| matches!(p.update_type, UpdateType::Minor))
+        .count();
+    let patch_count = outdated_packages
+        .iter()
+        .filter(|p| matches!(p.update_type, UpdateType::Patch))
+        .count();
 
     output.info(&format!(
         "Found {} outdated package(s): {} major, {} minor, {} patch",
@@ -631,8 +650,16 @@ enum UpdateType {
 
 /// Categorize the type of update between two versions.
 fn categorize_update(current: &hx_solver::Version, latest: &hx_solver::Version) -> UpdateType {
-    let current_parts: Vec<u32> = current.to_string().split('.').filter_map(|s| s.parse().ok()).collect();
-    let latest_parts: Vec<u32> = latest.to_string().split('.').filter_map(|s| s.parse().ok()).collect();
+    let current_parts: Vec<u32> = current
+        .to_string()
+        .split('.')
+        .filter_map(|s| s.parse().ok())
+        .collect();
+    let latest_parts: Vec<u32> = latest
+        .to_string()
+        .split('.')
+        .filter_map(|s| s.parse().ok())
+        .collect();
 
     let current_major = current_parts.first().copied().unwrap_or(0);
     let current_minor = current_parts.get(1).copied().unwrap_or(0);
@@ -765,17 +792,18 @@ pub async fn update(
     }
 
     if updates.is_empty() {
-        output.status("Up to date", "All dependencies are at their latest versions.");
+        output.status(
+            "Up to date",
+            "All dependencies are at their latest versions.",
+        );
         return Ok(0);
     }
 
     // Sort updates: direct deps first, then by name
-    updates.sort_by(|a, b| {
-        match (a.is_direct, b.is_direct) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.cmp(&b.name),
-        }
+    updates.sort_by(|a, b| match (a.is_direct, b.is_direct) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.cmp(&b.name),
     });
 
     if dry_run {
@@ -814,7 +842,8 @@ pub async fn update(
             // Only update direct dependencies in cabal file
             if update.is_direct {
                 // Update version constraint in cabal file
-                let updated = update_dependency_version(&mut cabal_content, &update.name, &update.latest);
+                let updated =
+                    update_dependency_version(&mut cabal_content, &update.name, &update.latest);
                 if updated {
                     output.info(&format!(
                         "  {} {} → {}",
@@ -966,7 +995,11 @@ pub async fn info(package: &str, show_versions: bool, output: &Output) -> Result
     let latest_version = versions.first().copied();
 
     println!();
-    println!("  {} {}", package, latest_version.map(|v| v.to_string()).unwrap_or_default());
+    println!(
+        "  {} {}",
+        package,
+        latest_version.map(|v| v.to_string()).unwrap_or_default()
+    );
     println!();
 
     // Try to fetch additional metadata from Hackage
@@ -996,10 +1029,16 @@ pub async fn info(package: &str, show_versions: bool, output: &Output) -> Result
                 println!("  Homepage:    {}", homepage);
             }
         }
-        println!("  Hackage:     https://hackage.haskell.org/package/{}", package);
+        println!(
+            "  Hackage:     https://hackage.haskell.org/package/{}",
+            package
+        );
         println!();
     } else {
-        println!("  Hackage:     https://hackage.haskell.org/package/{}", package);
+        println!(
+            "  Hackage:     https://hackage.haskell.org/package/{}",
+            package
+        );
         println!();
     }
 
@@ -1030,7 +1069,14 @@ pub async fn info(package: &str, show_versions: bool, output: &Output) -> Result
         println!();
     } else if versions.len() > 1 {
         let recent: Vec<_> = versions.iter().take(5).collect();
-        println!("  Recent versions: {}", recent.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", "));
+        println!(
+            "  Recent versions: {}",
+            recent
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
         if versions.len() > 5 {
             println!("  ({} total, use --versions to see all)", versions.len());
         }
@@ -1052,7 +1098,10 @@ struct HackageMetadata {
 
 /// Fetch package metadata from Hackage API.
 async fn fetch_hackage_metadata(package: &str) -> Option<HackageMetadata> {
-    let url = format!("https://hackage.haskell.org/package/{}/{}.cabal", package, package);
+    let url = format!(
+        "https://hackage.haskell.org/package/{}/{}.cabal",
+        package, package
+    );
 
     let response = reqwest::get(&url).await.ok()?;
     if !response.status().is_success() {

@@ -195,11 +195,9 @@ pub async fn compile_setup(
     })?;
 
     // Output path for compiled Setup executable
-    let setup_exe = options.build_dir.join(if cfg!(windows) {
-        "Setup.exe"
-    } else {
-        "Setup"
-    });
+    let setup_exe = options
+        .build_dir
+        .join(if cfg!(windows) { "Setup.exe" } else { "Setup" });
 
     // Build GHC arguments
     let mut args = vec![
@@ -238,7 +236,11 @@ pub async fn compile_setup(
     args.push(setup_file.display().to_string());
 
     if options.verbose {
-        info!("Setup compile: {} {}", options.ghc_path.display(), args.join(" "));
+        info!(
+            "Setup compile: {} {}",
+            options.ghc_path.display(),
+            args.join(" ")
+        );
     }
 
     let runner = CommandRunner::new().with_working_dir(package_dir);
@@ -268,7 +270,14 @@ pub async fn run_configure(
     flags: &ConfigureFlags,
     verbose: bool,
 ) -> Result<SetupRunResult> {
-    run_setup_command(setup_exe, package_dir, "configure", &flags.to_args(), verbose).await
+    run_setup_command(
+        setup_exe,
+        package_dir,
+        "configure",
+        &flags.to_args(),
+        verbose,
+    )
+    .await
 }
 
 /// Run Setup build.
@@ -331,7 +340,10 @@ async fn run_setup_command(
     let success = output.success();
 
     if !success {
-        debug!("Setup {} failed (exit {}): {}", command, exit_code, output.stderr);
+        debug!(
+            "Setup {} failed (exit {}): {}",
+            command, exit_code, output.stderr
+        );
     }
 
     Ok(SetupRunResult {
@@ -387,7 +399,8 @@ pub async fn build_with_setup(
     let setup_exe = &compile_result.executable_path;
 
     // Step 2: Configure
-    let configure_result = run_configure(setup_exe, package_dir, configure_flags, options.verbose).await?;
+    let configure_result =
+        run_configure(setup_exe, package_dir, configure_flags, options.verbose).await?;
     if !configure_result.success {
         result.success = false;
         let stderr = configure_result.stderr.trim();
@@ -397,9 +410,14 @@ pub async fn build_with_setup(
                 configure_result.exit_code
             ));
         } else {
-            result.errors.push(format!("Setup configure failed:\n  {}", stderr.replace('\n', "\n  ")));
+            result.errors.push(format!(
+                "Setup configure failed:\n  {}",
+                stderr.replace('\n', "\n  ")
+            ));
         }
-        result.errors.push("hint: Check that all dependencies are installed".to_string());
+        result
+            .errors
+            .push("hint: Check that all dependencies are installed".to_string());
         result.duration = start.elapsed();
         return Ok(result);
     }
@@ -416,9 +434,14 @@ pub async fn build_with_setup(
                 build_result.exit_code
             ));
         } else {
-            result.errors.push(format!("Setup build failed:\n  {}", stderr.replace('\n', "\n  ")));
+            result.errors.push(format!(
+                "Setup build failed:\n  {}",
+                stderr.replace('\n', "\n  ")
+            ));
         }
-        result.errors.push("hint: Run 'hx build --verbose' for full compiler output".to_string());
+        result
+            .errors
+            .push("hint: Run 'hx build --verbose' for full compiler output".to_string());
         result.duration = start.elapsed();
         return Ok(result);
     }
@@ -436,9 +459,14 @@ pub async fn build_with_setup(
                     copy_result.exit_code
                 ));
             } else {
-                result.errors.push(format!("Setup copy failed:\n  {}", stderr.replace('\n', "\n  ")));
+                result.errors.push(format!(
+                    "Setup copy failed:\n  {}",
+                    stderr.replace('\n', "\n  ")
+                ));
             }
-            result.errors.push("hint: Check destination directory permissions".to_string());
+            result
+                .errors
+                .push("hint: Check destination directory permissions".to_string());
             result.duration = start.elapsed();
             return Ok(result);
         }
@@ -447,7 +475,8 @@ pub async fn build_with_setup(
 
     // Step 5: Register (optional)
     if let Some(db) = register_db {
-        let register_result = run_register(setup_exe, package_dir, Some(db), options.verbose).await?;
+        let register_result =
+            run_register(setup_exe, package_dir, Some(db), options.verbose).await?;
         if !register_result.success {
             result.success = false;
             let stderr = register_result.stderr.trim();
@@ -457,9 +486,14 @@ pub async fn build_with_setup(
                     register_result.exit_code
                 ));
             } else {
-                result.errors.push(format!("Setup register failed:\n  {}", stderr.replace('\n', "\n  ")));
+                result.errors.push(format!(
+                    "Setup register failed:\n  {}",
+                    stderr.replace('\n', "\n  ")
+                ));
             }
-            result.errors.push("hint: Check package database permissions".to_string());
+            result
+                .errors
+                .push("hint: Check package database permissions".to_string());
             result.duration = start.elapsed();
             return Ok(result);
         }
@@ -641,7 +675,11 @@ mod tests {
     fn test_find_setup_file_with_setup_lhs() {
         let temp = TempDir::new().unwrap();
         let setup_lhs = temp.path().join("Setup.lhs");
-        std::fs::write(&setup_lhs, "> import Distribution.Simple\n> main = defaultMain").unwrap();
+        std::fs::write(
+            &setup_lhs,
+            "> import Distribution.Simple\n> main = defaultMain",
+        )
+        .unwrap();
 
         let result = find_setup_file(temp.path());
         assert!(result.is_some());

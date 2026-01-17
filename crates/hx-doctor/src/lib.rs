@@ -593,25 +593,25 @@ fn check_project(dir: &Path, report: &mut DoctorReport) {
 }
 
 fn check_stackage_config(dir: &Path, report: &mut DoctorReport) {
-    if let Ok(project) = hx_config::Project::load(dir) {
-        if let Some(ref snapshot) = project.manifest.stackage.snapshot {
-            // Check if snapshot identifier looks valid
-            let is_valid = snapshot.starts_with("lts-") || snapshot.starts_with("nightly");
-            if !is_valid {
-                report.add(
-                    Diagnostic::warning(format!(
-                        "Invalid Stackage snapshot identifier: {}",
-                        snapshot
-                    ))
-                    .with_fix(Fix::new("Use format: lts-XX.YY or nightly-YYYY-MM-DD"))
-                    .with_fix(Fix::with_command(
-                        "List available snapshots",
-                        "hx stackage list",
-                    )),
-                );
-            } else {
-                report.add(Diagnostic::info(format!("Stackage snapshot: {}", snapshot)));
-            }
+    if let Ok(project) = hx_config::Project::load(dir)
+        && let Some(ref snapshot) = project.manifest.stackage.snapshot
+    {
+        // Check if snapshot identifier looks valid
+        let is_valid = snapshot.starts_with("lts-") || snapshot.starts_with("nightly");
+        if !is_valid {
+            report.add(
+                Diagnostic::warning(format!(
+                    "Invalid Stackage snapshot identifier: {}",
+                    snapshot
+                ))
+                .with_fix(Fix::new("Use format: lts-XX.YY or nightly-YYYY-MM-DD"))
+                .with_fix(Fix::with_command(
+                    "List available snapshots",
+                    "hx stackage list",
+                )),
+            );
+        } else {
+            report.add(Diagnostic::info(format!("Stackage snapshot: {}", snapshot)));
         }
     }
 }
@@ -672,12 +672,12 @@ pub fn check_cross_compilation(report: &mut DoctorReport) {
     {
         // On Linux, check for common cross-compilers
         if !check_cross_compiler("aarch64-linux-gnu-gcc") {
-            report.add(
-                Diagnostic::info("ARM64 cross-compiler not found").with_fix(Fix::with_command(
+            report.add(Diagnostic::info("ARM64 cross-compiler not found").with_fix(
+                Fix::with_command(
                     "Install on Debian/Ubuntu",
                     "sudo apt-get install gcc-aarch64-linux-gnu",
-                )),
-            );
+                ),
+            ));
         }
     }
 }

@@ -1,7 +1,7 @@
 //! Stackage snapshot management commands.
 
 use anyhow::Result;
-use hx_config::{find_project_root, Manifest, Project, MANIFEST_FILENAME};
+use hx_config::{MANIFEST_FILENAME, Manifest, Project, find_project_root};
 use hx_solver::{SnapshotId, get_latest_lts, get_latest_nightly, load_snapshot};
 use hx_ui::Output;
 
@@ -10,7 +10,11 @@ use crate::cli::StackageCommands;
 /// Run the stackage command.
 pub async fn run(command: StackageCommands, output: &Output) -> Result<i32> {
     match command {
-        StackageCommands::List { lts, nightly, limit } => list(lts, nightly, limit, output).await,
+        StackageCommands::List {
+            lts,
+            nightly,
+            limit,
+        } => list(lts, nightly, limit, output).await,
         StackageCommands::Info { snapshot, packages } => info(&snapshot, packages, output).await,
         StackageCommands::Set { snapshot } => set(&snapshot, output).await,
     }
@@ -61,7 +65,10 @@ async fn list(lts_only: bool, nightly_only: bool, limit: usize, output: &Output)
                         if count >= limit {
                             break;
                         }
-                        output.info(&format!("  lts-{} (use 'hx stackage info lts-{}' for details)", prev_major, prev_major));
+                        output.info(&format!(
+                            "  lts-{} (use 'hx stackage info lts-{}' for details)",
+                            prev_major, prev_major
+                        ));
                         count += 1;
                     }
                 }
@@ -107,7 +114,10 @@ async fn info(snapshot_str: &str, show_packages: bool, output: &Output) -> Resul
     let snapshot_id = match SnapshotId::parse(snapshot_str) {
         Ok(id) => id,
         Err(e) => {
-            output.error(&format!("Invalid snapshot identifier '{}': {}", snapshot_str, e));
+            output.error(&format!(
+                "Invalid snapshot identifier '{}': {}",
+                snapshot_str, e
+            ));
             output.info("Examples: lts-22.28, lts-22, nightly-2024-01-15, nightly");
             return Ok(1);
         }
@@ -146,7 +156,10 @@ async fn info(snapshot_str: &str, show_packages: bool, output: &Output) -> Resul
     }
 
     output.info("");
-    output.info(&format!("To use this snapshot: hx stackage set {}", snapshot_str));
+    output.info(&format!(
+        "To use this snapshot: hx stackage set {}",
+        snapshot_str
+    ));
 
     Ok(0)
 }
@@ -157,7 +170,10 @@ async fn set(snapshot_str: &str, output: &Output) -> Result<i32> {
     let snapshot_id = match SnapshotId::parse(snapshot_str) {
         Ok(id) => id,
         Err(e) => {
-            output.error(&format!("Invalid snapshot identifier '{}': {}", snapshot_str, e));
+            output.error(&format!(
+                "Invalid snapshot identifier '{}': {}",
+                snapshot_str, e
+            ));
             output.info("Examples: lts-22.28, lts-22, nightly-2024-01-15, nightly");
             return Ok(1);
         }
@@ -199,9 +215,7 @@ async fn set(snapshot_str: &str, output: &Output) -> Result<i32> {
         output.success_summary(
             &format!(
                 "Changed snapshot from {} to {} (GHC {})",
-                old,
-                snapshot_str,
-                snapshot.metadata.ghc_version
+                old, snapshot_str, snapshot.metadata.ghc_version
             ),
             std::time::Duration::from_secs(0),
         );
@@ -209,8 +223,7 @@ async fn set(snapshot_str: &str, output: &Output) -> Result<i32> {
         output.success_summary(
             &format!(
                 "Set snapshot to {} (GHC {})",
-                snapshot_str,
-                snapshot.metadata.ghc_version
+                snapshot_str, snapshot.metadata.ghc_version
             ),
             std::time::Duration::from_secs(0),
         );
@@ -225,8 +238,7 @@ async fn set(snapshot_str: &str, output: &Output) -> Result<i32> {
         if *project_ghc != snapshot.metadata.ghc_version {
             output.warn(&format!(
                 "Project uses GHC {} but snapshot uses GHC {}",
-                project_ghc,
-                snapshot.metadata.ghc_version
+                project_ghc, snapshot.metadata.ghc_version
             ));
             output.info(&format!(
                 "Consider updating [toolchain].ghc to \"{}\" in hx.toml",

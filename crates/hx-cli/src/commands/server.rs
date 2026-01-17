@@ -2,8 +2,8 @@
 
 use anyhow::Result;
 use hx_cabal::native::GhcConfig;
-use hx_cabal::server::{is_server_running, server_socket_path, CompilationServer, ServerConfig};
-use hx_config::{find_project_root, Project};
+use hx_cabal::server::{CompilationServer, ServerConfig, is_server_running, server_socket_path};
+use hx_config::{Project, find_project_root};
 use hx_toolchain::Toolchain;
 use hx_ui::Output;
 use std::path::PathBuf;

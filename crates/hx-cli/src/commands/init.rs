@@ -44,8 +44,13 @@ pub async fn run(
     // Validate project name
     if !is_valid_package_name(&project_name) {
         spinner.finish_error("Invalid project name");
-        output.error(&format!("'{}' is not a valid Haskell package name", project_name));
-        output.info("Package names must start with a letter and contain only letters, numbers, and hyphens");
+        output.error(&format!(
+            "'{}' is not a valid Haskell package name",
+            project_name
+        ));
+        output.info(
+            "Package names must start with a letter and contain only letters, numbers, and hyphens",
+        );
         return Ok(1);
     }
 
@@ -61,7 +66,10 @@ pub async fn run(
         fs::create_dir_all(&project_dir)?;
     } else if !create_dir && !project_dir.exists() {
         spinner.finish_error("Directory does not exist");
-        output.error(&format!("Directory '{}' does not exist", project_dir.display()));
+        output.error(&format!(
+            "Directory '{}' does not exist",
+            project_dir.display()
+        ));
         return Ok(1);
     }
 

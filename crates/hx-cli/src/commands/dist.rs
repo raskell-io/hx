@@ -110,14 +110,13 @@ fn strip_binary(binary_path: &Path, target: &str, output: &Output) -> Result<()>
         return Ok(());
     }
 
-    let strip_cmd = if target.contains("linux") && !target.contains("musl")
-        || target.contains("darwin")
-    {
-        "strip"
-    } else {
-        // For cross-compilation, try target-prefixed strip
-        return Ok(()); // Skip if not available
-    };
+    let strip_cmd =
+        if target.contains("linux") && !target.contains("musl") || target.contains("darwin") {
+            "strip"
+        } else {
+            // For cross-compilation, try target-prefixed strip
+            return Ok(()); // Skip if not available
+        };
 
     let status = Command::new(strip_cmd).arg(binary_path).status();
 

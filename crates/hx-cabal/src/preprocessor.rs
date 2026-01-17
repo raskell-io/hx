@@ -258,21 +258,15 @@ pub async fn check_availability(
                 if files.is_empty() {
                     None
                 } else {
-                    Some(format!(
-                        "{}: {} file(s)",
-                        p.executable(),
-                        files.len()
-                    ))
+                    Some(format!("{}: {} file(s)", p.executable(), files.len()))
                 }
             })
             .collect();
 
-        let mut fixes = vec![
-            Fix::with_command(
-                "Install missing preprocessors with cabal",
-                format!("cabal install {}", missing_names.join(" ")),
-            ),
-        ];
+        let mut fixes = vec![Fix::with_command(
+            "Install missing preprocessors with cabal",
+            format!("cabal install {}", missing_names.join(" ")),
+        )];
 
         // Add platform-specific installation hints
         #[cfg(target_os = "macos")]
@@ -381,9 +375,9 @@ pub async fn run_happy(
     let mut args = vec![
         "-o".to_string(),
         output_path.display().to_string(),
-        "-g".to_string(),  // Generate GHC-compatible code
-        "-a".to_string(),  // Use arrays (more efficient)
-        "-c".to_string(),  // Generate GHC-compatible code
+        "-g".to_string(), // Generate GHC-compatible code
+        "-a".to_string(), // Use arrays (more efficient)
+        "-c".to_string(), // Generate GHC-compatible code
     ];
 
     args.push(input.display().to_string());
@@ -433,10 +427,7 @@ pub async fn run_hsc2hs(
         })?;
     }
 
-    let mut args = vec![
-        "-o".to_string(),
-        output_path.display().to_string(),
-    ];
+    let mut args = vec!["-o".to_string(), output_path.display().to_string()];
 
     // Note: We don't set --cc here; hsc2hs will use the default C compiler.
     // Setting --cc to GHC doesn't work as GHC doesn't accept raw C compiler flags.
@@ -542,7 +533,8 @@ pub async fn preprocess_all(
     // Process hsc2hs files
     if let Some(hsc2hs_path) = available.get(&Preprocessor::Hsc2hs) {
         for file in &sources.hsc_files {
-            let result = run_hsc2hs(file, &config.output_dir, config, ghc_path, hsc2hs_path).await?;
+            let result =
+                run_hsc2hs(file, &config.output_dir, config, ghc_path, hsc2hs_path).await?;
             if !result.success {
                 had_errors = true;
                 for error in &result.errors {
@@ -585,12 +577,10 @@ pub async fn preprocess_all(
         }
 
         // Build actionable fixes based on failure type
-        let mut fixes = vec![
-            Fix::with_command(
-                "Run with verbose output for full details",
-                "hx build --verbose",
-            ),
-        ];
+        let mut fixes = vec![Fix::with_command(
+            "Run with verbose output for full details",
+            "hx build --verbose",
+        )];
 
         // Check if any hsc2hs files failed (common issue: missing C headers)
         let hsc_failed = failed_results
@@ -612,10 +602,7 @@ pub async fn preprocess_all(
         });
     }
 
-    info!(
-        "Preprocessed {} files successfully",
-        results.len()
-    );
+    info!("Preprocessed {} files successfully", results.len());
 
     Ok(results)
 }
@@ -683,7 +670,8 @@ fn parse_preprocessor_output(stderr: &str, stdout: &str) -> (Vec<String>, Vec<St
         }
 
         let lower = trimmed.to_lowercase();
-        if lower.contains("error:") || lower.contains("error ")
+        if lower.contains("error:")
+            || lower.contains("error ")
             || lower.starts_with("parse error")
             || lower.contains("cannot")
             || lower.contains("failed")
@@ -727,8 +715,14 @@ mod tests {
     fn test_preprocessor_from_extension() {
         assert_eq!(Preprocessor::from_extension("x"), Some(Preprocessor::Alex));
         assert_eq!(Preprocessor::from_extension("y"), Some(Preprocessor::Happy));
-        assert_eq!(Preprocessor::from_extension("ly"), Some(Preprocessor::Happy));
-        assert_eq!(Preprocessor::from_extension("hsc"), Some(Preprocessor::Hsc2hs));
+        assert_eq!(
+            Preprocessor::from_extension("ly"),
+            Some(Preprocessor::Happy)
+        );
+        assert_eq!(
+            Preprocessor::from_extension("hsc"),
+            Some(Preprocessor::Hsc2hs)
+        );
         assert_eq!(Preprocessor::from_extension("hs"), None);
         assert_eq!(Preprocessor::from_extension("X"), Some(Preprocessor::Alex));
     }
@@ -901,6 +895,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(windows))] // Unix-style absolute paths don't work the same on Windows
     fn test_compute_output_path_absolute_input() {
         // When input has an absolute path, we should not try to join it
         // as that would replace the output_dir entirely on Unix

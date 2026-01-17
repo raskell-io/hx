@@ -154,7 +154,10 @@ impl CompilationServer {
             {
                 // Server is already running, but we can't connect to it yet
                 // (IPC not implemented), so warn and start fresh
-                warn!("Existing server (PID {}) found but IPC not implemented, starting new", pid);
+                warn!(
+                    "Existing server (PID {}) found but IPC not implemented, starting new",
+                    pid
+                );
             }
             // Socket exists but server is dead or invalid - clean up
             debug!("Cleaning up stale socket file");
@@ -585,7 +588,11 @@ fn is_process_running(pid: u32) -> bool {
 
 #[cfg(windows)]
 unsafe extern "system" {
-    fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> *mut std::ffi::c_void;
+    fn OpenProcess(
+        dwDesiredAccess: u32,
+        bInheritHandle: i32,
+        dwProcessId: u32,
+    ) -> *mut std::ffi::c_void;
     fn GetExitCodeProcess(hProcess: *mut std::ffi::c_void, lpExitCode: *mut u32) -> i32;
     fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32;
 }
@@ -670,7 +677,9 @@ mod tests {
     #[test]
     fn test_extract_module_name_with_brackets() {
         assert_eq!(
-            CompilationServer::extract_module_name("[15 of 20] Compiling Foo.Bar ( src/Foo/Bar.hs, interpreted )"),
+            CompilationServer::extract_module_name(
+                "[15 of 20] Compiling Foo.Bar ( src/Foo/Bar.hs, interpreted )"
+            ),
             Some("Foo.Bar".to_string())
         );
     }

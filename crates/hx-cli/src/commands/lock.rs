@@ -32,7 +32,10 @@ pub async fn run(
         let snapshot_id = match SnapshotId::parse(&snapshot_str) {
             Ok(id) => id,
             Err(e) => {
-                output.error(&format!("Invalid snapshot identifier '{}': {}", snapshot_str, e));
+                output.error(&format!(
+                    "Invalid snapshot identifier '{}': {}",
+                    snapshot_str, e
+                ));
                 output.info("Examples: lts-22.28, lts-22, nightly-2024-01-15, nightly");
                 return Ok(1);
             }
@@ -58,7 +61,10 @@ pub async fn run(
         let mut manifest = Manifest::from_file(&manifest_path)?;
         manifest.stackage.snapshot = Some(snapshot_str.clone());
         manifest.to_file(&manifest_path)?;
-        output.info(&format!("Set snapshot to {} in {}", snapshot_str, MANIFEST_FILENAME));
+        output.info(&format!(
+            "Set snapshot to {} in {}",
+            snapshot_str, MANIFEST_FILENAME
+        ));
     }
 
     // Default is native solver, --cabal uses cabal freeze
@@ -266,7 +272,7 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
     // Check for Stackage snapshot configuration
     let snapshot_config = &project.manifest.stackage;
     let snapshot = if let Some(snapshot_str) = &snapshot_config.snapshot {
-        let spinner = Spinner::new(&format!("Loading Stackage snapshot {}...", snapshot_str));
+        let spinner = Spinner::new(format!("Loading Stackage snapshot {}...", snapshot_str));
         match SnapshotId::parse(snapshot_str) {
             Ok(snapshot_id) => match load_snapshot(&snapshot_id, None).await {
                 Ok(snapshot) => {
@@ -282,9 +288,7 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
                         if *project_ghc != snapshot.metadata.ghc_version {
                             output.warn(&format!(
                                 "Project uses GHC {} but snapshot {} uses GHC {}",
-                                project_ghc,
-                                snapshot_str,
-                                snapshot.metadata.ghc_version
+                                project_ghc, snapshot_str, snapshot.metadata.ghc_version
                             ));
                             output.info(&format!(
                                 "Consider updating [toolchain].ghc to \"{}\" in hx.toml",
@@ -309,7 +313,10 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
                 }
             },
             Err(e) => {
-                output.error(&format!("Invalid snapshot identifier '{}': {}", snapshot_str, e));
+                output.error(&format!(
+                    "Invalid snapshot identifier '{}': {}",
+                    snapshot_str, e
+                ));
                 return Ok(3); // Config error
             }
         }
@@ -520,7 +527,10 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
         }
 
         // Determine the source - stackage if package came from snapshot, otherwise hackage
-        let source = if snapshot.as_ref().map_or(false, |(_, s)| s.packages.contains_key(&pkg.name)) {
+        let source = if snapshot
+            .as_ref()
+            .is_some_and(|(_, s)| s.packages.contains_key(&pkg.name))
+        {
             "stackage".to_string()
         } else {
             "hackage".to_string()

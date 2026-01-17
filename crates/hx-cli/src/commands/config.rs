@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use hx_cache::global_config_file;
-use hx_config::{GlobalConfig, load_global_config, global_config_path};
+use hx_config::{GlobalConfig, global_config_path, load_global_config};
 use hx_ui::Output;
 use std::process::Command;
 
@@ -60,7 +60,9 @@ pub async fn edit(output: &Output) -> Result<i32> {
     if !config_file.exists() {
         output.info("Creating default global configuration...");
         let config = GlobalConfig::default();
-        config.to_file(&config_file).map_err(|e| anyhow::anyhow!("{}", e))?;
+        config
+            .to_file(&config_file)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
     }
 
     // Get editor from EDITOR or VISUAL, fallback to common editors
@@ -74,11 +76,13 @@ pub async fn edit(output: &Output) -> Result<i32> {
             }
         });
 
-    output.info(&format!("Opening {} in {}...", config_file.display(), editor));
+    output.info(&format!(
+        "Opening {} in {}...",
+        config_file.display(),
+        editor
+    ));
 
-    let status = Command::new(&editor)
-        .arg(&config_file)
-        .status()?;
+    let status = Command::new(&editor).arg(&config_file).status()?;
 
     if status.success() {
         Ok(0)
@@ -150,9 +154,9 @@ pub async fn set(key: &str, value: &str, output: &Output) -> Result<i32> {
             config.plugins.enabled = parse_bool(value)?;
         }
         ["plugins", "hook_timeout_ms"] => {
-            config.plugins.hook_timeout_ms = value.parse().map_err(|_| {
-                anyhow::anyhow!("Invalid timeout: {} (must be a number)", value)
-            })?;
+            config.plugins.hook_timeout_ms = value
+                .parse()
+                .map_err(|_| anyhow::anyhow!("Invalid timeout: {} (must be a number)", value))?;
         }
         _ => {
             output.error(&format!("Unknown configuration key: {}", key));
@@ -174,7 +178,9 @@ pub async fn set(key: &str, value: &str, output: &Output) -> Result<i32> {
     }
 
     // Save config
-    config.to_file(&config_file).map_err(|e| anyhow::anyhow!("{}", e))?;
+    config
+        .to_file(&config_file)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     output.status("Set", &format!("{} = {}", key, value));
     Ok(0)
@@ -236,7 +242,10 @@ pub async fn init(force: bool, output: &Output) -> Result<i32> {
     };
 
     if config_file.exists() && !force {
-        output.warn(&format!("Config file already exists: {}", config_file.display()));
+        output.warn(&format!(
+            "Config file already exists: {}",
+            config_file.display()
+        ));
         output.info("Use --force to overwrite.");
         return Ok(1);
     }

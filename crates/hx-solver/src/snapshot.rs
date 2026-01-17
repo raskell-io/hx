@@ -105,7 +105,10 @@ impl SnapshotId {
         match parts.as_slice() {
             [major] => {
                 let major: u32 = major.parse().map_err(|_| {
-                    SnapshotError::InvalidIdentifier(format!("invalid LTS major version: {}", major))
+                    SnapshotError::InvalidIdentifier(format!(
+                        "invalid LTS major version: {}",
+                        major
+                    ))
                 })?;
                 Ok(Self {
                     snapshot_type: SnapshotType::Lts,
@@ -117,10 +120,16 @@ impl SnapshotId {
             }
             [major, minor] => {
                 let major: u32 = major.parse().map_err(|_| {
-                    SnapshotError::InvalidIdentifier(format!("invalid LTS major version: {}", major))
+                    SnapshotError::InvalidIdentifier(format!(
+                        "invalid LTS major version: {}",
+                        major
+                    ))
                 })?;
                 let minor: u32 = minor.parse().map_err(|_| {
-                    SnapshotError::InvalidIdentifier(format!("invalid LTS minor version: {}", minor))
+                    SnapshotError::InvalidIdentifier(format!(
+                        "invalid LTS minor version: {}",
+                        minor
+                    ))
                 })?;
                 Ok(Self {
                     snapshot_type: SnapshotType::Lts,
@@ -293,16 +302,11 @@ pub fn snapshot_cache_path(snapshot: &SnapshotId) -> Option<PathBuf> {
 pub async fn fetch_snapshot(snapshot: &SnapshotId) -> Result<Snapshot, SnapshotError> {
     info!("Fetching Stackage snapshot: {}", snapshot);
 
-    let client = reqwest::Client::builder()
-        .user_agent("hx/0.3.6")
-        .build()?;
+    let client = reqwest::Client::builder().user_agent("hx/0.3.6").build()?;
 
     // Stackage provides snapshot data in multiple formats
     // We'll use the JSON API
-    let url = format!(
-        "https://www.stackage.org/{}/cabal.config",
-        snapshot.key()
-    );
+    let url = format!("https://www.stackage.org/{}/cabal.config", snapshot.key());
 
     debug!("Fetching snapshot from: {}", url);
 
@@ -372,10 +376,8 @@ fn parse_cabal_config(content: &str, snapshot: &SnapshotId) -> Result<Snapshot, 
             // Parse "package ==version" or "package installed"
             if let Some((name, version)) = parse_constraint_line(line) {
                 // Skip base packages that are tied to GHC
-                if name == "ghc" {
-                    if ghc_version.is_empty() {
-                        ghc_version = version.clone();
-                    }
+                if name == "ghc" && ghc_version.is_empty() {
+                    ghc_version = version.clone();
                 }
 
                 packages.insert(
@@ -489,15 +491,15 @@ pub async fn load_snapshot(
         .map(|d| d.join(format!("{}.json", snapshot.key())))
         .or_else(|| snapshot_cache_path(snapshot));
 
-    if let Some(ref path) = cache_path {
-        if path.exists() {
-            debug!("Loading snapshot from cache: {}", path.display());
-            match load_snapshot_from_cache(path) {
-                Ok(snap) => return Ok(snap),
-                Err(e) => {
-                    warn!("Failed to load cached snapshot: {}", e);
-                    // Fall through to fetch
-                }
+    if let Some(ref path) = cache_path
+        && path.exists()
+    {
+        debug!("Loading snapshot from cache: {}", path.display());
+        match load_snapshot_from_cache(path) {
+            Ok(snap) => return Ok(snap),
+            Err(e) => {
+                warn!("Failed to load cached snapshot: {}", e);
+                // Fall through to fetch
             }
         }
     }
@@ -569,10 +571,7 @@ pub async fn get_latest_lts() -> Result<SnapshotId, SnapshotError> {
         .redirect(reqwest::redirect::Policy::none())
         .build()?;
 
-    let response = client
-        .head("https://www.stackage.org/lts")
-        .send()
-        .await?;
+    let response = client.head("https://www.stackage.org/lts").send().await?;
 
     if let Some(location) = response.headers().get("location") {
         let loc = location.to_str().unwrap_or("");

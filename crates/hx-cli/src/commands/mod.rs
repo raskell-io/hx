@@ -86,12 +86,16 @@ pub async fn run(cli: Cli) -> Result<i32> {
             package,
             native,
         }) => build::run(release, jobs, target, package, native, policy, &output).await,
-        Some(Commands::Test { pattern, package, target }) => {
-            build::test(pattern, package, target, policy, &output).await
-        }
-        Some(Commands::Run { args, package, target }) => {
-            run::run(args, package, target, policy, &output).await
-        }
+        Some(Commands::Test {
+            pattern,
+            package,
+            target,
+        }) => build::test(pattern, package, target, policy, &output).await,
+        Some(Commands::Run {
+            args,
+            package,
+            target,
+        }) => run::run(args, package, target, policy, &output).await,
         Some(Commands::Repl) => run::repl(policy, &output).await,
         Some(Commands::Check) => {
             // Check is just a fast build
@@ -100,9 +104,11 @@ pub async fn run(cli: Cli) -> Result<i32> {
         Some(Commands::Fmt { check }) => fmt::run(check, &output).await,
         Some(Commands::Lint { fix }) => lint::run(fix, &output).await,
         Some(Commands::Doctor) => doctor::run(&output).await,
-        Some(Commands::Lock { cabal, update, snapshot }) => {
-            lock::run(cabal, update, snapshot, &output).await
-        }
+        Some(Commands::Lock {
+            cabal,
+            update,
+            snapshot,
+        }) => lock::run(cabal, update, snapshot, &output).await,
         Some(Commands::Fetch { jobs }) => fetch::run(jobs, &output).await,
         Some(Commands::Sync { force }) => lock::sync(force, &output).await,
         Some(Commands::Clean { global }) => clean::run(global, &output).await,
@@ -131,6 +137,9 @@ pub async fn run(cli: Cli) -> Result<i32> {
         Some(Commands::Completions { command }) => match command {
             CompletionsCommands::Generate { shell } => completions::generate(shell),
             CompletionsCommands::Install { shell } => completions::install(shell, &output).await,
+            CompletionsCommands::Manpages { output: out_dir } => {
+                completions::manpages(out_dir, &output)
+            }
         },
         Some(Commands::Upgrade {
             check,
@@ -142,7 +151,23 @@ pub async fn run(cli: Cli) -> Result<i32> {
             save_baseline,
             baseline,
             package,
-        }) => bench::run(filter, save_baseline, baseline, package, policy, &output).await,
+            json,
+            regression_threshold,
+            save_history,
+        }) => {
+            bench::run(
+                filter,
+                save_baseline,
+                baseline,
+                package,
+                json,
+                regression_threshold,
+                save_history,
+                policy,
+                &output,
+            )
+            .await
+        }
         Some(Commands::Publish {
             dry_run,
             username,

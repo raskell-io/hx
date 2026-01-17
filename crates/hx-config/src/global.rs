@@ -116,7 +116,10 @@ pub fn load_global_config() -> Result<Option<GlobalConfig>, GlobalConfigError> {
     };
 
     if !config_file.exists() {
-        debug!("Global config file does not exist: {}", config_file.display());
+        debug!(
+            "Global config file does not exist: {}",
+            config_file.display()
+        );
         return Ok(None);
     }
 

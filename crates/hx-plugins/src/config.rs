@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-/// Plugin system configuration from hx.toml [plugins] section.
+/// Plugin system configuration from hx.toml `[plugins]` section.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PluginConfig {

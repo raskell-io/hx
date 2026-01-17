@@ -105,10 +105,7 @@ impl HxLanguageServer {
 
     /// Publish diagnostics to the client.
     async fn publish_diagnostics(&self, uri: Url, diagnostics: Vec<GhcDiagnostic>) {
-        let lsp_diags: Vec<Diagnostic> = diagnostics
-            .iter()
-            .map(ghc_to_lsp_diagnostic)
-            .collect();
+        let lsp_diags: Vec<Diagnostic> = diagnostics.iter().map(ghc_to_lsp_diagnostic).collect();
 
         self.client.publish_diagnostics(uri, lsp_diags, None).await;
     }
@@ -237,9 +234,7 @@ impl LanguageServer for HxLanguageServer {
         for diag in diagnostics {
             if let Some(span) = &diag.span {
                 // Check if diagnostic overlaps with requested range
-                if span.start_line <= range.end.line + 1
-                    && span.end_line > range.start.line
-                {
+                if span.start_line <= range.end.line + 1 && span.end_line > range.start.line {
                     // Add quick fixes as code actions
                     for fix in &diag.fixes {
                         if let Some(action) = quick_fix_to_code_action(fix, uri, &diag) {

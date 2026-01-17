@@ -325,6 +325,18 @@ pub enum Commands {
         /// Benchmark specific package (in workspace)
         #[arg(short, long)]
         package: Option<String>,
+
+        /// Output results as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Regression threshold percentage (fail if regression exceeds this)
+        #[arg(long, value_name = "PERCENT")]
+        regression_threshold: Option<f64>,
+
+        /// Save results to history for tracking over time
+        #[arg(long)]
+        save_history: bool,
     },
 
     /// Publish package to Hackage
@@ -696,6 +708,13 @@ pub enum CompletionsCommands {
         /// Shell to install completions for (auto-detected if not specified)
         #[arg(long, value_enum)]
         shell: Option<Shell>,
+    },
+
+    /// Generate man pages
+    Manpages {
+        /// Output directory for man pages
+        #[arg(long, short, default_value = "man")]
+        output: std::path::PathBuf,
     },
 }
 
