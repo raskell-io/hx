@@ -34,8 +34,8 @@ mod upgrade;
 mod watch;
 
 use crate::cli::{
-    ArtifactCommands, CacheCommands, Cli, Commands, DepsCommands, DistCommands, GlobalArgs,
-    GraphFormat, IndexCommands, NixCommands, PluginsCommands,
+    ArtifactCommands, CacheCommands, Cli, Commands, CompletionsCommands, DepsCommands,
+    DistCommands, GlobalArgs, GraphFormat, IndexCommands, NixCommands, PluginsCommands,
 };
 use anyhow::Result;
 use hx_toolchain::AutoInstallPolicy;
@@ -121,7 +121,10 @@ pub async fn run(cli: Cli) -> Result<i32> {
         Some(Commands::List { dev, direct }) => {
             deps::graph(GraphFormat::List, 0, None, None, dev, direct, &output).await
         }
-        Some(Commands::Completions { shell }) => completions::run(shell),
+        Some(Commands::Completions { command }) => match command {
+            CompletionsCommands::Generate { shell } => completions::generate(shell),
+            CompletionsCommands::Install { shell } => completions::install(shell, &output).await,
+        },
         Some(Commands::Upgrade {
             check,
             target_version,

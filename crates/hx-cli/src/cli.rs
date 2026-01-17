@@ -273,11 +273,10 @@ pub enum Commands {
         direct: bool,
     },
 
-    /// Generate shell completions
+    /// Manage shell completions
     Completions {
-        /// Shell to generate completions for
-        #[arg(value_enum)]
-        shell: Shell,
+        #[command(subcommand)]
+        command: CompletionsCommands,
     },
 
     /// Upgrade hx to the latest version
@@ -594,6 +593,23 @@ pub enum NixCommands {
         /// Overwrite existing file
         #[arg(long)]
         force: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CompletionsCommands {
+    /// Generate completions for a shell (output to stdout)
+    Generate {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: Shell,
+    },
+
+    /// Install completions for your shell
+    Install {
+        /// Shell to install completions for (auto-detected if not specified)
+        #[arg(long, value_enum)]
+        shell: Option<Shell>,
     },
 }
 
