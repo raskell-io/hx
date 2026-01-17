@@ -53,22 +53,22 @@ pub struct GlobalArgs {
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// Initialize a new Haskell project
+    ///
+    /// Examples:
+    ///   hx init           # Initialize in current directory
+    ///   hx init myapp     # Create myapp/ directory and initialize
+    ///   hx init --lib     # Create a library instead of executable
     Init {
-        /// Create a binary project
-        #[arg(long, conflicts_with = "lib")]
-        bin: bool,
+        /// Directory to initialize (default: current directory)
+        path: Option<String>,
 
-        /// Create a library project
+        /// Create a library project (default: executable)
         #[arg(long)]
         lib: bool,
 
-        /// Project name
+        /// Override project name (default: directory name)
         #[arg(long)]
         name: Option<String>,
-
-        /// Target directory
-        #[arg(long)]
-        dir: Option<String>,
 
         /// Generate GitHub Actions CI workflow
         #[arg(long)]

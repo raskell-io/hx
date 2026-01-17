@@ -7,24 +7,32 @@ use std::fs;
 use std::path::PathBuf;
 
 /// Run the init command.
+///
+/// Smart defaults:
+/// - `hx init` initializes in current directory
+/// - `hx init myapp` creates myapp/ and initializes there
+/// - Defaults to executable (use --lib for library)
+/// - Project name defaults to directory name
 pub async fn run(
-    _bin: bool,
+    path: Option<String>,
     lib: bool,
     name: Option<String>,
-    dir: Option<String>,
     ci: bool,
     output: &Output,
 ) -> Result<i32> {
     let spinner = Spinner::new("Initializing project...");
 
     // Determine project directory
-    let project_dir = if let Some(d) = dir {
-        PathBuf::from(d)
+    let (project_dir, create_dir) = if let Some(p) = path {
+        let dir = PathBuf::from(&p);
+        // If path is provided, we'll create the directory
+        (dir, true)
     } else {
-        std::env::current_dir()?
+        // No path = current directory
+        (std::env::current_dir()?, false)
     };
 
-    // Determine project name
+    // Determine project name (from --name, or from directory name)
     let project_name = name.unwrap_or_else(|| {
         project_dir
             .file_name()
@@ -33,7 +41,15 @@ pub async fn run(
             .to_string()
     });
 
-    // Determine project kind
+    // Validate project name
+    if !is_valid_package_name(&project_name) {
+        spinner.finish_error("Invalid project name");
+        output.error(&format!("'{}' is not a valid Haskell package name", project_name));
+        output.info("Package names must start with a letter and contain only letters, numbers, and hyphens");
+        return Ok(1);
+    }
+
+    // Determine project kind (default to executable)
     let kind = if lib {
         ProjectKind::Lib
     } else {
@@ -41,8 +57,12 @@ pub async fn run(
     };
 
     // Create project directory if needed
-    if !project_dir.exists() {
+    if create_dir && !project_dir.exists() {
         fs::create_dir_all(&project_dir)?;
+    } else if !create_dir && !project_dir.exists() {
+        spinner.finish_error("Directory does not exist");
+        output.error(&format!("Directory '{}' does not exist", project_dir.display()));
+        return Ok(1);
     }
 
     // Check if hx.toml already exists
@@ -300,4 +320,33 @@ jobs:
           path: src/
 "#
     )
+}
+
+/// Check if a string is a valid Haskell package name.
+fn is_valid_package_name(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+
+    let mut chars = name.chars();
+
+    // Must start with a letter
+    match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() => {}
+        _ => return false,
+    }
+
+    // Rest must be letters, digits, or hyphens
+    for c in chars {
+        if !c.is_ascii_alphanumeric() && c != '-' {
+            return false;
+        }
+    }
+
+    // Can't end with a hyphen
+    if name.ends_with('-') {
+        return false;
+    }
+
+    true
 }

@@ -70,12 +70,11 @@ pub async fn run(cli: Cli) -> Result<i32> {
 
     match cli.command {
         Some(Commands::Init {
-            bin,
+            path,
             lib,
             name,
-            dir,
             ci,
-        }) => init::run(bin, lib, name, dir, ci, &output).await,
+        }) => init::run(path, lib, name, ci, &output).await,
         Some(Commands::Build {
             release,
             jobs,
