@@ -61,3 +61,8 @@ tempfile.workspace = true
 assert_cmd.workspace = true
 predicates.workspace = true
 insta.workspace = true
+criterion.workspace = true
+
+[[bench]]
+name = "cli_bench"
+harness = false
