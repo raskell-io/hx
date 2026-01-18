@@ -616,7 +616,10 @@ async fn run_bhc_build(
         Ok(result) => {
             let duration = start.elapsed();
             if result.success {
-                output.status("Finished", &format!("BHC build in {}", format_build_duration(duration)));
+                output.status(
+                    "Finished",
+                    &format!("BHC build in {}", format_build_duration(duration)),
+                );
 
                 // Show warnings if any
                 if !result.warnings.is_empty() {
@@ -630,7 +633,10 @@ async fn run_bhc_build(
 
                 Ok(0)
             } else {
-                output.error(&format!("Build failed with {} error(s)", result.errors.len()));
+                output.error(&format!(
+                    "Build failed with {} error(s)",
+                    result.errors.len()
+                ));
                 for error in &result.errors {
                     eprintln!("{}", error);
                 }

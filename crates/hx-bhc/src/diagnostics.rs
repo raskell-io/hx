@@ -31,7 +31,10 @@ pub fn parse_bhc_output(output: &str) -> Vec<Diagnostic> {
 
         // Check for note/help continuation lines
         if trimmed.starts_with("note:") || trimmed.starts_with("help:") {
-            let note_content = trimmed.split_once(':').map(|(_, msg)| msg.trim()).unwrap_or(trimmed);
+            let note_content = trimmed
+                .split_once(':')
+                .map(|(_, msg)| msg.trim())
+                .unwrap_or(trimmed);
             note_lines.push(note_content.to_string());
             continue;
         }

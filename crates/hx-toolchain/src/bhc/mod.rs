@@ -329,9 +329,6 @@ mod tests {
             parse_version_output("BHC version 0.1.0"),
             Some("0.1.0".to_string())
         );
-        assert_eq!(
-            parse_version_output("bhc 0.2.0"),
-            Some("0.2.0".to_string())
-        );
+        assert_eq!(parse_version_output("bhc 0.2.0"), Some("0.2.0".to_string()));
     }
 }

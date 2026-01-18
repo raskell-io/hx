@@ -21,7 +21,7 @@ use hx_ui::Output;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
-use tracing::{debug, info};
+use tracing::{info, debug};
 
 pub use build::BhcBuildOptions;
 pub use diagnostics::parse_bhc_output;
@@ -181,7 +181,10 @@ impl CompilerBackend for BhcBackend {
         info!("Running BHC build in {}", project_root.display());
         debug!("Args: {:?}", args);
 
-        output.status("Building", &format!("with BHC ({})", self.config.profile.as_str()));
+        output.status(
+            "Building",
+            &format!("with BHC ({})", self.config.profile.as_str()),
+        );
 
         let start = Instant::now();
 
@@ -216,7 +219,10 @@ impl CompilerBackend for BhcBackend {
         }
 
         if success {
-            output.status("Finished", &format!("BHC build in {:.2}s", duration.as_secs_f64()));
+            output.status(
+                "Finished",
+                &format!("BHC build in {:.2}s", duration.as_secs_f64()),
+            );
         } else {
             return Err(CompilerError::BuildFailed {
                 error_count: errors.len(),

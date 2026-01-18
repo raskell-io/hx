@@ -152,7 +152,7 @@ pub struct BhcConfig {
 /// GHC-specific configuration.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct GhcConfig {
-    /// GHC version to use (moved from [toolchain]).
+    /// GHC version to use (moved from `[toolchain]` section).
     pub version: Option<String>,
     /// Enable profiling.
     #[serde(default)]
@@ -579,10 +579,22 @@ name = "myapp"
 
     #[test]
     fn test_compiler_backend_from_str() {
-        assert_eq!("ghc".parse::<CompilerBackend>().unwrap(), CompilerBackend::Ghc);
-        assert_eq!("GHC".parse::<CompilerBackend>().unwrap(), CompilerBackend::Ghc);
-        assert_eq!("bhc".parse::<CompilerBackend>().unwrap(), CompilerBackend::Bhc);
-        assert_eq!("BHC".parse::<CompilerBackend>().unwrap(), CompilerBackend::Bhc);
+        assert_eq!(
+            "ghc".parse::<CompilerBackend>().unwrap(),
+            CompilerBackend::Ghc
+        );
+        assert_eq!(
+            "GHC".parse::<CompilerBackend>().unwrap(),
+            CompilerBackend::Ghc
+        );
+        assert_eq!(
+            "bhc".parse::<CompilerBackend>().unwrap(),
+            CompilerBackend::Bhc
+        );
+        assert_eq!(
+            "BHC".parse::<CompilerBackend>().unwrap(),
+            CompilerBackend::Bhc
+        );
         assert!("unknown".parse::<CompilerBackend>().is_err());
     }
 

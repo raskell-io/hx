@@ -179,8 +179,12 @@ mod tests {
     #[test]
     fn test_convert_hx_manifest() {
         let mut manifest = Manifest::new("test-project", ProjectKind::Bin);
-        manifest.dependencies.insert("base".to_string(), ">=4.18".to_string());
-        manifest.dependencies.insert("text".to_string(), ">=2.0".to_string());
+        manifest
+            .dependencies
+            .insert("base".to_string(), ">=4.18".to_string());
+        manifest
+            .dependencies
+            .insert("text".to_string(), ">=2.0".to_string());
         manifest.compiler.bhc = BhcConfig {
             profile: BhcProfile::Numeric,
             emit_kernel_report: true,
@@ -195,7 +199,10 @@ mod tests {
         assert_eq!(bhc_manifest.dependencies.len(), 2);
         assert!(bhc_manifest.build.tensor_fusion);
         assert!(bhc_manifest.build.emit_kernel_report);
-        assert_eq!(bhc_manifest.build.target, Some("aarch64-linux-gnu".to_string()));
+        assert_eq!(
+            bhc_manifest.build.target,
+            Some("aarch64-linux-gnu".to_string())
+        );
         assert_eq!(bhc_manifest.profile.name, Some("numeric".to_string()));
     }
 
