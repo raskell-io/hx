@@ -7,6 +7,116 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-01-18
+
+### Added
+- **BHC (Basel Haskell Compiler) support** - Alternative compiler backend
+  - New `hx-compiler` crate with `CompilerBackend` trait abstraction
+  - New `hx-bhc` crate implementing BHC backend
+  - `[compiler]` section in hx.toml for backend configuration
+  - `--backend` flag to override compiler selection
+  - BHC profiles: default, server, numeric, edge
+- **Comprehensive benchmarks and testing**
+  - CLI benchmarks with Criterion (startup, init, doctor, config, clean, completions)
+  - 15+ end-to-end integration tests for complete workflows
+  - Benchmark comparison script (`scripts/benchmark-comparison.sh`)
+  - 430+ unit tests across all crates
+
+### Changed
+- Compiler abstraction layer enables future compiler integrations
+- Updated documentation with benchmark results and testing guide
+
+## [0.3.6] - 2026-01-17
+
+### Added
+- **Stackage CLI commands**
+  - `hx stackage list` - List available snapshots (--lts, --nightly)
+  - `hx stackage info <snapshot>` - Show snapshot details
+  - `hx stackage set <snapshot>` - Set snapshot for project
+- **Cross-compilation enhancements**
+  - `--target` flag for build, test, and run commands
+  - Support for x86_64-linux-gnu, aarch64-linux-gnu, wasm32-wasi, and more
+- **Stackage snapshot support in lockfiles**
+  - `[toolchain] snapshot = "lts-22.7"` configuration
+  - Automatic resolver selection from snapshot
+
+### Fixed
+- Improved preprocessor tool discovery (alex, happy, hsc2hs, c2hs)
+- Better hsc2hs support with proper include paths
+
+## [0.3.5] - 2026-01-17
+
+### Added
+- **Native build advanced features**
+  - Preprocessor support: alex (.x), happy (.y), hsc2hs (.hsc), c2hs (.chs)
+  - Parallel module compilation
+  - Fingerprint-based incremental builds
+  - Automatic fallback to cabal for complex projects
+
+### Fixed
+- Use hx-managed toolchain path for native builds and server
+- Handle missing parent directory in ghc_path for server
+- Edge case handling and robustness improvements
+
+## [0.3.0] - 2026-01-17
+
+### Added
+- **install.sh** - One-liner installation script
+- **Global configuration** - `~/.config/hx/config.toml` for user defaults
+- **Smart defaults for hx init**
+  - Auto-detect project name from directory
+  - Intelligent default GHC version selection
+  - Simplified interactive prompts
+- **Shell completions auto-install**
+  - Automatically install completions on first run
+  - Support for bash, zsh, fish detection
+- **New dependency commands**
+  - `hx info <package>` - Show package details from Hackage
+  - `hx list` - Alias for `hx deps list`
+  - `hx tree` - Alias for `hx deps tree`
+  - `hx update` - Update dependencies to latest compatible versions
+  - `hx outdated` - Check for available dependency updates
+  - `hx why <package>` - Show why a dependency is included
+- **Enhanced hx add/remove**
+  - Version constraint support: `hx add aeson@^2.2`
+  - Automatic hx.toml synchronization
+
+### Changed
+- Improved CLI test infrastructure
+- Better error messages with context
+
+## [0.2.0] - 2026-01-16
+
+### Added
+- **hx-solver crate** - Native dependency resolver written in Rust
+  - Version constraint parsing and solving
+  - Hackage index loading and caching
+  - Build plan generation
+- **hx-lsp crate** - Language server protocol support
+  - HLS process management
+  - Diagnostic forwarding
+- **Native build mode** (`hx build --native`)
+  - Direct GHC invocation for simple projects
+  - 5.6x faster cold builds vs cabal
+  - 7.8x faster incremental builds
+- **Watch mode** (`hx watch`)
+  - File change detection with notify
+  - Automatic rebuild on save
+  - Support for `hx watch test`, `hx watch build`
+- **Coverage reporting** (`hx coverage`)
+  - HPC integration
+  - HTML and JSON output formats
+  - Threshold checking for CI
+- **Server commands**
+  - `hx server start` - Start HLS in background
+  - `hx server stop` - Stop HLS
+  - `hx server status` - Check HLS status
+  - `hx server restart` - Restart HLS
+
+### Improved
+- Performance optimizations across all commands
+- Better Hackage integration
+
 ## [0.1.1] - 2026-01-16
 
 ### Added
@@ -75,6 +185,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration test infrastructure with assert_cmd
 - CI/CD with GitHub Actions (Linux, macOS, Windows)
 
-[Unreleased]: https://github.com/raskell-io/hx/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/raskell-io/hx/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/raskell-io/hx/compare/v0.3.6...v0.4.0
+[0.3.6]: https://github.com/raskell-io/hx/compare/v0.3.5...v0.3.6
+[0.3.5]: https://github.com/raskell-io/hx/compare/v0.3.0...v0.3.5
+[0.3.0]: https://github.com/raskell-io/hx/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/raskell-io/hx/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/raskell-io/hx/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/raskell-io/hx/releases/tag/v0.1.0
