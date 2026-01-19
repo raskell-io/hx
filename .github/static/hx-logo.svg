@@ -10,7 +10,7 @@
   </defs>
   <text x="50" y="42"
         text-anchor="middle"
-        font-family="Geist Mono, SF Mono, Monaco, Menlo, Consolas, monospace"
+        font-family="Clash Display, -apple-system, BlinkMacSystemFont, sans-serif"
         font-size="52"
         font-weight="700"
         fill="url(#brandGradient)">hx</text>
