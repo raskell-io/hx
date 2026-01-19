@@ -20,6 +20,8 @@ hx doctor      # Diagnose issues
 
 hx aims to eliminate "Haskell setup hell" by providing a single tool that handles toolchains, dependencies, building, formatting, linting, and IDE integration.
 
+> **Note**: This document is for **developers contributing to hx**. If you're looking for user documentation on how to use hx, visit **[hx.raskell.io/docs](https://hx.raskell.io/docs/)**.
+
 ---
 
 ## Philosophy
@@ -306,7 +308,17 @@ See [BENCHMARKS.md](./BENCHMARKS.md) for performance data.
 
 ## Documentation Index
 
-### Project-Level
+### User Documentation
+
+For end-user documentation on how to use hx, visit the official docs site:
+
+| Resource | URL |
+|----------|-----|
+| **Documentation** | [hx.raskell.io/docs](https://hx.raskell.io/docs/) |
+| **Features** | [hx.raskell.io/features](https://hx.raskell.io/features/) |
+| **Benchmarks** | [hx.raskell.io/benchmarks](https://hx.raskell.io/benchmarks/) |
+
+### Project-Level (Developer)
 
 | Document | Description |
 |----------|-------------|
