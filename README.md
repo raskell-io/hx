@@ -1,9 +1,40 @@
-# hx
+<div align="center">
 
-A fast, opinionated, batteries-included toolchain CLI for Haskell.
+<h1 align="center">
+  <img src=".github/static/hx-logo.png" alt="hx logo" width="96" />
+  <br>
+  hx
+</h1>
 
-[![CI](https://github.com/raskell-io/hx/actions/workflows/ci.yml/badge.svg)](https://github.com/raskell-io/hx/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/raskell-io/hx)](https://github.com/raskell-io/hx/releases)
+<p align="center">
+  <em>A fast, opinionated, batteries-included toolchain for Haskell.</em><br>
+  <em>Haskell, finally fast.</em>
+</p>
+
+<p align="center">
+  <a href="https://www.rust-lang.org/">
+    <img alt="Rust" src="https://img.shields.io/badge/Rust-stable-000000?logo=rust&logoColor=white&style=for-the-badge">
+  </a>
+  <a href="https://www.haskell.org/">
+    <img alt="Haskell" src="https://img.shields.io/badge/For-Haskell-5e5086?logo=haskell&logoColor=white&style=for-the-badge">
+  </a>
+  <a href="LICENSE">
+    <img alt="License" src="https://img.shields.io/badge/License-MIT-c6a0f6?style=for-the-badge">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://hx.raskell.io/docs/">Documentation</a> •
+  <a href="https://hx.raskell.io/features/">Features</a> •
+  <a href="https://hx.raskell.io/benchmarks/">Benchmarks</a> •
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
+
+</div>
+
+---
+
+hx is a modern toolchain CLI for Haskell, written in Rust. It wraps existing tools (GHC, Cabal, GHCup, HLS) in a fast, unified interface with excellent error messages and deterministic builds.
 
 ## Features
 
