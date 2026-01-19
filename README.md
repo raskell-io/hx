@@ -45,6 +45,10 @@ hx is a modern toolchain CLI for Haskell, written in Rust. It wraps existing too
 - **Plugin system** - Extensible with Steel (Scheme) scripts
 - **Self-contained** - Manages GHC versions directly, no ghcup required
 
+<div align="center">
+  <img src=".github/static/demo.gif" alt="hx demo" width="600" />
+</div>
+
 ## Installation
 
 ### From releases
