@@ -1,9 +1,7 @@
 <div align="center">
 
 <h1 align="center">
-  <img src=".github/static/hx-logo.png" alt="hx logo" width="96" />
-  <br>
-  hx
+  <img src=".github/static/hx-logo.svg" alt="hx" height="80" />
 </h1>
 
 <p align="center">
