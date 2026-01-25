@@ -1,7 +1,7 @@
 FROM debian:bookworm-slim
 
 ARG TARGETARCH
-ARG VERSION=0.4.1
+ARG VERSION=0.4.2
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
