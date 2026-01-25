@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+current_script_path=${BASH_SOURCE[0]}
+plugin_dir=$(dirname "$(dirname "$current_script_path")")
+
+# shellcheck source=./lib/utils.bash
+source "${plugin_dir}/lib/utils.bash"
+
+mkdir -p "$ASDF_DOWNLOAD_PATH"
+
+version="$ASDF_INSTALL_VERSION"
+platform=$(get_platform)
+arch=$(get_arch)
+
+download_url="https://github.com/raskell-io/hx/releases/download/v${version}/hx-v${version}-${arch}-${platform}.tar.gz"
+
+echo "Downloading hx v${version} for ${arch}-${platform}..."
+
+curl -fsSL "$download_url" -o "${ASDF_DOWNLOAD_PATH}/hx.tar.gz"
+
+tar -xzf "${ASDF_DOWNLOAD_PATH}/hx.tar.gz" -C "$ASDF_DOWNLOAD_PATH"
+rm "${ASDF_DOWNLOAD_PATH}/hx.tar.gz"
+
+echo "Download complete."

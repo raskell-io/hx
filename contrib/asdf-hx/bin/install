@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+mkdir -p "${ASDF_INSTALL_PATH}/bin"
+
+cp "${ASDF_DOWNLOAD_PATH}/hx" "${ASDF_INSTALL_PATH}/bin/hx"
+chmod +x "${ASDF_INSTALL_PATH}/bin/hx"
+
+echo "hx ${ASDF_INSTALL_VERSION} installed successfully."

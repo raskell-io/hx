@@ -1,0 +1,56 @@
+# asdf-hx
+
+[hx](https://github.com/raskell-io/hx) plugin for [asdf](https://asdf-vm.com) and [mise](https://mise.jdx.dev).
+
+## Installation
+
+### mise
+
+```bash
+mise plugin install hx https://github.com/raskell-io/asdf-hx.git
+mise install hx@latest
+mise use hx@latest
+```
+
+Or add to your `mise.toml`:
+
+```toml
+[tools]
+hx = "latest"
+```
+
+### asdf
+
+```bash
+asdf plugin add hx https://github.com/raskell-io/asdf-hx.git
+asdf install hx latest
+asdf global hx latest
+```
+
+## Usage
+
+```bash
+# List all available versions
+asdf list all hx
+
+# Install a specific version
+asdf install hx 0.4.0
+
+# Set global version
+asdf global hx 0.4.0
+
+# Set local version (creates .tool-versions)
+asdf local hx 0.4.0
+```
+
+## Supported Platforms
+
+- macOS (Apple Silicon and Intel)
+- Linux (x86_64 and aarch64)
+- Windows (x86_64)
+
+## Links
+
+- [hx documentation](https://github.com/raskell-io/hx)
+- [asdf documentation](https://asdf-vm.com)
+- [mise documentation](https://mise.jdx.dev)
