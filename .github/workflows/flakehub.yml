@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 jobs:
   publish:
@@ -20,3 +19,4 @@ jobs:
       - uses: DeterminateSystems/flakehub-push@main
         with:
           visibility: public
+          tag: ${{ github.ref_name }}
