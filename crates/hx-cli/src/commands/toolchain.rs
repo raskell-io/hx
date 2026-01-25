@@ -5,8 +5,9 @@ use anyhow::Result;
 use hx_cache::toolchain_dir;
 use hx_config::{Manifest, find_project_root};
 use hx_toolchain::{
-    GhcSource, InstallStrategy, RECOMMENDED_GHC_VERSION, SmartInstallOptions, Toolchain,
-    ToolchainManifest, create_symlinks, install, known_versions, remove_ghc, set_active,
+    BhcInstallOptions, GhcSource, InstallStrategy, RECOMMENDED_BHC_VERSION, RECOMMENDED_GHC_VERSION,
+    SmartInstallOptions, Toolchain, ToolchainManifest, create_symlinks, install, install_bhc,
+    known_versions, remove_ghc, set_active,
 };
 use hx_ui::{Output, Style};
 
@@ -23,10 +24,11 @@ pub async fn run(command: ToolchainCommands, output: &Output) -> Result<i32> {
             ghc,
             cabal,
             hls,
+            bhc,
             set,
             force,
             ghcup,
-        } => install_ghc(version.or(ghc), cabal, hls, set, force, ghcup, output).await,
+        } => install_toolchain(version.or(ghc), cabal, hls, bhc, set, force, ghcup, output).await,
         ToolchainCommands::Remove { version, yes } => remove(&version, yes, output).await,
         ToolchainCommands::Use { version } => use_version(&version, output).await,
     }
@@ -195,10 +197,11 @@ async fn list(available: bool, installed_only: bool, output: &Output) -> Result<
     Ok(0)
 }
 
-async fn install_ghc(
+async fn install_toolchain(
     ghc_version: Option<String>,
     cabal: Option<String>,
     hls: Option<String>,
+    bhc: Option<String>,
     set_as_active: bool,
     force: bool,
     use_ghcup: bool,
@@ -276,14 +279,45 @@ async fn install_ghc(
         }
     }
 
+    // Install BHC (if requested)
+    if let Some(ref version) = bhc {
+        // Handle "latest" as an alias for the recommended version
+        let version = if version == "latest" {
+            RECOMMENDED_BHC_VERSION.to_string()
+        } else {
+            version.clone()
+        };
+
+        output.status("Installing", &format!("BHC {}", version));
+
+        let options = BhcInstallOptions::new(&version)
+            .with_set_active(set_as_active)
+            .with_force(force);
+
+        match install_bhc(&options).await {
+            Ok(result) => {
+                if result.was_cached {
+                    output.status("Done", &format!("BHC {} already installed", version));
+                } else {
+                    output.status("Done", &format!("BHC {} installed", version));
+                }
+            }
+            Err(e) => {
+                output.error(&format!("Failed to install BHC {}: {}", version, e));
+                success = false;
+            }
+        }
+    }
+
     // If no specific versions requested, show help
-    if ghc_version.is_none() && cabal.is_none() && hls.is_none() {
+    if ghc_version.is_none() && cabal.is_none() && hls.is_none() && bhc.is_none() {
         output.warn("No version specified");
         output.info(&format!(
             "Example: hx toolchain install {}",
             RECOMMENDED_GHC_VERSION
         ));
         output.info("Or: hx toolchain install --ghc 9.8.2");
+        output.info("Or: hx toolchain install --bhc latest");
         return Ok(2);
     }
 

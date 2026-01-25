@@ -17,9 +17,10 @@ pub mod ghc;
 pub mod install;
 
 pub use bhc::{
-    BhcError, BhcVersion, InstalledBhc, KNOWN_BHC_VERSIONS, RECOMMENDED_BHC_VERSION,
-    bhc_download_url, bhc_install_dir, current_platform as bhc_current_platform,
-    detect as detect_bhc, is_known_version as is_known_bhc_version,
+    BhcError, BhcInstallOptions, BhcInstallResult, BhcVersion, InstalledBhc, KNOWN_BHC_VERSIONS,
+    RECOMMENDED_BHC_VERSION, bhc_download_url, bhc_install_dir,
+    current_platform as bhc_current_platform, detect as detect_bhc,
+    install_bhc, is_known_version as is_known_bhc_version,
     is_valid_version as is_valid_bhc_version, known_versions as known_bhc_versions,
     list_installed as list_installed_bhc, remove_bhc, set_active as set_active_bhc,
     version_install_path as bhc_version_install_path,

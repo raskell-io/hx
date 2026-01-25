@@ -954,6 +954,10 @@ pub enum ToolchainCommands {
         #[arg(long)]
         hls: Option<String>,
 
+        /// BHC version to install (e.g., 0.2.0 or "latest")
+        #[arg(long)]
+        bhc: Option<String>,
+
         /// Set as active version after installation
         #[arg(long)]
         set: bool,
