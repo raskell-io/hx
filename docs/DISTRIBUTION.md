@@ -6,18 +6,18 @@ Tracking all places where hx is or could be available.
 
 | Channel | Install Command | Link |
 |---------|-----------------|------|
-| GitHub Releases | `curl -fsSL .../install.sh \| sh` | [releases](https://github.com/raskell-io/hx/releases) |
-| Cargo | `cargo install hx-cli` | [crates.io](https://crates.io/crates/hx-cli) |
+| GitHub Releases | `curl -fsSL https://hx.raskell.io/install.sh \| sh` | [releases](https://github.com/raskell-io/hx/releases) |
 | Homebrew | `brew install raskell-io/tap/hx` | [homebrew-tap](https://github.com/raskell-io/homebrew-tap) |
 | Nix Flake | `nix run github:raskell-io/hx` | [flake.nix](../flake.nix) |
 | Scoop | `scoop bucket add raskell-io ...` | [scoop-bucket](https://github.com/raskell-io/scoop-bucket) |
+| aqua | `aqua g -i raskell-io/hx` | [aqua-registry](https://github.com/aquaproj/aqua-registry) |
 
 ## Pending (PRs submitted)
 
 | Channel | Status | Link |
 |---------|--------|------|
+| Nixpkgs | PR open (maintainers want more adoption first) | https://github.com/NixOS/nixpkgs/pull/483671 |
 | asdf | PR open | https://github.com/asdf-vm/asdf-plugins/pull/1140 |
-| aqua | PR open | https://github.com/aquaproj/aqua-registry/pull/47579 |
 | mise | Uses asdf plugin | (waiting on asdf PR) |
 | WinGet | PR open | https://github.com/microsoft/winget-pkgs/pull/333584 |
 | pkgx | PR open | https://github.com/pkgxdev/pantry/pull/11657 |
@@ -26,8 +26,8 @@ Tracking all places where hx is or could be available.
 
 | Channel | Blocker | Files Ready |
 |---------|---------|-------------|
+| Cargo | Need to publish to crates.io | `cargo publish -p hx-cli` |
 | AUR | Need Arch Linux to solve CAPTCHA for account creation | [aur-hx-bin](https://github.com/raskell-io/aur-hx-bin) |
-| Nixpkgs | Need to compute cargoHash with nix, submit PR | [issue](https://github.com/NixOS/nixpkgs/issues/483568), [package.nix](../contrib/nix/package.nix) |
 | FlakeHub | Publishes on next tag release | [workflow](../.github/workflows/flakehub.yml) |
 | Chocolatey | Need Windows + Chocolatey account to publish | [chocolatey-hx](https://github.com/raskell-io/chocolatey-hx) |
 | Docker/GHCR | Publishes on next tag release | [workflow](../.github/workflows/docker.yml) |
