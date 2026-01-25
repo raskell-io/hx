@@ -133,31 +133,46 @@ jobs:
       - name: Publish crates
         run: |
           # Publish in dependency order (base crates first)
+          # Level 0: No internal dependencies
           cargo publish -p hx-core --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 30
+          sleep 60
           cargo publish -p hx-warnings --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 30
+          sleep 60
+
+          # Level 1: Depend only on hx-core
           cargo publish -p hx-ui --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 30
+          sleep 60
           cargo publish -p hx-cache --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 30
+          sleep 60
           cargo publish -p hx-telemetry --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 30
-          cargo publish -p hx-config --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 30
+          sleep 60
           cargo publish -p hx-lock --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 30
+          sleep 60
           cargo publish -p hx-solver --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 30
+          sleep 60
+
+          # Level 2: Depend on level 1 crates
+          cargo publish -p hx-config --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+          sleep 60
           cargo publish -p hx-toolchain --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 30
+          sleep 60
+          cargo publish -p hx-compiler --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+          sleep 60
+
+          # Level 3: Depend on level 2 crates
           cargo publish -p hx-cabal --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 30
-          cargo publish -p hx-doctor --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 30
-          cargo publish -p hx-lsp --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 30
+          sleep 60
+          cargo publish -p hx-bhc --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+          sleep 60
           cargo publish -p hx-plugins --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-          sleep 30
+          sleep 60
+          cargo publish -p hx-doctor --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+          sleep 60
+
+          # Level 4: Depend on level 3 crates
+          cargo publish -p hx-lsp --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+          sleep 60
+
+          # Level 5: CLI depends on everything
           cargo publish -p hx-cli --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
         continue-on-error: true
