@@ -1,7 +1,7 @@
 //! Project initialization command.
 
 use anyhow::Result;
-use hx_config::{MANIFEST_FILENAME, Manifest, ProjectKind};
+use hx_config::{BhcProfile, CompilerBackend, MANIFEST_FILENAME, Manifest, ProjectKind};
 use hx_ui::{Output, Spinner};
 use std::fs;
 use std::path::PathBuf;
@@ -18,6 +18,7 @@ pub async fn run(
     lib: bool,
     name: Option<String>,
     ci: bool,
+    backend: Option<CompilerBackend>,
     output: &Output,
 ) -> Result<i32> {
     let spinner = Spinner::new("Initializing project...");
@@ -82,7 +83,14 @@ pub async fn run(
     }
 
     // Create hx.toml
-    let manifest = Manifest::new(&project_name, kind);
+    let mut manifest = Manifest::new(&project_name, kind);
+
+    // Set BHC backend if requested
+    if let Some(CompilerBackend::Bhc) = backend {
+        manifest.compiler.backend = CompilerBackend::Bhc;
+        manifest.compiler.bhc.profile = BhcProfile::Default;
+    }
+
     manifest.to_file(&manifest_path)?;
 
     // Create .gitignore

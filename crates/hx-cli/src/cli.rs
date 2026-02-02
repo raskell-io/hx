@@ -73,6 +73,10 @@ pub enum Commands {
         /// Generate GitHub Actions CI workflow
         #[arg(long)]
         ci: bool,
+
+        /// Compiler backend to use (ghc or bhc)
+        #[arg(long, value_parser = parse_compiler_backend)]
+        backend: Option<hx_config::CompilerBackend>,
     },
 
     /// Build the project
@@ -618,6 +622,12 @@ pub enum Commands {
         command: ConfigCommands,
     },
 
+    /// Manage BHC Platform curated snapshots
+    BhcPlatform {
+        #[command(subcommand)]
+        command: BhcPlatformCommands,
+    },
+
     /// Persistent compilation server for fast incremental rebuilds
     ///
     /// The server keeps a GHCi process running in the background to enable
@@ -641,6 +651,28 @@ pub enum ServerCommands {
 
     /// Restart the compilation server
     Restart,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum BhcPlatformCommands {
+    /// List available BHC Platform snapshots
+    List,
+
+    /// Show information about a BHC Platform snapshot
+    Info {
+        /// Platform identifier (e.g., bhc-platform-2026.1)
+        platform: String,
+
+        /// Show all packages in the platform
+        #[arg(long)]
+        packages: bool,
+    },
+
+    /// Set the BHC Platform snapshot for the current project
+    Set {
+        /// Platform identifier (e.g., bhc-platform-2026.1)
+        platform: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -821,6 +853,10 @@ pub enum NewCommands {
         /// Target directory (defaults to project name)
         #[arg(long)]
         dir: Option<String>,
+
+        /// Compiler backend to use (ghc or bhc)
+        #[arg(long, value_parser = parse_compiler_backend)]
+        backend: Option<hx_config::CompilerBackend>,
     },
 
     /// Create a CLI application project (optparse-applicative)
@@ -831,10 +867,38 @@ pub enum NewCommands {
         /// Target directory (defaults to project name)
         #[arg(long)]
         dir: Option<String>,
+
+        /// Compiler backend to use (ghc or bhc)
+        #[arg(long, value_parser = parse_compiler_backend)]
+        backend: Option<hx_config::CompilerBackend>,
     },
 
     /// Create a library project with documentation setup
     Library {
+        /// Project name
+        name: String,
+
+        /// Target directory (defaults to project name)
+        #[arg(long)]
+        dir: Option<String>,
+
+        /// Compiler backend to use (ghc or bhc)
+        #[arg(long, value_parser = parse_compiler_backend)]
+        backend: Option<hx_config::CompilerBackend>,
+    },
+
+    /// Create a numeric/scientific computing project (BHC)
+    Numeric {
+        /// Project name
+        name: String,
+
+        /// Target directory (defaults to project name)
+        #[arg(long)]
+        dir: Option<String>,
+    },
+
+    /// Create a server application project (BHC + Servant)
+    Server {
         /// Project name
         name: String,
 

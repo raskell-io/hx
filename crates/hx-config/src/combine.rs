@@ -8,8 +8,8 @@
 //! - `Option<T>`: first `Some` value wins
 
 use crate::{
-    BhcConfig, BuildConfig, CompilerConfig, FormatConfig, GhcConfig, LintConfig, Manifest,
-    PluginConfig, PluginHookConfig, ProjectConfig, StackageConfig, ToolchainConfig,
+    BhcConfig, BhcPlatformConfig, BuildConfig, CompilerConfig, FormatConfig, GhcConfig, LintConfig,
+    Manifest, PluginConfig, PluginHookConfig, ProjectConfig, StackageConfig, ToolchainConfig,
 };
 
 /// Trait for combining configuration values.
@@ -47,6 +47,7 @@ impl Combine for Manifest {
             toolchain: self.toolchain.combine(other.toolchain),
             compiler: self.compiler.combine(other.compiler),
             stackage: self.stackage.combine(other.stackage),
+            bhc_platform: self.bhc_platform.combine(other.bhc_platform),
             build: self.build.combine(other.build),
             format: self.format.combine(other.format),
             lint: self.lint.combine(other.lint),
@@ -120,6 +121,22 @@ impl Combine for GhcConfig {
 }
 
 impl Combine for StackageConfig {
+    fn combine(self, other: Self) -> Self {
+        Self {
+            snapshot: self.snapshot.combine(other.snapshot),
+            allow_newer: self.allow_newer || other.allow_newer,
+            extra_deps: {
+                let mut deps = self.extra_deps;
+                for (k, v) in other.extra_deps {
+                    deps.entry(k).or_insert(v);
+                }
+                deps
+            },
+        }
+    }
+}
+
+impl Combine for BhcPlatformConfig {
     fn combine(self, other: Self) -> Self {
         Self {
             snapshot: self.snapshot.combine(other.snapshot),

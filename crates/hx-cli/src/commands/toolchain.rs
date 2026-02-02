@@ -5,9 +5,9 @@ use anyhow::Result;
 use hx_cache::toolchain_dir;
 use hx_config::{Manifest, find_project_root};
 use hx_toolchain::{
-    BhcInstallOptions, GhcSource, InstallStrategy, RECOMMENDED_BHC_VERSION, RECOMMENDED_GHC_VERSION,
-    SmartInstallOptions, Toolchain, ToolchainManifest, create_symlinks, install, install_bhc,
-    known_versions, remove_ghc, set_active,
+    BhcInstallOptions, GhcSource, InstallStrategy, RECOMMENDED_BHC_VERSION,
+    RECOMMENDED_GHC_VERSION, SmartInstallOptions, Toolchain, ToolchainManifest, create_symlinks,
+    install, install_bhc, known_versions, remove_ghc, set_active,
 };
 use hx_ui::{Output, Style};
 
@@ -197,6 +197,7 @@ async fn list(available: bool, installed_only: bool, output: &Output) -> Result<
     Ok(0)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn install_toolchain(
     ghc_version: Option<String>,
     cabal: Option<String>,

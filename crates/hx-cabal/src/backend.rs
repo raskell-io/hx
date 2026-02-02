@@ -315,7 +315,7 @@ fn parse_location(location: &str) -> Option<(PathBuf, Option<(u32, u32)>)> {
             let line = parts[1].parse().ok()?;
             Some((PathBuf::from(parts[0]), Some((line, 1))))
         }
-        3 | _ => {
+        _ => {
             let line = parts[1].parse().ok()?;
             let col = parts[2].parse().ok()?;
             Some((PathBuf::from(parts[0]), Some((line, col))))

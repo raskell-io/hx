@@ -296,24 +296,22 @@ fn check_bhc(project_dir: Option<&Path>, report: &mut DoctorReport) {
         report.add(Diagnostic::info(format!("bhc: {}", bhc.version)));
 
         // If project uses BHC, also check compatibility
-        if uses_bhc {
-            if let Some(dir) = project_dir
-                && let Ok(project) = hx_config::Project::load(dir)
-                && let Some(ref required) = project.manifest.compiler.version
-            {
-                if &bhc.version != required {
-                    report.add(
-                        Diagnostic::warning(format!(
-                            "BHC version mismatch: required {}, found {}",
-                            required, bhc.version
-                        ))
-                        .with_fix(Fix::with_command(
-                            format!("Install BHC {}", required),
-                            format!("hx toolchain install --bhc {}", required),
-                        )),
-                    );
-                }
-            }
+        if uses_bhc
+            && let Some(dir) = project_dir
+            && let Ok(project) = hx_config::Project::load(dir)
+            && let Some(ref required) = project.manifest.compiler.version
+            && &bhc.version != required
+        {
+            report.add(
+                Diagnostic::warning(format!(
+                    "BHC version mismatch: required {}, found {}",
+                    required, bhc.version
+                ))
+                .with_fix(Fix::with_command(
+                    format!("Install BHC {}", required),
+                    format!("hx toolchain install --bhc {}", required),
+                )),
+            );
         }
     } else if uses_bhc {
         // BHC is required but not installed

@@ -253,8 +253,23 @@ fn test_workflow_help_navigation() {
 
     // All major subcommands have help
     let subcommands = [
-        "init", "build", "test", "run", "bench", "clean", "lock", "doctor", "toolchain", "fmt",
-        "lint", "watch", "repl", "config", "stackage", "server", "coverage",
+        "init",
+        "build",
+        "test",
+        "run",
+        "bench",
+        "clean",
+        "lock",
+        "doctor",
+        "toolchain",
+        "fmt",
+        "lint",
+        "watch",
+        "repl",
+        "config",
+        "stackage",
+        "server",
+        "coverage",
     ];
 
     for cmd in subcommands {
@@ -355,9 +370,7 @@ fn test_workflow_stackage_commands() {
         .stdout(predicate::str::contains("snapshot"));
 
     // Stackage set help
-    hx().args(["stackage", "set", "--help"])
-        .assert()
-        .success();
+    hx().args(["stackage", "set", "--help"]).assert().success();
 }
 
 // =============================================================================

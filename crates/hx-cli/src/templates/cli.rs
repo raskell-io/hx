@@ -94,7 +94,7 @@ version = "0.1.0.0"
 [toolchain]
 # Uncomment to pin GHC version
 # ghc = "9.8.2"
-"#;
+{{backend_config}}"#;
 
 const GITIGNORE: &str = r#"# hx build artifacts
 .hx/

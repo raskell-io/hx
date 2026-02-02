@@ -25,9 +25,9 @@ pub async fn run(
     // Determine compiler backend (CLI override > config > default)
     let backend = backend_override.unwrap_or(project.manifest.compiler.backend);
 
-    // BHC run support would go here
+    // Use BHC backend for running
     if backend == CompilerBackend::Bhc {
-        output.warn("BHC run support is not yet fully implemented, falling back to GHC");
+        return run_bhc_run(&project, args, package, target, output).await;
     }
 
     // Check toolchain requirements
@@ -169,4 +169,75 @@ pub async fn repl(policy: AutoInstallPolicy, output: &Output) -> Result<i32> {
 
     let exit_code = cabal_build::repl(&project.root, &build_dir, &toolchain_bin_dirs).await?;
     Ok(exit_code)
+}
+
+/// Run a project using the BHC backend.
+async fn run_bhc_run(
+    project: &Project,
+    args: Vec<String>,
+    package: Option<String>,
+    target: Option<String>,
+    output: &Output,
+) -> Result<i32> {
+    use hx_bhc::{BhcBackend, generate_bhc_manifest};
+    use hx_compiler::{CompilerBackend as Backend, RunOptions as CompilerRunOptions};
+
+    output.status("Running", &format!("{} (BHC)", project.name()));
+
+    // Generate bhc.toml from hx.toml
+    match generate_bhc_manifest(&project.root, &project.manifest) {
+        Ok(path) => {
+            output.verbose(&format!("Generated BHC manifest at {}", path.display()));
+        }
+        Err(e) => {
+            output.error(&format!("Failed to generate BHC manifest: {}", e));
+            return Ok(3);
+        }
+    }
+
+    // Create BHC backend with project configuration
+    let bhc_config = &project.manifest.compiler.bhc;
+    let backend = BhcBackend::new().with_config(bhc_config.clone());
+
+    // Check if BHC is available
+    let status = backend.detect().await;
+    match status {
+        Ok(hx_compiler::CompilerStatus::Available { version, .. }) => {
+            output.verbose(&format!("BHC version: {}", version));
+        }
+        Ok(hx_compiler::CompilerStatus::NotInstalled) => {
+            output.error("BHC is not installed");
+            output.info("Install BHC with: hx toolchain install --bhc latest");
+            return Ok(4);
+        }
+        Ok(hx_compiler::CompilerStatus::VersionMismatch {
+            required,
+            installed,
+        }) => {
+            output.warn(&format!(
+                "BHC version mismatch: required {}, installed {}",
+                required, installed
+            ));
+        }
+        Err(e) => {
+            output.error(&format!("Failed to detect BHC: {}", e));
+            return Ok(4);
+        }
+    }
+
+    // Run options
+    let run_options = CompilerRunOptions {
+        args,
+        package,
+        target,
+        verbose: output.is_verbose(),
+    };
+
+    match backend.run(&project.root, &run_options, output).await {
+        Ok(result) => Ok(result.exit_code),
+        Err(e) => {
+            output.error(&format!("BHC run failed: {}", e));
+            Ok(5)
+        }
+    }
 }

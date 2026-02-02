@@ -135,10 +135,10 @@ fn parse_severity_and_message(s: &str) -> Option<(DiagnosticSeverity, Option<Str
 
 /// Extract error code from "error[E0001]" format.
 fn extract_code(s: &str) -> Option<String> {
-    if let Some(start) = s.find('[') {
-        if let Some(end) = s.find(']') {
-            return Some(s[start + 1..end].to_string());
-        }
+    if let Some(start) = s.find('[')
+        && let Some(end) = s.find(']')
+    {
+        return Some(s[start + 1..end].to_string());
     }
     None
 }
@@ -152,7 +152,7 @@ fn parse_location(location: &str) -> Option<(PathBuf, Option<u32>, Option<u32>)>
             let line = parts[1].parse().ok();
             Some((PathBuf::from(parts[0]), line, None))
         }
-        3 | _ => {
+        _ => {
             let line = parts[1].parse().ok();
             let col = parts[2].parse().ok();
             Some((PathBuf::from(parts[0]), line, col))

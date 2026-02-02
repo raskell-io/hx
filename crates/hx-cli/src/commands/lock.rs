@@ -442,6 +442,38 @@ async fn run_native(update: Option<Vec<String>>, output: &Output) -> Result<i32>
             }
         }
 
+        // Pin versions from BHC Platform snapshot if configured
+        let bhc_platform_config = &project.manifest.bhc_platform;
+        if let Some(ref platform_str) = bhc_platform_config.snapshot
+            && project.manifest.compiler.backend == hx_config::CompilerBackend::Bhc
+        {
+            if let Ok(platform_id) = SnapshotId::parse(platform_str)
+                && let Ok(platform_snap) = hx_solver::bhc_platform::load_bhc_platform(&platform_id)
+            {
+                let mut pinned = 0;
+                for pkg in platform_snap.packages.values() {
+                    if !config.installed.contains_key(&pkg.name)
+                        && let Ok(version) = pkg.version.parse()
+                    {
+                        config.installed.insert(pkg.name.clone(), version);
+                        pinned += 1;
+                    }
+                }
+
+                // Also add extra_deps from bhc-platform config
+                for (name, version_str) in &bhc_platform_config.extra_deps {
+                    if let Ok(version) = version_str.parse() {
+                        config.installed.insert(name.clone(), version);
+                    }
+                }
+
+                output.info(&format!(
+                    "Pinning {} packages from BHC Platform {}",
+                    pinned, platform_str
+                ));
+            }
+        }
+
         // Pin versions from Stackage snapshot if configured
         if let Some((ref snapshot_name, ref snap)) = snapshot {
             let mut pinned = 0;

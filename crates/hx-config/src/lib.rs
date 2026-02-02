@@ -21,9 +21,9 @@ pub use ide::{
     write_hie_yaml,
 };
 pub use manifest::{
-    BhcConfig, BhcProfile, BuildConfig, CompilerBackend, CompilerConfig, FormatConfig, GhcConfig,
-    LintConfig, Manifest, PluginConfig, PluginHookConfig, ProjectConfig, ProjectKind,
-    StackageConfig, ToolchainConfig,
+    BhcConfig, BhcPlatformConfig, BhcProfile, BuildConfig, CompilerBackend, CompilerConfig,
+    FormatConfig, GhcConfig, LintConfig, Manifest, PluginConfig, PluginHookConfig, ProjectConfig,
+    ProjectKind, StackageConfig, ToolchainConfig,
 };
 pub use project::{Project, WorkspacePackage, find_project_root};
 

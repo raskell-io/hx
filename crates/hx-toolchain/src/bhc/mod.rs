@@ -380,7 +380,11 @@ pub async fn install_bhc(options: &BhcInstallOptions) -> Result<BhcInstallResult
         }
     }
 
-    info!("Installing BHC {} for {}", options.version, current_platform());
+    info!(
+        "Installing BHC {} for {}",
+        options.version,
+        current_platform()
+    );
 
     // Create directories
     let base_dir = bhc_install_dir();
@@ -443,11 +447,10 @@ async fn download_bhc_archive(url: &str, dest: &Path, version: &str, timeout: u6
         .map_err(|e| BhcError::Network(format!("Failed to create HTTP client: {}", e)))?;
 
     debug!("Downloading from {}", url);
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| BhcError::Download(format!("Failed to download BHC {}: {}", version, e)))?;
+    let response =
+        client.get(url).send().await.map_err(|e| {
+            BhcError::Download(format!("Failed to download BHC {}: {}", version, e))
+        })?;
 
     if !response.status().is_success() {
         spinner.finish_error(format!("Failed to download BHC {}", version));
@@ -479,7 +482,8 @@ async fn download_bhc_archive(url: &str, dest: &Path, version: &str, timeout: u6
     let mut downloaded: u64 = 0;
 
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| BhcError::Download(format!("Download interrupted: {}", e)))?;
+        let chunk =
+            chunk.map_err(|e| BhcError::Download(format!("Download interrupted: {}", e)))?;
         file.write_all(&chunk).map_err(BhcError::Io)?;
         downloaded += chunk.len() as u64;
         if let Some(ref pb) = progress {
@@ -519,7 +523,10 @@ fn extract_bhc_archive(archive_path: &Path, dest_dir: &Path, version: &str) -> R
     let mut archive = Archive::new(decoder);
 
     // Extract with strip_components behavior - extract contents directly
-    for entry in archive.entries().map_err(|e| BhcError::Install(e.to_string()))? {
+    for entry in archive
+        .entries()
+        .map_err(|e| BhcError::Install(e.to_string()))?
+    {
         let mut entry = entry.map_err(|e| BhcError::Install(e.to_string()))?;
         let path = entry.path().map_err(|e| BhcError::Install(e.to_string()))?;
 
@@ -536,9 +543,9 @@ fn extract_bhc_archive(archive_path: &Path, dest_dir: &Path, version: &str) -> R
             fs::create_dir_all(parent).map_err(BhcError::Io)?;
         }
 
-        entry
-            .unpack(&dest_path)
-            .map_err(|e| BhcError::Install(format!("Failed to extract {}: {}", stripped.display(), e)))?;
+        entry.unpack(&dest_path).map_err(|e| {
+            BhcError::Install(format!("Failed to extract {}: {}", stripped.display(), e))
+        })?;
     }
 
     spinner.finish_success(format!("Extracted BHC {}", version));
@@ -564,9 +571,7 @@ async fn verify_bhc_installation(install_dir: &Path, expected_version: &str) -> 
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&bhc_path)
-            .map_err(BhcError::Io)?
-            .permissions();
+        let mut perms = fs::metadata(&bhc_path).map_err(BhcError::Io)?.permissions();
         perms.set_mode(0o755);
         fs::set_permissions(&bhc_path, perms).map_err(BhcError::Io)?;
     }
@@ -590,8 +595,7 @@ async fn verify_bhc_installation(install_dir: &Path, expected_version: &str) -> 
         version_output.trim()
     );
 
-    Ok(()
-    )
+    Ok(())
 }
 
 #[cfg(test)]

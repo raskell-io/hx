@@ -21,7 +21,7 @@ use hx_ui::Output;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
-use tracing::{info, debug};
+use tracing::{debug, info};
 
 pub use build::BhcBuildOptions;
 pub use diagnostics::parse_bhc_output;
@@ -59,7 +59,7 @@ impl BhcBackend {
     }
 
     /// Get the BHC executable path.
-    fn bhc_cmd(&self) -> String {
+    pub fn bhc_cmd(&self) -> String {
         self.bhc_path
             .as_ref()
             .map(|p| p.to_string_lossy().to_string())
@@ -91,6 +91,32 @@ impl BhcBackend {
             }
             Ok(version_str.trim().to_string())
         }
+    }
+
+    /// Build command-line arguments for BHC test.
+    pub fn test_args(
+        &self,
+        pattern: Option<&str>,
+        package: Option<&str>,
+        target: Option<&str>,
+    ) -> Vec<String> {
+        let mut args = vec!["test".to_string()];
+
+        if let Some(pkg) = package {
+            args.push(pkg.to_string());
+        }
+
+        if let Some(pat) = pattern {
+            args.push(format!("--pattern={}", pat));
+        }
+
+        if let Some(tgt) = target {
+            args.push(format!("--target={}", tgt));
+        } else if let Some(ref tgt) = self.config.target {
+            args.push(format!("--target={}", tgt));
+        }
+
+        args
     }
 
     /// Build command-line arguments for BHC.
@@ -385,6 +411,24 @@ mod tests {
         let args = backend.build_args(&options);
 
         assert!(args.contains(&"-O2".to_string()));
+    }
+
+    #[test]
+    fn test_test_args_default() {
+        let backend = BhcBackend::new();
+        let args = backend.test_args(None, None, None);
+
+        assert_eq!(args, vec!["test".to_string()]);
+    }
+
+    #[test]
+    fn test_test_args_with_pattern() {
+        let backend = BhcBackend::new();
+        let args = backend.test_args(Some("MyModule"), Some("my-pkg"), None);
+
+        assert!(args.contains(&"test".to_string()));
+        assert!(args.contains(&"my-pkg".to_string()));
+        assert!(args.contains(&"--pattern=MyModule".to_string()));
     }
 
     #[test]

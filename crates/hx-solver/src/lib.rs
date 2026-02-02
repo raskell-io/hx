@@ -27,6 +27,7 @@
 //! }
 //! ```
 
+pub mod bhc_platform;
 pub mod cabal;
 pub mod cache;
 pub mod extract;

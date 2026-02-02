@@ -246,7 +246,10 @@ executable test
             result.contains("^>=4.20,"),
             "should add comma to previous dep"
         );
-        assert!(result.contains("        text"), "should add text with proper indent");
+        assert!(
+            result.contains("        text"),
+            "should add text with proper indent"
+        );
         // Verify the file is still valid (text comes before ghc-options)
         let text_pos = result.find("text").unwrap();
         let ghc_pos = result.find("ghc-options").unwrap();

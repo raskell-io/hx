@@ -202,6 +202,19 @@ pub struct StackageConfig {
     pub extra_deps: HashMap<String, String>,
 }
 
+/// BHC Platform curated snapshot configuration section.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct BhcPlatformConfig {
+    /// BHC Platform snapshot to use (e.g., "bhc-platform-2026.1")
+    pub snapshot: Option<String>,
+    /// Whether to allow packages not in the platform set
+    #[serde(default)]
+    pub allow_newer: bool,
+    /// Extra packages to add with specific versions (overrides platform)
+    #[serde(default)]
+    pub extra_deps: HashMap<String, String>,
+}
+
 /// Format configuration section.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FormatConfig {
@@ -379,6 +392,10 @@ pub struct Manifest {
     #[serde(default)]
     pub stackage: StackageConfig,
 
+    /// BHC Platform curated snapshot configuration
+    #[serde(default, rename = "bhc-platform")]
+    pub bhc_platform: BhcPlatformConfig,
+
     /// Build configuration
     #[serde(default)]
     pub build: BuildConfig,
@@ -435,6 +452,7 @@ impl Manifest {
             toolchain: ToolchainConfig::default(),
             compiler: CompilerConfig::default(),
             stackage: StackageConfig::default(),
+            bhc_platform: BhcPlatformConfig::default(),
             build: BuildConfig::default(),
             format: FormatConfig::default(),
             lint: LintConfig::default(),
@@ -460,6 +478,8 @@ impl Manifest {
             compiler: self.compiler,
             // Stackage config is project-specific only
             stackage: self.stackage,
+            // BHC Platform config is project-specific only
+            bhc_platform: self.bhc_platform,
             // Merge build (project takes precedence)
             build: self.build.combine(global.build.clone()),
             // Merge format (project takes precedence)

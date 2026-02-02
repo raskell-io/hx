@@ -15,6 +15,7 @@ use std::time::Instant;
 use crate::plugins::PluginHooks;
 
 /// Run the build command.
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     release: bool,
     jobs: Option<usize>,
@@ -264,9 +265,9 @@ pub async fn test(
     // Determine compiler backend (CLI override > config > default)
     let backend = backend_override.unwrap_or(project.manifest.compiler.backend);
 
-    // BHC test support would go here
+    // Use BHC backend for testing
     if backend == CompilerBackend::Bhc {
-        output.warn("BHC test support is not yet implemented, falling back to GHC");
+        return run_bhc_test(&project, pattern, package, target, output).await;
     }
 
     // Check toolchain requirements
@@ -647,5 +648,101 @@ async fn run_bhc_build(
             output.error(&format!("BHC build failed: {}", e));
             Ok(5)
         }
+    }
+}
+
+/// Run tests using the BHC backend.
+async fn run_bhc_test(
+    project: &Project,
+    pattern: Option<String>,
+    package: Option<String>,
+    target: Option<String>,
+    output: &Output,
+) -> Result<i32> {
+    use hx_bhc::{BhcBackend, generate_bhc_manifest};
+    use hx_compiler::CompilerBackend as Backend;
+
+    output.status("Testing", &format!("{} (BHC)", project.name()));
+
+    // Generate bhc.toml from hx.toml
+    match generate_bhc_manifest(&project.root, &project.manifest) {
+        Ok(path) => {
+            output.verbose(&format!("Generated BHC manifest at {}", path.display()));
+        }
+        Err(e) => {
+            output.error(&format!("Failed to generate BHC manifest: {}", e));
+            return Ok(3);
+        }
+    }
+
+    // Create BHC backend with project configuration
+    let bhc_config = &project.manifest.compiler.bhc;
+    let backend = BhcBackend::new().with_config(bhc_config.clone());
+
+    // Check if BHC is available
+    let status = backend.detect().await;
+    match status {
+        Ok(hx_compiler::CompilerStatus::Available { version, .. }) => {
+            output.verbose(&format!("BHC version: {}", version));
+        }
+        Ok(hx_compiler::CompilerStatus::NotInstalled) => {
+            output.error("BHC is not installed");
+            output.info("Install BHC with: hx toolchain install --bhc latest");
+            return Ok(4);
+        }
+        Ok(hx_compiler::CompilerStatus::VersionMismatch {
+            required,
+            installed,
+        }) => {
+            output.warn(&format!(
+                "BHC version mismatch: required {}, installed {}",
+                required, installed
+            ));
+        }
+        Err(e) => {
+            output.error(&format!("Failed to detect BHC: {}", e));
+            return Ok(4);
+        }
+    }
+
+    // Build test arguments using the backend's test_args helper
+    let bhc_cmd = backend.bhc_cmd();
+    let args = backend.test_args(pattern.as_deref(), package.as_deref(), target.as_deref());
+
+    let start = std::time::Instant::now();
+
+    let cmd_output = std::process::Command::new(&bhc_cmd)
+        .args(&args)
+        .current_dir(&project.root)
+        .output()?;
+
+    let duration = start.elapsed();
+    let success = cmd_output.status.success();
+
+    let stdout = String::from_utf8_lossy(&cmd_output.stdout);
+    let stderr = String::from_utf8_lossy(&cmd_output.stderr);
+
+    if output.is_verbose() || !success {
+        if !stdout.is_empty() {
+            output.verbose(&stdout);
+        }
+        if !stderr.is_empty() {
+            if success {
+                output.verbose(&stderr);
+            } else {
+                eprintln!("{}", stderr);
+            }
+        }
+    }
+
+    if success {
+        output.status(
+            "Finished",
+            &format!("BHC tests in {}", format_build_duration(duration)),
+        );
+        Ok(0)
+    } else {
+        output.error("BHC tests failed");
+        Ok(5)
     }
 }

@@ -1,4 +1,4 @@
-//! Web application template using Servant.
+//! Server application template using BHC with Servant.
 
 use super::TemplateFile;
 
@@ -32,6 +32,10 @@ pub const FILES: &[TemplateFile] = &[
         content: SERVER_HS,
     },
     TemplateFile {
+        path: "src/Config.hs",
+        content: CONFIG_HS,
+    },
+    TemplateFile {
         path: "src/Types.hs",
         content: TYPES_HS,
     },
@@ -44,7 +48,7 @@ pub const FILES: &[TemplateFile] = &[
 const CABAL_FILE: &str = r#"cabal-version: 3.0
 name:          {{project_name}}
 version:       0.1.0.0
-synopsis:      A web application built with Servant
+synopsis:      A server application built with Servant and BHC
 license:       MIT
 author:        {{author}}
 maintainer:    {{author}}
@@ -64,12 +68,14 @@ executable {{project_name}}
         warp ^>=3.3,
     hs-source-dirs:   app
     default-language: GHC2021
+    ghc-options:      -threaded -rtsopts -with-rtsopts=-N
 
 library
     import:           warnings
     exposed-modules:
         Api
         Server
+        Config
         Types
     build-depends:
         base ^>=4.18 || ^>=4.19 || ^>=4.20,
@@ -78,6 +84,7 @@ library
         servant-server ^>=0.20,
         text ^>=2.1,
         wai ^>=3.2,
+        wai-extra ^>=3.1,
     hs-source-dirs:   src
     default-language: GHC2021
 
@@ -105,7 +112,13 @@ version = "0.1.0.0"
 [toolchain]
 # Uncomment to pin GHC version
 # ghc = "9.8.2"
-{{backend_config}}"#;
+
+[compiler]
+backend = "bhc"
+
+[compiler.bhc]
+profile = "server"
+"#;
 
 const GITIGNORE: &str = r#"# hx build artifacts
 .hx/
@@ -123,7 +136,8 @@ dist-newstyle/
 
 const README: &str = r#"# {{project_name}}
 
-A web application built with [Servant](https://docs.servant.dev/).
+A server application built with [Servant](https://docs.servant.dev/) and
+[BHC](https://bhc.dev/) (server profile).
 
 ## Building
 
@@ -150,20 +164,40 @@ The server will start on http://localhost:8080
 hx test
 ```
 
+## Configuration
+
+The server reads configuration from environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `8080` | Server port |
+| `HOST` | `0.0.0.0` | Server host |
+
+## BHC Server Profile
+
+This project uses BHC with the `server` profile, which provides:
+
+- Optimized runtime for long-running server processes
+- Improved GC behavior for request/response workloads
+- Efficient concurrent I/O handling
+
 ## Development
 
-This project was generated with `hx new webapp`.
+This project was generated with `hx new server`.
 "#;
 
 const MAIN_HS: &str = r#"module Main where
 
 import Network.Wai.Handler.Warp (run)
+import Config (loadConfig, configPort)
 import Server (app)
 
 main :: IO ()
 main = do
-    putStrLn "Starting server on http://localhost:8080"
-    run 8080 app
+    config <- loadConfig
+    let port = configPort config
+    putStrLn $ "Starting server on http://localhost:" ++ show port
+    run port app
 "#;
 
 const API_HS: &str = r#"-- | API type definition
@@ -173,11 +207,11 @@ module Api
     ) where
 
 import Servant
-import Types (Greeting)
+import Types (Greeting, HealthStatus)
 
 -- | The full API type
 type API =
-    "health" :> Get '[JSON] String
+    "health" :> Get '[JSON] HealthStatus
     :<|> "api" :> "hello" :> Capture "name" String :> Get '[JSON] Greeting
 
 -- | Proxy for the API type
@@ -192,20 +226,25 @@ module Server
     ) where
 
 import Servant
+import Network.Wai (Middleware)
+import Network.Wai.Middleware.RequestLogger (logStdoutDev)
 import Api (API, api)
-import Types (Greeting(..))
+import Types (Greeting(..), HealthStatus(..))
 
--- | WAI Application
+-- | WAI Application with logging middleware
 app :: Application
-app = serve api server
+app = logStdoutDev $ serve api server
 
 -- | Server implementation
 server :: Server API
 server = healthHandler :<|> helloHandler
 
 -- | Health check handler
-healthHandler :: Handler String
-healthHandler = pure "OK"
+healthHandler :: Handler HealthStatus
+healthHandler = pure $ HealthStatus
+    { hsStatus = "ok"
+    , hsVersion = "0.1.0.0"
+    }
 
 -- | Hello handler
 helloHandler :: String -> Handler Greeting
@@ -214,9 +253,64 @@ helloHandler name = pure $ Greeting
     }
 "#;
 
+const CONFIG_HS: &str = r#"-- | Environment-based configuration
+module Config
+    ( AppConfig(..)
+    , loadConfig
+    , configPort
+    ) where
+
+import System.Environment (lookupEnv)
+import System.IO (hPutStrLn, stderr)
+
+-- | Application configuration
+data AppConfig = AppConfig
+    { appPort :: Int
+    , appHost :: String
+    }
+    deriving stock (Show, Eq)
+
+-- | Default configuration
+defaultConfig :: AppConfig
+defaultConfig = AppConfig
+    { appPort = 8080
+    , appHost = "0.0.0.0"
+    }
+
+-- | Load configuration from environment variables
+loadConfig :: IO AppConfig
+loadConfig = do
+    port <- lookupEnvDefault "PORT" (appPort defaultConfig) readMaybe
+    host <- lookupEnvDefault "HOST" (appHost defaultConfig) Just
+    pure AppConfig { appPort = port, appHost = host }
+
+-- | Get the configured port
+configPort :: AppConfig -> Int
+configPort = appPort
+
+-- | Look up an environment variable with a default value
+lookupEnvDefault :: String -> a -> (String -> Maybe a) -> IO a
+lookupEnvDefault key def parser = do
+    result <- lookupEnv key
+    case result of
+        Nothing -> pure def
+        Just val -> case parser val of
+            Just parsed -> pure parsed
+            Nothing -> do
+                hPutStrLn stderr $ "Warning: invalid value for " ++ key ++ ": " ++ val
+                pure def
+
+-- | Simple read parser
+readMaybe :: Read a => String -> Maybe a
+readMaybe s = case reads s of
+    [(x, "")] -> Just x
+    _ -> Nothing
+"#;
+
 const TYPES_HS: &str = r#"-- | Shared types
 module Types
     ( Greeting(..)
+    , HealthStatus(..)
     ) where
 
 import Data.Aeson (ToJSON, FromJSON)
@@ -226,6 +320,14 @@ import GHC.Generics (Generic)
 -- | Greeting response
 data Greeting = Greeting
     { greetingMessage :: Text
+    }
+    deriving stock (Show, Eq, Generic)
+    deriving anyclass (ToJSON, FromJSON)
+
+-- | Health check response
+data HealthStatus = HealthStatus
+    { hsStatus :: Text
+    , hsVersion :: Text
     }
     deriving stock (Show, Eq, Generic)
     deriving anyclass (ToJSON, FromJSON)

@@ -19,12 +19,20 @@ pub async fn run(command: NewCommands, output: &Output) -> Result<i32> {
         }
         NewCommands::Test { name } => create_test_module(&name, output),
         NewCommands::Benchmark { name } => create_benchmark_module(&name, output),
-        NewCommands::Webapp { name, dir } => {
-            create_project_from_template(&name, dir, "webapp", output)
+        NewCommands::Webapp { name, dir, backend } => {
+            create_project_from_template(&name, dir, "webapp", backend, output)
         }
-        NewCommands::Cli { name, dir } => create_project_from_template(&name, dir, "cli", output),
-        NewCommands::Library { name, dir } => {
-            create_project_from_template(&name, dir, "library", output)
+        NewCommands::Cli { name, dir, backend } => {
+            create_project_from_template(&name, dir, "cli", backend, output)
+        }
+        NewCommands::Library { name, dir, backend } => {
+            create_project_from_template(&name, dir, "library", backend, output)
+        }
+        NewCommands::Numeric { name, dir } => {
+            create_project_from_template(&name, dir, "numeric", None, output)
+        }
+        NewCommands::Server { name, dir } => {
+            create_project_from_template(&name, dir, "server", None, output)
         }
         NewCommands::Template {
             url,
@@ -39,6 +47,7 @@ fn create_project_from_template(
     name: &str,
     dir: Option<String>,
     template: &str,
+    backend: Option<hx_config::CompilerBackend>,
     output: &Output,
 ) -> Result<i32> {
     let target_dir = dir.unwrap_or_else(|| name.to_string());
@@ -67,11 +76,13 @@ fn create_project_from_template(
         "webapp" => templates::webapp::FILES,
         "cli" => templates::cli::FILES,
         "library" => templates::library::FILES,
+        "numeric" => templates::numeric::FILES,
+        "server" => templates::server::FILES,
         _ => unreachable!("Unknown template: {}", template),
     };
 
     // Create context for variable substitution
-    let ctx = TemplateContext::new(name);
+    let ctx = TemplateContext::with_backend(name, backend);
 
     // Write all template files
     for file in files {
@@ -111,10 +122,12 @@ fn create_project_from_template(
     output.info(&format!("  cd {}", target_dir));
     output.info("  hx build");
 
-    if template == "webapp" {
+    if template == "webapp" || template == "server" {
         output.info("  hx run  # starts server on http://localhost:8080");
     } else if template == "cli" {
         output.info("  hx run -- --help");
+    } else if template == "numeric" {
+        output.info("  hx run  # runs numeric computation");
     }
 
     Ok(0)

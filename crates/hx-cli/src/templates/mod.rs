@@ -2,7 +2,11 @@
 
 pub mod cli;
 pub mod library;
+pub mod numeric;
+pub mod server;
 pub mod webapp;
+
+use hx_config::CompilerBackend;
 
 /// Template variable substitution context.
 pub struct TemplateContext {
@@ -10,10 +14,15 @@ pub struct TemplateContext {
     pub module_name: String,
     pub author: String,
     pub year: String,
+    pub backend: Option<CompilerBackend>,
 }
 
 impl TemplateContext {
     pub fn new(project_name: &str) -> Self {
+        Self::with_backend(project_name, None)
+    }
+
+    pub fn with_backend(project_name: &str, backend: Option<CompilerBackend>) -> Self {
         // Convert project name to module name (kebab-case to PascalCase)
         let module_name = project_name
             .split('-')
@@ -42,16 +51,23 @@ impl TemplateContext {
             module_name,
             author,
             year,
+            backend,
         }
     }
 
     /// Substitute template variables in content.
     pub fn substitute(&self, content: &str) -> String {
+        let backend_config = match self.backend {
+            Some(CompilerBackend::Bhc) => "\n[compiler]\nbackend = \"bhc\"\n",
+            _ => "",
+        };
+
         content
             .replace("{{project_name}}", &self.project_name)
             .replace("{{module_name}}", &self.module_name)
             .replace("{{author}}", &self.author)
             .replace("{{year}}", &self.year)
+            .replace("{{backend_config}}", backend_config)
     }
 }
 

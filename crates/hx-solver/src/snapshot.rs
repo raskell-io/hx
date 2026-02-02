@@ -46,6 +46,8 @@ pub enum SnapshotType {
     Lts,
     /// Nightly snapshot (e.g., nightly-2024-01-15)
     Nightly,
+    /// BHC Platform curated snapshot (e.g., bhc-platform-2026.1)
+    BhcPlatform,
 }
 
 /// Parsed Stackage snapshot identifier.
@@ -78,9 +80,11 @@ impl SnapshotId {
             Self::parse_lts(&s)
         } else if s.starts_with("nightly") {
             Self::parse_nightly(&s)
+        } else if s.starts_with("bhc-platform") {
+            Self::parse_bhc_platform(&s)
         } else {
             Err(SnapshotError::InvalidIdentifier(format!(
-                "snapshot must start with 'lts' or 'nightly': {}",
+                "snapshot must start with 'lts', 'nightly', or 'bhc-platform': {}",
                 s
             )))
         }
@@ -179,6 +183,39 @@ impl SnapshotId {
         })
     }
 
+    fn parse_bhc_platform(s: &str) -> Result<Self, SnapshotError> {
+        // Format: bhc-platform-YYYY.N
+        let rest = s.strip_prefix("bhc-platform-").ok_or_else(|| {
+            SnapshotError::InvalidIdentifier(format!("invalid BHC platform format: {}", s))
+        })?;
+
+        let parts: Vec<&str> = rest.split('.').collect();
+        match parts.as_slice() {
+            [year, rev] => {
+                let _year: u32 = year.parse().map_err(|_| {
+                    SnapshotError::InvalidIdentifier(format!("invalid BHC platform year: {}", year))
+                })?;
+                let _rev: u32 = rev.parse().map_err(|_| {
+                    SnapshotError::InvalidIdentifier(format!(
+                        "invalid BHC platform revision: {}",
+                        rev
+                    ))
+                })?;
+                Ok(Self {
+                    snapshot_type: SnapshotType::BhcPlatform,
+                    raw: s.to_string(),
+                    major: Some(_year),
+                    minor: Some(_rev),
+                    date: None,
+                })
+            }
+            _ => Err(SnapshotError::InvalidIdentifier(format!(
+                "BHC platform must be bhc-platform-YYYY.N: {}",
+                s
+            ))),
+        }
+    }
+
     /// Get the canonical snapshot key for URLs/caching.
     pub fn key(&self) -> String {
         self.raw.clone()
@@ -189,6 +226,7 @@ impl SnapshotId {
         match self.snapshot_type {
             SnapshotType::Lts => self.major.is_some() && self.minor.is_some(),
             SnapshotType::Nightly => self.date.is_some(),
+            SnapshotType::BhcPlatform => self.major.is_some() && self.minor.is_some(),
         }
     }
 }
@@ -210,6 +248,12 @@ pub struct SnapshotMetadata {
     pub package_count: usize,
     /// When the snapshot was created
     pub created: Option<String>,
+    /// BHC version (for BHC Platform snapshots)
+    #[serde(default)]
+    pub bhc_version: Option<String>,
+    /// Recommended BHC profile (for BHC Platform snapshots)
+    #[serde(default)]
+    pub recommended_profile: Option<String>,
 }
 
 /// A package version in a Stackage snapshot.
@@ -403,6 +447,8 @@ fn parse_cabal_config(content: &str, snapshot: &SnapshotId) -> Result<Snapshot, 
         ghc_version,
         package_count: packages.len(),
         created: None,
+        bhc_version: None,
+        recommended_profile: None,
     };
 
     Ok(Snapshot { metadata, packages })
@@ -478,6 +524,7 @@ fn infer_ghc_version(snapshot: &SnapshotId) -> String {
             }
         }
         SnapshotType::Nightly => "9.8.2".to_string(), // Nightly typically uses latest
+        SnapshotType::BhcPlatform => "9.8.2".to_string(), // BHC platforms target latest stable
     }
 }
 
@@ -486,6 +533,11 @@ pub async fn load_snapshot(
     snapshot: &SnapshotId,
     cache_dir: Option<&Path>,
 ) -> Result<Snapshot, SnapshotError> {
+    // BHC Platform snapshots are loaded from embedded data
+    if snapshot.snapshot_type == SnapshotType::BhcPlatform {
+        return crate::bhc_platform::load_bhc_platform(snapshot);
+    }
+
     // Check cache first
     let cache_path = cache_dir
         .map(|d| d.join(format!("{}.json", snapshot.key())))
@@ -658,6 +710,28 @@ mod tests {
         assert_eq!(id.snapshot_type, SnapshotType::Nightly);
         assert_eq!(id.date, None);
         assert!(!id.is_specific());
+    }
+
+    #[test]
+    fn test_parse_bhc_platform_id() {
+        let id = SnapshotId::parse("bhc-platform-2026.1").unwrap();
+        assert_eq!(id.snapshot_type, SnapshotType::BhcPlatform);
+        assert_eq!(id.major, Some(2026));
+        assert_eq!(id.minor, Some(1));
+        assert!(id.is_specific());
+    }
+
+    #[test]
+    fn test_bhc_platform_key() {
+        let id = SnapshotId::parse("bhc-platform-2026.1").unwrap();
+        assert_eq!(id.key(), "bhc-platform-2026.1");
+    }
+
+    #[test]
+    fn test_parse_bhc_platform_invalid() {
+        assert!(SnapshotId::parse("bhc-platform-").is_err());
+        assert!(SnapshotId::parse("bhc-platform-abc").is_err());
+        assert!(SnapshotId::parse("bhc-platform-2026").is_err());
     }
 
     #[test]

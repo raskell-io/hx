@@ -2,6 +2,7 @@
 
 mod audit;
 mod bench;
+mod bhc_platform;
 mod build;
 mod cache;
 mod changelog;
@@ -37,9 +38,9 @@ mod upgrade;
 mod watch;
 
 use crate::cli::{
-    ArtifactCommands, CacheCommands, Cli, Commands, CompletionsCommands, ConfigCommands,
-    DepsCommands, DistCommands, GlobalArgs, GraphFormat, IndexCommands, NixCommands,
-    PluginsCommands, ServerCommands,
+    ArtifactCommands, BhcPlatformCommands, CacheCommands, Cli, Commands, CompletionsCommands,
+    ConfigCommands, DepsCommands, DistCommands, GlobalArgs, GraphFormat, IndexCommands,
+    NixCommands, PluginsCommands, ServerCommands,
 };
 use anyhow::Result;
 use hx_toolchain::AutoInstallPolicy;
@@ -78,7 +79,8 @@ pub async fn run(cli: Cli) -> Result<i32> {
             lib,
             name,
             ci,
-        }) => init::run(path, lib, name, ci, &output).await,
+            backend,
+        }) => init::run(path, lib, name, ci, backend, &output).await,
         Some(Commands::Build {
             release,
             jobs,
@@ -328,6 +330,13 @@ pub async fn run(cli: Cli) -> Result<i32> {
             ConfigCommands::Set { key, value } => config::set(&key, &value, &output).await,
             ConfigCommands::Get { key } => config::get(&key, &output).await,
             ConfigCommands::Init { force } => config::init(force, &output).await,
+        },
+        Some(Commands::BhcPlatform { command }) => match command {
+            BhcPlatformCommands::List => bhc_platform::list(&output).await,
+            BhcPlatformCommands::Info { platform, packages } => {
+                bhc_platform::info(&platform, packages, &output).await
+            }
+            BhcPlatformCommands::Set { platform } => bhc_platform::set(&platform, &output).await,
         },
         Some(Commands::Server { command }) => match command {
             ServerCommands::Start => server::start(&output).await,

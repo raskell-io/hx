@@ -21,6 +21,9 @@ dirs-next = "2.0"
 # Time
 chrono = { version = "0.4", features = ["serde"] }
 
+# TOML
+toml = "0.8"
+
 # Utilities
 thiserror = "2"
 tracing = "0.1"
