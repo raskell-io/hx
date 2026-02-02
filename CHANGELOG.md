@@ -7,8 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-02-02
+
 ### Added
+- **BHC test and run commands** - Full BHC backend support for `hx test` and `hx run`, replacing previous stubs with implementations that generate manifests, detect the backend, and invoke `bhc test`/`bhc run`
+- **`--backend` flag on init/new** - `hx init --backend bhc` and `hx new <template> --backend bhc` to scaffold projects with BHC from the start
+- **Numeric project template** - `hx new numeric <name>` creates a BHC-optimized numeric computing project with hmatrix, vector, statistics, and massiv dependencies
+- **Server project template** - `hx new server <name>` creates a BHC-optimized web server project with Servant, Warp, and WAI dependencies
+- **BHC Platform curated snapshots** - Stackage-like curated package sets for BHC
+  - `hx bhc-platform list` - List available BHC Platform snapshots
+  - `hx bhc-platform info <platform>` - Show snapshot details and packages
+  - `hx bhc-platform set <platform>` - Set snapshot for current project
+  - `bhc-platform-2026.1` initial snapshot with ~70 curated packages
+  - `[bhc-platform]` configuration section in hx.toml
+  - Lock/resolver integration for pinning BHC Platform package versions
 - **WinGet distribution** - `winget install raskell-io.hx` now available on Windows ([winget-pkgs#333584](https://github.com/microsoft/winget-pkgs/pull/333584))
+
+### Changed
+- Template system now supports `{{backend_config}}` substitution for compiler backend configuration
+- `BhcPlatform` snapshot type added to the solver alongside Stackage LTS/Nightly
+- `BhcPlatformConfig` added to manifest with `snapshot`, `allow_newer`, and `extra_deps` fields
+
+### Fixed
+- Pre-existing clippy warnings across hx-bhc, hx-cabal, hx-doctor, and hx-cli (collapsible_if, wildcard_in_or_patterns, too_many_arguments)
 
 ## [0.4.0] - 2026-01-18
 
@@ -188,7 +209,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration test infrastructure with assert_cmd
 - CI/CD with GitHub Actions (Linux, macOS, Windows)
 
-[Unreleased]: https://github.com/raskell-io/hx/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/raskell-io/hx/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/raskell-io/hx/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/raskell-io/hx/compare/v0.3.6...v0.4.0
 [0.3.6]: https://github.com/raskell-io/hx/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/raskell-io/hx/compare/v0.3.0...v0.3.5
