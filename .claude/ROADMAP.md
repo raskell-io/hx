@@ -282,7 +282,61 @@ hx v0.1.0 is shippable when:
 
 ---
 
-## v0.4.0 - Cloud & Enterprise
+## v0.4.0 - BHC Foundation ✅
+
+### BHC Compiler Backend ✅
+- [x] `CompilerBackend` trait abstraction (`hx-compiler` crate)
+- [x] `hx-bhc` crate implementing BHC backend
+- [x] `[compiler]` section in hx.toml for backend configuration
+- [x] `--backend` flag on build/test/run to override compiler selection
+- [x] BHC profiles: default, server, numeric, edge
+- [x] BHC diagnostics parsing
+
+---
+
+## v0.5.0 - Deep BHC Integration ✅
+
+### BHC Test & Run ✅
+- [x] Full `hx test --backend bhc` implementation
+  - [x] BHC manifest generation
+  - [x] Backend detection and version checking
+  - [x] Test argument construction with pattern/package/target support
+- [x] Full `hx run --backend bhc` implementation
+  - [x] BHC manifest generation
+  - [x] RunOptions with args, package, target, verbose
+
+### `--backend` on Init & New ✅
+- [x] `hx init --backend bhc` sets compiler backend in hx.toml
+- [x] `hx new webapp|cli|library --backend bhc` with backend config in templates
+- [x] `{{backend_config}}` template substitution system
+
+### BHC Project Templates ✅
+- [x] `hx new numeric <name>` - Numeric computing template
+  - [x] BHC numeric profile with tensor_fusion enabled
+  - [x] hmatrix, vector, statistics, massiv dependencies
+  - [x] Example matrix/vector computations
+  - [x] Property tests with QuickCheck
+- [x] `hx new server <name>` - Web server template
+  - [x] BHC server profile
+  - [x] Servant API with Warp server
+  - [x] WAI middleware (logging)
+  - [x] Environment-based configuration
+  - [x] hspec-wai integration tests
+
+### BHC Platform Curated Snapshots ✅
+- [x] `BhcPlatform` snapshot type in solver
+  - [x] `SnapshotId` parsing for `bhc-platform-YYYY.N` format
+  - [x] Embedded TOML snapshot data via `include_str!`
+- [x] `bhc-platform-2026.1` initial snapshot (~70 curated packages)
+- [x] `[bhc-platform]` config section in hx.toml (snapshot, allow_newer, extra_deps)
+- [x] `hx bhc-platform list` - List available snapshots
+- [x] `hx bhc-platform info <platform> [--packages]` - Show snapshot details
+- [x] `hx bhc-platform set <platform>` - Set snapshot for project
+- [x] Lock/resolver integration: pin BHC Platform package versions
+
+---
+
+## v0.6.0 - Cloud & Enterprise
 
 ### Cloud Builds
 - [ ] Remote build execution
@@ -290,20 +344,27 @@ hx v0.1.0 is shippable when:
   - [ ] Distributed compilation
   - [ ] Result caching and sharing
 
+### BHC Platform Expansion
+- [ ] Additional curated snapshots (bhc-platform-2026.2, etc.)
+- [ ] Remote snapshot fetching (beyond embedded data)
+- [ ] Snapshot diffing between versions
+
 ---
 
 ## Command Namespace (Current)
 
 ```
-hx init [--bin|--lib] [--ci]
-hx build [--package <name>] [--native] [--target <triple>]
-hx test [--package <name>] [--target <triple>]
-hx run [--package <name>] [--target <triple>]
+hx init [--bin|--lib] [--ci] [--backend bhc|ghc]
+hx build [--package <name>] [--native] [--target <triple>] [--backend bhc|ghc]
+hx test [--package <name>] [--target <triple>] [--backend bhc|ghc]
+hx run [--package <name>] [--target <triple>] [--backend bhc|ghc]
 hx repl
-hx check
+hx check [--backend bhc|ghc]
 
 hx new module|test|benchmark <name>
-hx new webapp|cli|library <name>
+hx new webapp|cli|library <name> [--backend bhc|ghc]
+hx new numeric <name>
+hx new server <name>
 hx new --template <git-url> <name>
 hx bench [--package <name>]
 hx docs [--open] [--deps] [--serve]
@@ -339,6 +400,14 @@ hx stackage list [--lts] [--nightly] [--limit <n>]
 hx stackage info <snapshot> [--packages]
 hx stackage set <snapshot>
 
+hx bhc-platform list
+hx bhc-platform info <platform> [--packages]
+hx bhc-platform set <platform>
+
+hx config show|path|edit|init
+hx config set <key> <value>
+hx config get <key>
+
 hx nix flake|shell [--output <file>]
 hx profile [--heap] [--time] <args>
 hx script <file.hs> [args]
@@ -368,8 +437,9 @@ hx server stop
 hx server status
 hx server restart
 
-hx completions <shell>
-hx upgrade [--check]
+hx completions generate|install <shell>
+hx completions manpages [--output <dir>]
+hx upgrade [--check] [--target <version>]
 ```
 
 ---
