@@ -61,6 +61,12 @@ curl -fsSL https://raw.githubusercontent.com/raskell-io/hx/main/install.sh | sh
 https://github.com/raskell-io/hx/releases
 ```
 
+### Windows
+
+```
+winget install raskell-io.hx
+```
+
 ### From source
 
 ```bash

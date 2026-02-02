@@ -18,6 +18,12 @@ You need either:
 curl -fsSL https://raw.githubusercontent.com/raskell-io/hx/main/install.sh | sh
 ```
 
+**Windows:**
+
+```
+winget install raskell-io.hx
+```
+
 **From source (requires Rust):**
 
 ```bash

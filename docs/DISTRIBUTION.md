@@ -12,6 +12,7 @@ Tracking all places where hx is or could be available.
 | Scoop | `scoop bucket add raskell-io ...` | [scoop-bucket](https://github.com/raskell-io/scoop-bucket) |
 | aqua | `aqua g -i raskell-io/hx` | [aqua-registry](https://github.com/aquaproj/aqua-registry) |
 | pkgx | `pkgx hx` | [pantry](https://github.com/pkgxdev/pantry) |
+| WinGet | `winget install raskell-io.hx` | [winget-pkgs](https://github.com/microsoft/winget-pkgs/tree/master/manifests/r/raskell-io/hx) |
 
 ## Pending (PRs submitted)
 
@@ -20,7 +21,6 @@ Tracking all places where hx is or could be available.
 | Nixpkgs | PR open (maintainers want more adoption first) | https://github.com/NixOS/nixpkgs/pull/483671 |
 | asdf | PR open | https://github.com/asdf-vm/asdf-plugins/pull/1140 |
 | mise | Uses asdf plugin | (waiting on asdf PR) |
-| WinGet | PR open (CLA signed) | https://github.com/microsoft/winget-pkgs/pull/333584 |
 
 ## Pending (manual action needed)
 
