@@ -8,12 +8,12 @@ For full benchmark documentation with methodology, see: https://hx.raskell.io/be
 
 | Property | Value |
 |----------|-------|
-| **hx version** | 0.4.0 |
+| **hx version** | 0.5.0 |
 | **GHC version** | 9.8.2 |
 | **Cabal version** | 3.12.1.0 |
 | **Stack version** | 2.15.1 |
 | **Platform** | macOS (Apple Silicon M4) |
-| **Date** | 2026-01-18 |
+| **Date** | 2026-02-02 |
 
 ## Executive Summary
 
@@ -205,6 +205,7 @@ open target/criterion/report/index.html
 
 | Version | Date | Native Cold | Cabal Cold | Speedup |
 |---------|------|-------------|------------|---------|
+| 0.5.0 | 2026-02-02 | 0.48s | 2.68s | 5.6x |
 | 0.4.0 | 2026-01-18 | 0.48s | 2.68s | 5.6x |
 | 0.3.6 | 2026-01-17 | 0.48s | 2.68s | 5.6x |
 | 0.3.0 | 2026-01-10 | 0.52s | 2.68s | 5.2x |

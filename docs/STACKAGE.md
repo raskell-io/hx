@@ -2,6 +2,8 @@
 
 hx supports [Stackage](https://www.stackage.org/) snapshots for reproducible builds with curated, compatible package versions.
 
+> **Using BHC?** See [BHC_PLATFORM.md](./BHC_PLATFORM.md) for BHC Platform curated snapshots, the BHC equivalent of Stackage.
+
 ## Configuration
 
 Add a snapshot to your `hx.toml`:

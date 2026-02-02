@@ -58,6 +58,7 @@ This means hx is currently an orchestrator. Under the hood, it calls:
 - `ghcup` for toolchain installation
 - `cabal` for building and dependency management
 - `ghc` directly for native builds (simple projects)
+- `bhc` (Basel Haskell Compiler) as an alternative compiler backend
 - `fourmolu`/`ormolu` for formatting
 - `hlint` for linting
 - `haskell-language-server` for IDE features
@@ -166,12 +167,19 @@ User Command
 ┌─────────┐     ┌───────────┐     ┌──────────────┐
 │ hx-core │ ──▶ │ hx-solver │ ──▶ │  hx-cabal    │
 └─────────┘     └───────────┘     └──────────────┘
-     │                                    │
-     ▼                                    ▼
-┌─────────┐                       ┌──────────────┐
-│  hx-ui  │ ◀──────────────────── │   GHC/HLS    │
-└─────────┘                       └──────────────┘
+     │               │                    │
+     ▼               ▼                    ▼
+┌─────────┐   ┌────────────┐     ┌──────────────┐
+│  hx-ui  │   │  hx-bhc    │     │   GHC/HLS    │
+└─────────┘   └────────────┘     └──────────────┘
+                    │
+                    ▼
+              ┌────────────┐
+              │    BHC      │
+              └────────────┘
 ```
+
+When the compiler backend is set to BHC, `hx-bhc` handles build/test/run instead of `hx-cabal`. The `hx-solver` also integrates BHC Platform snapshots for curated package sets.
 
 ### Error Philosophy ("The Astral Effect")
 
@@ -328,6 +336,7 @@ For end-user documentation on how to use hx, visit the official docs site:
 | [docs/BENCHMARKS.md](./BENCHMARKS.md) | Performance benchmarks |
 | [docs/CROSS_COMPILATION.md](./CROSS_COMPILATION.md) | Cross-compilation guide |
 | [docs/STACKAGE.md](./STACKAGE.md) | Stackage integration |
+| [docs/BHC_PLATFORM.md](./BHC_PLATFORM.md) | BHC Platform snapshots |
 
 ### AI-Assisted Development
 
@@ -359,6 +368,9 @@ Browse them at `crates/<name>/docs/README.md`.
 | Work on configuration | `crates/hx-config/docs/` |
 | Improve build performance | `crates/hx-cabal/docs/native.md` |
 | Add toolchain support | `crates/hx-toolchain/docs/` |
+| Work on BHC backend | `crates/hx-bhc/src/lib.rs`, `crates/hx-compiler/src/lib.rs` |
+| Add BHC Platform snapshots | `crates/hx-solver/src/bhc_platform.rs` |
+| Add project templates | `crates/hx-cli/src/templates/` |
 | Improve error messages | `.claude/rules/errors.md` |
 | Add a new command | `crates/hx-cli/src/commands/` |
 
