@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **WinGet distribution** - `winget install raskell-io.hx` now available on Windows ([winget-pkgs#333584](https://github.com/microsoft/winget-pkgs/pull/333584))
+
 ## [0.4.0] - 2026-01-18
 
 ### Added
