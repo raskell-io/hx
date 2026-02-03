@@ -334,6 +334,20 @@ hx v0.1.0 is shippable when:
 - [x] `hx bhc-platform set <platform>` - Set snapshot for project
 - [x] Lock/resolver integration: pin BHC Platform package versions
 
+### Documentation ✅
+- [x] `docs/BHC_PLATFORM.md` — Developer-facing BHC Platform guide
+- [x] Updated `docs/GETTING_STARTED.md` — BHC in data flow, crate map, "where to start"
+- [x] Updated `docs/STACKAGE.md` — Cross-reference to BHC Platform
+- [x] Updated `docs/BENCHMARKS.md` — Version bump to 0.5.0
+- [x] hx.raskell.io-docs: new `commands/bhc-platform.md` command reference
+- [x] hx.raskell.io-docs: new `features/bhc-platform.md` feature guide
+- [x] hx.raskell.io-docs: updated `commands/new.md` (numeric/server templates)
+- [x] hx.raskell.io-docs: updated `commands/init.md` (--backend example)
+- [x] hx.raskell.io-docs: updated `configuration/hx-toml.md` ([bhc-platform] section)
+- [x] hx.raskell.io-docs: updated `features/compiler-backends.md` (test/run, templates, platform)
+- [x] hx.raskell.io-docs: updated `quickstart.md` (specialized templates)
+- [x] hx.raskell.io: updated BHC blog post for v0.5.0
+
 ---
 
 ## v0.6.0 - Cloud & Enterprise
