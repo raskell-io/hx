@@ -4,10 +4,12 @@ use crate::cli::ToolchainCommands;
 use anyhow::Result;
 use hx_cache::toolchain_dir;
 use hx_config::{Manifest, find_project_root};
+use hx_solver::bhc_platform::find_platform_for_bhc;
 use hx_toolchain::{
     BhcInstallOptions, GhcSource, InstallStrategy, RECOMMENDED_BHC_VERSION,
-    RECOMMENDED_GHC_VERSION, SmartInstallOptions, Toolchain, ToolchainManifest, create_symlinks,
-    install, install_bhc, known_versions, remove_ghc, set_active,
+    RECOMMENDED_CABAL_VERSION, RECOMMENDED_GHC_VERSION, SmartInstallOptions, Toolchain,
+    ToolchainManifest, create_symlinks, install, install_bhc, known_versions, remove_ghc,
+    set_active,
 };
 use hx_ui::{Output, Style};
 
@@ -301,6 +303,52 @@ async fn install_toolchain(
                     output.status("Done", &format!("BHC {} already installed", version));
                 } else {
                     output.status("Done", &format!("BHC {} installed", version));
+                }
+
+                // Auto-install GHC + Cabal when only --bhc was specified
+                if ghc_version.is_none() && cabal.is_none() {
+                    if let Some(platform) = find_platform_for_bhc(&version) {
+                        let ghc_ver = platform.ghc_compat.to_string();
+                        output.info(&format!(
+                            "Also installing GHC {} (required by BHC Platform {})",
+                            ghc_ver, platform.id
+                        ));
+
+                        let ghc_options = SmartInstallOptions::new(&ghc_ver)
+                            .with_strategy(if use_ghcup {
+                                InstallStrategy::Ghcup
+                            } else {
+                                InstallStrategy::Smart
+                            })
+                            .with_set_active(set_as_active)
+                            .with_force(force);
+
+                        if let Err(e) = install::install_ghc_smart(&ghc_options).await {
+                            output.print_error(&e);
+                            success = false;
+                        } else {
+                            output.status("Done", &format!("GHC {} installed", ghc_ver));
+                            if set_as_active {
+                                if let Ok(tc_dir) = toolchain_dir() {
+                                    if let Ok(Some(installed)) = hx_toolchain::get_active(&tc_dir) {
+                                        let _ = create_symlinks(&installed);
+                                    }
+                                }
+                            }
+                        }
+
+                        let cabal_ver = RECOMMENDED_CABAL_VERSION;
+                        output.info(&format!(
+                            "Also installing Cabal {} (recommended for BHC Platform)",
+                            cabal_ver
+                        ));
+                        if let Err(e) = install::install_cabal(cabal_ver).await {
+                            output.print_error(&e);
+                            success = false;
+                        } else {
+                            output.status("Done", &format!("Cabal {} installed", cabal_ver));
+                        }
+                    }
                 }
             }
             Err(e) => {

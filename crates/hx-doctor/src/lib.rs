@@ -6,6 +6,7 @@
 
 use hx_config::{CompilerBackend, MANIFEST_FILENAME};
 use hx_core::error::Fix;
+use hx_solver::bhc_platform::{find_platform_for_bhc, latest_platform};
 use hx_toolchain::{Toolchain, detect_bhc, install::ghcup_install_command};
 use hx_ui::{Output, Style};
 use std::path::Path;
@@ -137,6 +138,9 @@ pub async fn run_checks(project_dir: Option<&Path>) -> DoctorReport {
 
     // Check BHC if configured
     check_bhc(project_dir, &mut report);
+
+    // Check BHC Platform compatibility
+    check_bhc_platform(&toolchain, project_dir, &mut report);
 
     // Check native dependencies (platform-specific)
     check_native_deps(&mut report);
@@ -326,6 +330,92 @@ fn check_bhc(project_dir: Option<&Path>, report: &mut DoctorReport) {
         report.add(Diagnostic::info(
             "bhc: not installed (optional - install for alternative compiler backend)",
         ));
+    }
+}
+
+fn check_bhc_platform(
+    toolchain: &Toolchain,
+    project_dir: Option<&Path>,
+    report: &mut DoctorReport,
+) {
+    let bhc = match detect_bhc() {
+        Some(bhc) => bhc,
+        None => return, // No BHC installed, nothing to check
+    };
+
+    // Find matching platform for installed BHC
+    match find_platform_for_bhc(&bhc.version) {
+        Some(platform) => {
+            report.add(Diagnostic::info(format!(
+                "BHC Platform: {} ({} packages)",
+                platform.id, platform.package_count
+            )));
+
+            // Check GHC version matches what the platform expects
+            if let Some(ghc_ver) = toolchain.ghc.status.version() {
+                let ghc_str = ghc_ver.to_string();
+                if ghc_str != platform.ghc_compat {
+                    report.add(
+                        Diagnostic::warning(format!(
+                            "GHC {} does not match BHC Platform {} requirement (GHC {})",
+                            ghc_str, platform.id, platform.ghc_compat
+                        ))
+                        .with_fix(Fix::with_command(
+                            format!("Install GHC {}", platform.ghc_compat),
+                            format!("hx toolchain install --ghc {}", platform.ghc_compat),
+                        )),
+                    );
+                }
+            }
+
+            // Suggest upgrade if a newer platform exists
+            if let Some(latest) = latest_platform()
+                && latest.id != platform.id
+            {
+                report.add(
+                    Diagnostic::info(format!(
+                        "Newer BHC Platform available: {} (requires BHC {})",
+                        latest.id, latest.bhc_version
+                    ))
+                    .with_fix(Fix::with_command(
+                        format!("Upgrade BHC to {}", latest.bhc_version),
+                        format!("hx toolchain install --bhc {}", latest.bhc_version),
+                    )),
+                );
+            }
+        }
+        None => {
+            report.add(
+                Diagnostic::warning(format!(
+                    "No BHC Platform snapshot matches BHC {}",
+                    bhc.version
+                ))
+                .with_fix(Fix::with_command(
+                    "Install a supported BHC version",
+                    "hx toolchain install --bhc latest",
+                )),
+            );
+        }
+    }
+
+    // Verify project-configured snapshot is compatible with installed BHC
+    if let Some(dir) = project_dir
+        && let Ok(project) = hx_config::Project::load(dir)
+        && project.manifest.compiler.backend == CompilerBackend::Bhc
+        && let Some(ref snapshot_id) = project.manifest.bhc_platform.snapshot
+        && let Some(platform) = find_platform_for_bhc(&bhc.version)
+        && platform.id != snapshot_id.as_str()
+    {
+        report.add(
+            Diagnostic::warning(format!(
+                "Project uses snapshot '{}' but installed BHC {} matches '{}'",
+                snapshot_id, bhc.version, platform.id
+            ))
+            .with_fix(Fix::new(format!(
+                "Update [bhc-platform] snapshot to \"{}\" in hx.toml",
+                platform.id
+            ))),
+        );
     }
 }
 

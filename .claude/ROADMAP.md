@@ -386,12 +386,12 @@ cargo + rustc is to Rust.
   - [ ] `hx repl --backend bhc` with BHC interactive mode
   - [ ] Hot-reload of modules without full recompilation
 
-### Zero-Config Experience
-- [ ] `hx new <name>` defaults to BHC when BHC is installed and no GHC present
-- [ ] `hx toolchain install` installs BHC + hx-managed toolchain as one unit
-  - [ ] Single command from zero to building: `hx toolchain install && hx new my-app && cd my-app && hx run`
-- [ ] Auto-select BHC Platform snapshot matching installed BHC version
-- [ ] `hx doctor` checks BHC Platform compatibility, suggests upgrades
+### Zero-Config Experience ✅
+- [x] `hx new <name>` defaults to BHC when BHC is installed and no GHC present
+- [x] `hx toolchain install` installs BHC + hx-managed toolchain as one unit
+  - [x] Single command from zero to building: `hx toolchain install && hx new my-app && cd my-app && hx run`
+- [x] Auto-select BHC Platform snapshot matching installed BHC version
+- [x] `hx doctor` checks BHC Platform compatibility, suggests upgrades
 
 ---
 

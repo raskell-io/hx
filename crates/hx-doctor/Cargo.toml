@@ -13,6 +13,7 @@ categories.workspace = true
 hx-core.workspace = true
 hx-config.workspace = true
 hx-toolchain.workspace = true
+hx-solver.workspace = true
 hx-ui.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true

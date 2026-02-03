@@ -356,6 +356,38 @@ pub async fn fetch_remote_snapshot(
     parse_platform_toml(&content, &snapshot_id)
 }
 
+/// Check if a BHC version is compatible with a platform's BHC version.
+///
+/// Uses major.minor prefix matching: `0.2.3` is compatible with platform
+/// requiring `0.2.0`, but `0.3.0` is not.
+fn version_compatible(installed: &str, platform_version: &str) -> bool {
+    let installed_parts: Vec<&str> = installed.split('.').collect();
+    let platform_parts: Vec<&str> = platform_version.split('.').collect();
+
+    if installed_parts.len() < 2 || platform_parts.len() < 2 {
+        return false;
+    }
+
+    installed_parts[0] == platform_parts[0] && installed_parts[1] == platform_parts[1]
+}
+
+/// Find the best BHC Platform snapshot for an installed BHC version.
+///
+/// Uses major.minor prefix matching: `0.2.x` matches platforms with
+/// `bhc_version` `0.2.0`, `0.3.x` matches `0.3.0`, etc.
+/// Returns the latest compatible platform when multiple match.
+pub fn find_platform_for_bhc(bhc_version: &str) -> Option<BhcPlatformInfo> {
+    let platforms = list_platforms();
+    platforms
+        .into_iter()
+        .rfind(|p| version_compatible(bhc_version, p.bhc_version))
+}
+
+/// Return the newest embedded BHC Platform snapshot.
+pub fn latest_platform() -> Option<BhcPlatformInfo> {
+    list_platforms().into_iter().last()
+}
+
 /// List all available BHC platform snapshots.
 pub fn list_platforms() -> Vec<BhcPlatformInfo> {
     let mut platforms = Vec::new();
@@ -959,5 +991,47 @@ custom-utils = "2.3.0"
             "error should contain the path: {}",
             msg
         );
+    }
+
+    // ─── find_platform_for_bhc / latest_platform tests ──────────────────────
+
+    #[test]
+    fn test_find_platform_for_bhc_exact() {
+        let p = find_platform_for_bhc("0.2.0").unwrap();
+        assert_eq!(p.id, "bhc-platform-2026.1");
+    }
+
+    #[test]
+    fn test_find_platform_for_bhc_patch() {
+        // 0.2.3 should match the 0.2.0 platform
+        let p = find_platform_for_bhc("0.2.3").unwrap();
+        assert_eq!(p.id, "bhc-platform-2026.1");
+    }
+
+    #[test]
+    fn test_find_platform_for_bhc_0_3() {
+        let p = find_platform_for_bhc("0.3.0").unwrap();
+        assert_eq!(p.id, "bhc-platform-2026.2");
+    }
+
+    #[test]
+    fn test_find_platform_for_bhc_no_match() {
+        assert!(find_platform_for_bhc("0.9.0").is_none());
+        assert!(find_platform_for_bhc("1.0.0").is_none());
+    }
+
+    #[test]
+    fn test_latest_platform() {
+        let p = latest_platform().unwrap();
+        assert_eq!(p.id, "bhc-platform-2026.2");
+    }
+
+    #[test]
+    fn test_version_compatible() {
+        assert!(version_compatible("0.2.0", "0.2.0"));
+        assert!(version_compatible("0.2.5", "0.2.0"));
+        assert!(!version_compatible("0.3.0", "0.2.0"));
+        assert!(!version_compatible("1.2.0", "0.2.0"));
+        assert!(!version_compatible("bad", "0.2.0"));
     }
 }

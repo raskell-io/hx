@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use crate::cli::NewCommands;
 use crate::templates::{self, TemplateContext, TemplateFile};
+use hx_config::CompilerBackend;
 
 /// Run the new command.
 pub async fn run(command: NewCommands, output: &Output) -> Result<i32> {
@@ -29,10 +30,12 @@ pub async fn run(command: NewCommands, output: &Output) -> Result<i32> {
             create_project_from_template(&name, dir, "library", backend, output)
         }
         NewCommands::Numeric { name, dir } => {
-            create_project_from_template(&name, dir, "numeric", None, output)
+            let backend = auto_detect_backend();
+            create_project_from_template(&name, dir, "numeric", backend, output)
         }
         NewCommands::Server { name, dir } => {
-            create_project_from_template(&name, dir, "server", None, output)
+            let backend = auto_detect_backend();
+            create_project_from_template(&name, dir, "server", backend, output)
         }
         NewCommands::Template {
             url,
@@ -43,13 +46,28 @@ pub async fn run(command: NewCommands, output: &Output) -> Result<i32> {
     }
 }
 
+/// Auto-detect backend: default to BHC when BHC is installed and GHC is not.
+fn auto_detect_backend() -> Option<CompilerBackend> {
+    let has_bhc = hx_toolchain::detect_bhc().is_some();
+    let has_ghc = which::which("ghc").is_ok();
+
+    if has_bhc && !has_ghc {
+        Some(CompilerBackend::Bhc)
+    } else {
+        None
+    }
+}
+
 fn create_project_from_template(
     name: &str,
     dir: Option<String>,
     template: &str,
-    backend: Option<hx_config::CompilerBackend>,
+    backend: Option<CompilerBackend>,
     output: &Output,
 ) -> Result<i32> {
+    // Auto-detect backend when not explicitly specified
+    let backend = backend.or_else(auto_detect_backend);
+
     let target_dir = dir.unwrap_or_else(|| name.to_string());
     let target_path = Path::new(&target_dir);
 

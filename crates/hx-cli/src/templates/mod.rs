@@ -7,6 +7,8 @@ pub mod server;
 pub mod webapp;
 
 use hx_config::CompilerBackend;
+use hx_solver::bhc_platform::find_platform_for_bhc;
+use hx_toolchain::detect_bhc;
 
 /// Template variable substitution context.
 pub struct TemplateContext {
@@ -15,6 +17,7 @@ pub struct TemplateContext {
     pub author: String,
     pub year: String,
     pub backend: Option<CompilerBackend>,
+    pub bhc_platform_snapshot: Option<String>,
 }
 
 impl TemplateContext {
@@ -46,20 +49,36 @@ impl TemplateContext {
 
         let year = chrono::Utc::now().format("%Y").to_string();
 
+        // When using BHC backend, look up matching platform snapshot
+        let bhc_platform_snapshot = if backend == Some(CompilerBackend::Bhc) {
+            detect_bhc()
+                .and_then(|bhc| find_platform_for_bhc(&bhc.version))
+                .map(|p| p.id.to_string())
+        } else {
+            None
+        };
+
         Self {
             project_name: project_name.to_string(),
             module_name,
             author,
             year,
             backend,
+            bhc_platform_snapshot,
         }
     }
 
     /// Substitute template variables in content.
     pub fn substitute(&self, content: &str) -> String {
         let backend_config = match self.backend {
-            Some(CompilerBackend::Bhc) => "\n[compiler]\nbackend = \"bhc\"\n",
-            _ => "",
+            Some(CompilerBackend::Bhc) => {
+                let mut config = "\n[compiler]\nbackend = \"bhc\"\n".to_string();
+                if let Some(ref snapshot) = self.bhc_platform_snapshot {
+                    config.push_str(&format!("\n[bhc-platform]\nsnapshot = \"{}\"\n", snapshot));
+                }
+                config
+            }
+            _ => String::new(),
         };
 
         content
@@ -67,7 +86,7 @@ impl TemplateContext {
             .replace("{{module_name}}", &self.module_name)
             .replace("{{author}}", &self.author)
             .replace("{{year}}", &self.year)
-            .replace("{{backend_config}}", backend_config)
+            .replace("{{backend_config}}", &backend_config)
     }
 }
 

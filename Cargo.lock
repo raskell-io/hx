@@ -1392,6 +1392,7 @@ dependencies = [
  "anyhow",
  "hx-config",
  "hx-core",
+ "hx-solver",
  "hx-toolchain",
  "hx-ui",
  "thiserror 2.0.17",
