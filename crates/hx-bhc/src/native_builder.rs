@@ -6,8 +6,10 @@
 
 use crate::compile::compile_module;
 use crate::native::{BhcCompilerConfig, BhcNativeBuildOptions, BhcNativeError};
+use hx_cache::artifacts::{hash_file, retrieve_artifacts, store_artifacts};
 use hx_solver::build_module_graph;
 use hx_ui::Output;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -41,12 +43,23 @@ pub struct BhcNativeBuildResult {
 /// maximise parallelism while respecting inter-module dependencies.
 pub struct BhcNativeBuilder {
     bhc: BhcCompilerConfig,
+    /// Optional cache directory for per-module artifact caching.
+    cache_dir: Option<PathBuf>,
 }
 
 impl BhcNativeBuilder {
     /// Create a new native builder with the given compiler configuration.
     pub fn new(bhc: BhcCompilerConfig) -> Self {
-        Self { bhc }
+        Self {
+            bhc,
+            cache_dir: None,
+        }
+    }
+
+    /// Set the artifact cache directory for incremental compilation.
+    pub fn with_cache_dir(mut self, cache_dir: PathBuf) -> Self {
+        self.cache_dir = Some(cache_dir);
+        self
     }
 
     /// Build a project using native BHC compilation.
@@ -96,12 +109,19 @@ impl BhcNativeBuilder {
             groups.len()
         );
 
-        // 3. Compile modules in parallel groups
+        // 3. Compile modules in parallel groups (with per-module artifact caching)
         let semaphore = Arc::new(Semaphore::new(options.jobs));
         let mut all_warnings = Vec::new();
         let mut all_errors = Vec::new();
         let mut modules_compiled: usize = 0;
+        let mut modules_skipped: usize = 0;
         let mut build_failed = false;
+
+        let cache_flags = vec![
+            format!("-O{}", options.optimization),
+            format!("--profile={}", self.bhc.profile.as_str()),
+        ];
+        let empty_deps: HashMap<String, String> = HashMap::new();
 
         for (group_idx, group) in groups.iter().enumerate() {
             debug!(
@@ -122,6 +142,23 @@ impl BhcNativeBuilder {
                     }
                 };
 
+                // Check per-module artifact cache
+                if let Some(ref cache_dir) = self.cache_dir
+                    && let Ok(source_hash) = hash_file(&module_info.path)
+                    && let Ok(Some(_)) = retrieve_artifacts(
+                        cache_dir,
+                        &source_hash,
+                        &self.bhc.version,
+                        &cache_flags,
+                        &empty_deps,
+                        &build_dir,
+                    )
+                {
+                    debug!("Cache hit for module {}", module_name);
+                    modules_skipped += 1;
+                    continue;
+                }
+
                 let sem = semaphore.clone();
                 let bhc = BhcCompilerConfig {
                     bhc_path: self.bhc.bhc_path.clone(),
@@ -134,49 +171,48 @@ impl BhcNativeBuilder {
                 };
                 let module_name = module_name.clone();
                 let source_file = module_info.path.clone();
-                let build_dir = build_dir.clone();
-                let options_src_dirs = options.src_dirs.clone();
-                let options_optimization = options.optimization;
-                let options_warnings = options.warnings;
-                let options_werror = options.werror;
-                let options_extra_flags = options.extra_flags.clone();
-                let options_jobs = options.jobs;
-                let options_verbose = options.verbose;
-                let options_main_module = options.main_module.clone();
-                let options_output_exe = options.output_exe.clone();
-                let options_output_lib = options.output_lib.clone();
-                let options_target = options.target.clone();
-                let options_extensions = options.extensions.clone();
-                let options_output_dir = options.output_dir.clone();
+                let build_dir_clone = build_dir.clone();
+                let opts = options.clone();
+                let cache_dir_opt = self.cache_dir.clone();
+                let cache_flags_clone = cache_flags.clone();
+                let bhc_version = self.bhc.version.clone();
 
                 let handle = tokio::spawn(async move {
                     let _permit = sem.acquire().await.expect("semaphore closed unexpectedly");
 
-                    let build_opts = BhcNativeBuildOptions {
-                        src_dirs: options_src_dirs,
-                        output_dir: options_output_dir,
-                        optimization: options_optimization,
-                        warnings: options_warnings,
-                        werror: options_werror,
-                        extra_flags: options_extra_flags,
-                        jobs: options_jobs,
-                        verbose: options_verbose,
-                        main_module: options_main_module,
-                        output_exe: options_output_exe,
-                        output_lib: options_output_lib,
-                        target: options_target,
-                        extensions: options_extensions,
-                    };
-
-                    compile_module(
+                    let result = compile_module(
                         &bhc,
                         &module_name,
                         &source_file,
-                        &build_dir,
-                        &build_opts,
+                        &build_dir_clone,
+                        &opts,
                         &[],
                     )
-                    .await
+                    .await;
+
+                    // Store successful compilation results in artifact cache
+                    if let Ok(ref compile_result) = result
+                        && compile_result.success
+                        && let Some(ref cache_dir) = cache_dir_opt
+                        && let Ok(source_hash) = hash_file(&source_file)
+                    {
+                        let artifact_files: Vec<PathBuf> = vec![
+                            compile_result.object_file.clone(),
+                            compile_result.interface_file.clone(),
+                        ];
+                        let empty: HashMap<String, String> = HashMap::new();
+                        let _ = store_artifacts(
+                            cache_dir,
+                            &module_name,
+                            &source_hash,
+                            &bhc_version,
+                            &cache_flags_clone,
+                            &empty,
+                            &artifact_files,
+                        );
+                    }
+
+                    result
                 });
 
                 handles.push(handle);
@@ -222,7 +258,7 @@ impl BhcNativeBuilder {
                 success: false,
                 duration,
                 modules_compiled,
-                modules_skipped: 0,
+                modules_skipped,
                 executable: None,
                 library: None,
                 warnings: all_warnings,
@@ -250,11 +286,17 @@ impl BhcNativeBuilder {
 
         let duration = start.elapsed();
 
+        let skip_msg = if modules_skipped > 0 {
+            format!(", {} cached", modules_skipped)
+        } else {
+            String::new()
+        };
         output.status(
             "Finished",
             &format!(
-                "BHC build: {} modules compiled in {:.2}s",
+                "BHC build: {} modules compiled{} in {:.2}s",
                 modules_compiled,
+                skip_msg,
                 duration.as_secs_f64()
             ),
         );
@@ -263,7 +305,7 @@ impl BhcNativeBuilder {
             success: true,
             duration,
             modules_compiled,
-            modules_skipped: 0,
+            modules_skipped,
             executable,
             library,
             warnings: all_warnings,

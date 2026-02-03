@@ -213,6 +213,7 @@ impl BhcCompilerConfig {
 }
 
 /// Build options for a native BHC compilation.
+#[derive(Clone)]
 pub struct BhcNativeBuildOptions {
     /// Source directories to compile.
     pub src_dirs: Vec<PathBuf>,

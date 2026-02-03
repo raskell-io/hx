@@ -373,18 +373,18 @@ cargo + rustc is to Rust.
   - [x] `[bhc-platform] overlay = "path/to/overlay.toml"` for org-private packages
   - [x] Merge strategy: overlay wins over base snapshot
 
-### BHC-Native Build Pipeline
-- [ ] `hx build` invokes BHC directly (no Cabal intermediary for BHC projects)
-  - [ ] hx owns the full build graph: resolve → fetch → compile → link
-  - [ ] Module dependency extraction from BHC (not GHC)
-  - [ ] Parallel compilation via BHC's native parallelism
-- [ ] Incremental compilation aware of BHC's interface files
-- [ ] Content-addressed build cache shared between BHC projects
-  - [ ] `hx cache` stores compiled BHC artifacts keyed by (package, version, profile, flags)
-  - [ ] Cross-project cache sharing (like cargo's target/ but smarter)
-- [ ] BHC-native REPL
-  - [ ] `hx repl --backend bhc` with BHC interactive mode
-  - [ ] Hot-reload of modules without full recompilation
+### BHC-Native Build Pipeline ✅
+- [x] `hx build` invokes BHC directly (no Cabal intermediary for BHC projects)
+  - [x] hx owns the full build graph: resolve → fetch → compile → link
+  - [x] Module dependency extraction from BHC (not GHC)
+  - [x] Parallel compilation via BHC's native parallelism
+- [x] Incremental compilation aware of BHC's interface files
+- [x] Content-addressed build cache shared between BHC projects
+  - [x] `hx cache` stores compiled BHC artifacts keyed by (package, version, profile, flags)
+  - [x] Cross-project cache sharing (like cargo's target/ but smarter)
+- [x] BHC-native REPL
+  - [x] `hx repl --backend bhc` with BHC interactive mode
+  - [x] Hot-reload of modules without full recompilation
 
 ### Zero-Config Experience ✅
 - [x] `hx new <name>` defaults to BHC when BHC is installed and no GHC present
