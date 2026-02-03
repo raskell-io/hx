@@ -350,18 +350,220 @@ hx v0.1.0 is shippable when:
 
 ---
 
-## v0.6.0 - Cloud & Enterprise
+## v0.6.0 - BHC Platform Ecosystem
+
+The pivot point. hx stops being "a nice wrapper around GHC/Cabal" and starts
+becoming the integrated toolchain — where hx + BHC is to Haskell what
+cargo + rustc is to Rust.
+
+### BHC Platform Expansion
+- [ ] `bhc-platform-2026.2` snapshot (expanded package set, ~120 packages)
+  - [ ] Broader web coverage: scotty, yesod-core, IHP-core
+  - [ ] Broader data coverage: cassava, xlsx, postgresql-simple
+  - [ ] Broader crypto: crypton, tls, x509
+- [ ] Remote snapshot registry
+  - [ ] `hx bhc-platform update` — fetch latest snapshot index from registry
+  - [ ] Snapshot TOML served from `https://bhc-platform.raskell.io/`
+  - [ ] Offline fallback to last-fetched + embedded snapshots
+  - [ ] Signed snapshots (Ed25519 signature verification)
+- [ ] Snapshot diffing
+  - [ ] `hx bhc-platform diff <old> <new>` — show added/removed/upgraded packages
+  - [ ] Migration hints when upgrading snapshots
+- [ ] Custom/overlay snapshots
+  - [ ] `[bhc-platform] overlay = "path/to/overlay.toml"` for org-private packages
+  - [ ] Merge strategy: overlay wins over base snapshot
+
+### BHC-Native Build Pipeline
+- [ ] `hx build` invokes BHC directly (no Cabal intermediary for BHC projects)
+  - [ ] hx owns the full build graph: resolve → fetch → compile → link
+  - [ ] Module dependency extraction from BHC (not GHC)
+  - [ ] Parallel compilation via BHC's native parallelism
+- [ ] Incremental compilation aware of BHC's interface files
+- [ ] Content-addressed build cache shared between BHC projects
+  - [ ] `hx cache` stores compiled BHC artifacts keyed by (package, version, profile, flags)
+  - [ ] Cross-project cache sharing (like cargo's target/ but smarter)
+- [ ] BHC-native REPL
+  - [ ] `hx repl --backend bhc` with BHC interactive mode
+  - [ ] Hot-reload of modules without full recompilation
+
+### Zero-Config Experience
+- [ ] `hx new <name>` defaults to BHC when BHC is installed and no GHC present
+- [ ] `hx toolchain install` installs BHC + hx-managed toolchain as one unit
+  - [ ] Single command from zero to building: `hx toolchain install && hx new my-app && cd my-app && hx run`
+- [ ] Auto-select BHC Platform snapshot matching installed BHC version
+- [ ] `hx doctor` checks BHC Platform compatibility, suggests upgrades
+
+---
+
+## v0.7.0 - Cargo Parity
+
+The moment hx achieves full cargo-level ergonomics. A new Haskell developer
+installs hx, types three commands, and has a running project with deps resolved,
+tests passing, and formatting applied. No Stack. No Cabal. No GHCup.
+Just `hx`.
+
+### hx-native Package Registry
+- [ ] `hx publish` to raskell.io registry (BHC-verified packages)
+  - [ ] Package upload with BHC build verification
+  - [ ] Automated doc generation and hosting
+  - [ ] Provenance attestation (who built, when, from which source)
+- [ ] `hx search` against raskell.io registry
+- [ ] `hx add <package>` resolves from raskell.io first, Hackage fallback
+- [ ] Yanking, ownership transfer, team-based permissions
+
+### hx-native Resolver
+- [ ] Replace hx-solver's Hackage-based resolution with BHC Platform-aware resolver
+  - [ ] Resolver understands BHC profiles (packages may have profile-specific bounds)
+  - [ ] Resolver understands BHC-specific flags and build configurations
+  - [ ] Sub-second resolution for Platform-pinned projects
+- [ ] `hx lock` produces fully reproducible builds without network access
+  - [ ] Content hashes for all sources in lockfile
+  - [ ] Lockfile includes BHC version, profile, platform snapshot
+
+### Binary Installation
+- [ ] `hx install <package>` — build and install a binary to `~/.hx/bin/`
+  - [ ] Like `cargo install`: fetch, build, link, put on PATH
+  - [ ] Pre-built binary cache (download instead of compile when available)
+  - [ ] `hx install --list` to see installed binaries
+  - [ ] `hx uninstall <package>`
+
+### Workspaces 2.0
+- [ ] `hx workspace` commands for multi-package monorepos
+  - [ ] `hx workspace init` — create workspace root
+  - [ ] `hx workspace add <path>` — add member
+  - [ ] Per-member BHC profiles (server member uses `server`, lib uses `default`)
+- [ ] Workspace-level BHC Platform snapshot (shared across all members)
+- [ ] Selective rebuilds: only recompile affected members
+
+### Build Scripts
+- [ ] `[build] script = "build.hs"` — custom build logic in Haskell
+  - [ ] Replaces Setup.hs with a simpler, hx-aware API
+  - [ ] Access to project config, dependency info, BHC compiler flags
+  - [ ] Runs in a sandbox with only declared dependencies
+
+---
+
+## v0.8.0 - Production Grade
+
+### Reproducible Environments
+- [ ] `hx env` — Nix-like environment pinning without Nix
+  - [ ] `hx env lock` — capture exact toolchain + deps + system libs
+  - [ ] `hx env shell` — enter reproducible shell
+  - [ ] `hx env export` — generate Docker/OCI image from environment
+- [ ] Hermetic builds: same source + same lockfile = identical binary (bit-for-bit)
+
+### Deploy Pipeline
+- [ ] `hx deploy` — build, package, and ship
+  - [ ] `hx deploy docker` — generate optimized multi-stage Dockerfile
+  - [ ] `hx deploy lambda` — package for AWS Lambda
+  - [ ] `hx deploy fly` — deploy to Fly.io
+  - [ ] `hx deploy static` — produce fully static binary (musl)
+
+### Integrated Profiling
+- [ ] `hx profile` with BHC-native profiling
+  - [ ] Flame graphs from BHC runtime
+  - [ ] Allocation tracking per module
+  - [ ] `hx profile --web` — browser-based profiling viewer
+- [ ] `hx bench` with automatic regression detection
+  - [ ] Store historical benchmarks in `.hx/benchmarks/`
+  - [ ] CI integration: fail build on performance regression
+
+### Language Server
+- [ ] `hx lsp` as full language server (not just HLS wrapper)
+  - [ ] BHC-powered type checking (faster than GHC for BHC projects)
+  - [ ] Completion, go-to-definition, find-references from BHC's API
+  - [ ] Inline type hints, inlay hints
+  - [ ] Code actions: add import, fill hole, case split
+
+---
+
+## Future — Nice to Have
+
+These are valuable but not on the critical path to "cargo for Haskell."
+They'll happen when the core story is solid.
 
 ### Cloud Builds
 - [ ] Remote build execution
   - [ ] Build server protocol
   - [ ] Distributed compilation
   - [ ] Result caching and sharing
+  - [ ] `hx build --remote` for offloading to build farm
 
-### BHC Platform Expansion
-- [ ] Additional curated snapshots (bhc-platform-2026.2, etc.)
-- [ ] Remote snapshot fetching (beyond embedded data)
-- [ ] Snapshot diffing between versions
+### Package Ecosystem Analysis
+- [ ] Dependency health scores (maintenance, test coverage, download stats)
+- [ ] Supply chain audit: transitive dependency risk analysis
+- [ ] License compatibility matrix across full dependency tree
+
+### IDE Plugins
+- [ ] First-party VS Code extension (hx + BHC LSP)
+- [ ] IntelliJ/IDEA plugin
+- [ ] Neovim plugin with native LSP configuration
+
+### WebAssembly Story
+- [ ] `hx build --target wasm` as first-class workflow
+  - [ ] WASI preview 2 support
+  - [ ] Browser target with JS interop
+  - [ ] wasm-opt integration for size optimization
+
+---
+
+## Vision: cargo for Haskell
+
+The thesis is straightforward: Rust succeeded not just because of the language,
+but because `cargo` made the entire experience feel *inevitable*. You never
+wonder how to start a project, add a dependency, run tests, or publish a
+library. It just works.
+
+Haskell has a better type system than almost any mainstream language. But the
+tooling story — GHCup, Cabal, Stack, Hackage, Stackage, hie.yaml, HLS
+configuration — is the #1 reason people bounce off it. Every year, "Haskell
+setup hell" costs the ecosystem more potential users than any language feature
+could attract.
+
+**hx + BHC is the answer.** The strategic arc:
+
+```
+v0.1–v0.3:  Wrap       hx orchestrates GHC, Cabal, GHCup, HLS
+v0.4–v0.5:  Tame       hx adds BHC as alternative backend, curated snapshots
+v0.6–v0.7:  Own        hx builds BHC projects natively, owns the registry
+v0.8+:      Complete   hx is the single tool from `install` to `deploy`
+```
+
+### What "cargo for Haskell" means concretely
+
+| Cargo experience | hx equivalent | Status |
+|------------------|---------------|--------|
+| `rustup install` | `hx toolchain install` | ✅ Done |
+| `cargo new` | `hx new` | ✅ Done |
+| `cargo build` | `hx build` | ✅ Done |
+| `cargo test` | `hx test` | ✅ Done |
+| `cargo run` | `hx run` | ✅ Done |
+| `cargo fmt` | `hx fmt` | ✅ Done |
+| `cargo clippy` | `hx lint` | ✅ Done |
+| `cargo add` | `hx add` | ✅ Done |
+| `cargo publish` | `hx publish` | ✅ Done (Hackage) |
+| `cargo install` | `hx install` | v0.7.0 |
+| `crates.io` | raskell.io registry | v0.7.0 |
+| Rust editions | BHC Platform snapshots | ✅ Foundation done |
+| `cargo bench` | `hx bench` | ✅ Done |
+| `cargo doc` | `hx docs` | ✅ Done |
+
+### The end state
+
+```bash
+# A new developer's entire Haskell experience:
+curl -fsSL https://hx.raskell.io/install.sh | sh   # installs hx + BHC
+hx new server my-api                                 # scaffolds project
+cd my-api
+hx run                                               # builds and runs
+hx test                                              # runs tests
+hx add aeson servant                                 # adds dependencies
+hx lock                                              # locks versions
+hx publish                                           # ships to registry
+```
+
+No Stack. No Cabal. No GHCup. No Stackage. No hie.yaml.
+Just `hx`.
 
 ---
 
@@ -417,6 +619,8 @@ hx stackage set <snapshot>
 hx bhc-platform list
 hx bhc-platform info <platform> [--packages]
 hx bhc-platform set <platform>
+hx bhc-platform update
+hx bhc-platform diff <old> <new>
 
 hx config show|path|edit|init
 hx config set <key> <value>
@@ -454,6 +658,13 @@ hx server restart
 hx completions generate|install <shell>
 hx completions manpages [--output <dir>]
 hx upgrade [--check] [--target <version>]
+
+# v0.7.0+
+hx install <package>
+hx uninstall <package>
+hx workspace init|add
+hx env lock|shell|export
+hx deploy docker|lambda|fly|static
 ```
 
 ---
@@ -462,10 +673,12 @@ hx upgrade [--check] [--target <version>]
 
 | Setting | Default |
 |---------|---------|
+| Compiler | BHC (when installed), GHC fallback |
 | Formatter | fourmolu |
 | Linter | hlint |
-| Build system | native (cabal fallback) |
+| Build system | hx-native (BHC) / cabal fallback (GHC) |
 | Store/build dirs | hx-managed |
 | Lockfile format | TOML |
 | Error output | short + fixes |
 | Verbose output | behind `--verbose` |
+| Package registry | raskell.io (Hackage fallback) |
