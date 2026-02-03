@@ -337,6 +337,8 @@ pub async fn run(cli: Cli) -> Result<i32> {
                 bhc_platform::info(&platform, packages, &output).await
             }
             BhcPlatformCommands::Set { platform } => bhc_platform::set(&platform, &output).await,
+            BhcPlatformCommands::Diff { old, new } => bhc_platform::diff(&old, &new, &output).await,
+            BhcPlatformCommands::Update => bhc_platform::update(&output).await,
         },
         Some(Commands::Server { command }) => match command {
             ServerCommands::Start => server::start(&output).await,

@@ -673,6 +673,18 @@ pub enum BhcPlatformCommands {
         /// Platform identifier (e.g., bhc-platform-2026.1)
         platform: String,
     },
+
+    /// Compare two BHC Platform snapshots
+    Diff {
+        /// Old platform identifier (e.g., bhc-platform-2026.1)
+        old: String,
+
+        /// New platform identifier (e.g., bhc-platform-2026.2)
+        new: String,
+    },
+
+    /// Fetch latest snapshot index from the registry
+    Update,
 }
 
 #[derive(Subcommand, Debug)]

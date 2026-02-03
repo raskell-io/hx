@@ -80,6 +80,7 @@ tar = "0.4"
 flate2 = "1"
 zip = "2"
 hex = "0.4"
+ed25519-dalek = { version = "2", features = ["pkcs8"] }
 
 # Workspace crates
 hx-core = { version = "0.5.0", path = "crates/hx-core" }

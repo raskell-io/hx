@@ -36,6 +36,18 @@ pub enum SnapshotError {
 
     #[error("JSON parse error: {0}")]
     JsonError(#[from] serde_json::Error),
+
+    #[error("registry offline: {0}")]
+    RegistryOffline(String),
+
+    #[error("checksum mismatch: {0}")]
+    ChecksumMismatch(String),
+
+    #[error("signature verification failed: {0}")]
+    SignatureInvalid(String),
+
+    #[error("invalid public key: {0}")]
+    InvalidPublicKey(String),
 }
 
 /// Type of Stackage snapshot.
@@ -533,9 +545,9 @@ pub async fn load_snapshot(
     snapshot: &SnapshotId,
     cache_dir: Option<&Path>,
 ) -> Result<Snapshot, SnapshotError> {
-    // BHC Platform snapshots are loaded from embedded data
+    // BHC Platform snapshots: try embedded first, then cache, then remote
     if snapshot.snapshot_type == SnapshotType::BhcPlatform {
-        return crate::bhc_platform::load_bhc_platform(snapshot);
+        return crate::bhc_platform::load_bhc_platform_async(snapshot).await;
     }
 
     // Check cache first

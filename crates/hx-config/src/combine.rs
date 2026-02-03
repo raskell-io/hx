@@ -148,6 +148,7 @@ impl Combine for BhcPlatformConfig {
                 }
                 deps
             },
+            overlays: self.overlays.combine(other.overlays),
         }
     }
 }

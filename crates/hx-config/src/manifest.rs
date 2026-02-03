@@ -213,6 +213,9 @@ pub struct BhcPlatformConfig {
     /// Extra packages to add with specific versions (overrides platform)
     #[serde(default)]
     pub extra_deps: HashMap<String, String>,
+    /// Paths to overlay TOML files (relative to project root)
+    #[serde(default)]
+    pub overlays: Vec<String>,
 }
 
 /// Format configuration section.
