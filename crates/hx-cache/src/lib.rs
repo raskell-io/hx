@@ -10,6 +10,7 @@
 //! - Binary artifact caching for compiled modules
 
 pub mod artifacts;
+pub mod bhc_store;
 pub mod build_state;
 pub mod source;
 pub mod store;
@@ -23,6 +24,7 @@ pub use artifacts::{
     ArtifactEntry, ArtifactIndex, ArtifactStats, PruneResult, clear_artifacts,
     compute_artifact_hash, hash_file, prune_artifacts, retrieve_artifacts, store_artifacts,
 };
+pub use bhc_store::{BhcPackageCacheEntry, BhcPackageCacheIndex, calculate_bhc_cache_key};
 pub use build_state::{BuildState, PackageBuildInfo, PackageStatus};
 pub use source::{
     SourceFingerprint, compute_source_fingerprint, load_source_fingerprint, save_source_fingerprint,

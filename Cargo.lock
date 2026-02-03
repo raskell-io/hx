@@ -1237,16 +1237,23 @@ version = "0.5.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "directories",
+ "hex",
+ "hx-cache",
  "hx-compiler",
  "hx-config",
+ "hx-core",
+ "hx-solver",
  "hx-ui",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
  "toml",
  "tracing",
+ "which",
 ]
 
 [[package]]

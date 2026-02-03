@@ -6,8 +6,15 @@
 //! - bhc.toml manifest generation
 
 pub mod build;
+pub mod compile;
 pub mod diagnostics;
+pub mod full_native;
 pub mod manifest;
+pub mod native;
+pub mod native_builder;
+pub mod package_build;
+pub mod package_db;
+pub mod repl;
 
 use async_trait::async_trait;
 use hx_compiler::{

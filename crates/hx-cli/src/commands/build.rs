@@ -35,7 +35,7 @@ pub async fn run(
 
     // If BHC is requested, use the BHC backend
     if backend == CompilerBackend::Bhc {
-        return run_bhc_build(&project, release, jobs, target, output).await;
+        return run_bhc_build(&project, release, jobs, target, native, output).await;
     }
 
     // Check toolchain requirements and get toolchain info
@@ -540,8 +540,13 @@ async fn run_bhc_build(
     release: bool,
     jobs: Option<usize>,
     target: Option<String>,
+    native: bool,
     output: &Output,
 ) -> Result<i32> {
+    if native {
+        return run_bhc_native_build(project, release, jobs, target, output).await;
+    }
+
     use hx_bhc::{BhcBackend, generate_bhc_manifest};
     use hx_compiler::{BuildOptions as CompilerBuildOptions, CompilerBackend as Backend};
 
@@ -648,6 +653,145 @@ async fn run_bhc_build(
             output.error(&format!("BHC build failed: {}", e));
             Ok(5)
         }
+    }
+}
+
+/// Run a native BHC build (hx owns the build graph).
+async fn run_bhc_native_build(
+    project: &Project,
+    release: bool,
+    jobs: Option<usize>,
+    target: Option<String>,
+    output: &Output,
+) -> Result<i32> {
+    use hx_bhc::native::{BhcCompilerConfig, BhcNativeBuildOptions};
+
+    output.warn("BHC native build is experimental");
+    output.status("Building", &format!("{} (BHC native)", project.name()));
+
+    // Detect BHC
+    let bhc = match BhcCompilerConfig::detect().await {
+        Ok(config) => config
+            .with_profile(project.manifest.compiler.bhc.profile)
+            .with_tensor_fusion(project.manifest.compiler.bhc.tensor_fusion)
+            .with_emit_kernel_report(project.manifest.compiler.bhc.emit_kernel_report),
+        Err(e) => {
+            output.error(&format!("BHC not available: {}", e));
+            output.info("Install BHC with: hx toolchain install --bhc latest");
+            return Ok(4);
+        }
+    };
+
+    if output.is_verbose() {
+        output.info(&format!("  BHC version: {}", bhc.version));
+        output.info(&format!("  Profile: {}", bhc.profile.as_str()));
+    }
+
+    let build_config = &project.manifest.build;
+    let optimization = if release {
+        2
+    } else {
+        build_config.optimization
+    };
+    let src_dirs: Vec<PathBuf> = build_config.src_dirs.iter().map(PathBuf::from).collect();
+
+    let options = BhcNativeBuildOptions {
+        src_dirs,
+        output_dir: project.root.join(".hx/bhc-native-build"),
+        optimization,
+        warnings: build_config.warnings,
+        werror: build_config.werror,
+        extra_flags: build_config.ghc_flags.clone(),
+        jobs: jobs.unwrap_or(4),
+        verbose: output.is_verbose(),
+        main_module: Some("Main".to_string()),
+        output_exe: Some(
+            project
+                .root
+                .join(".hx/bhc-native-build")
+                .join(project.name()),
+        ),
+        output_lib: None,
+        target,
+        extensions: Vec::new(),
+    };
+
+    // For now, invoke BHC directly with native build flags
+    let mut args = bhc.bhc_flags();
+    args.push("--make".to_string());
+    args.push(format!("-O{}", options.optimization));
+    args.push(format!("-j{}", options.jobs));
+    args.push(format!("-outputdir={}", options.output_dir.display()));
+
+    if options.warnings {
+        args.push("-Wall".to_string());
+    }
+    if options.werror {
+        args.push("-Werror".to_string());
+    }
+
+    for dir in &options.src_dirs {
+        args.push(format!("-i{}", dir.display()));
+    }
+
+    for ext in &options.extensions {
+        args.push(format!("-X{}", ext));
+    }
+
+    args.extend(options.extra_flags.iter().cloned());
+
+    if let Some(ref main_module) = options.main_module {
+        args.push(main_module.clone());
+    }
+
+    if let Some(ref exe_path) = options.output_exe {
+        args.push(format!("-o={}", exe_path.display()));
+        // Ensure output directory exists
+        if let Some(parent) = exe_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+    }
+
+    if options.verbose {
+        args.push("-v".to_string());
+    }
+
+    let start = Instant::now();
+
+    let cmd_output = std::process::Command::new(&bhc.bhc_path)
+        .args(&args)
+        .current_dir(&project.root)
+        .output()?;
+
+    let duration = start.elapsed();
+    let success = cmd_output.status.success();
+
+    let stdout = String::from_utf8_lossy(&cmd_output.stdout);
+    let stderr = String::from_utf8_lossy(&cmd_output.stderr);
+
+    if output.is_verbose() || !success {
+        if !stdout.is_empty() {
+            output.verbose(&stdout);
+        }
+        if !stderr.is_empty() {
+            if success {
+                output.verbose(&stderr);
+            } else {
+                eprintln!("{}", stderr);
+            }
+        }
+    }
+
+    if success {
+        let duration_str = format!("{:.2}s", duration.as_secs_f64());
+        output.status("Finished", &format!("BHC native build in {}", duration_str));
+        if let Some(exe) = options.output_exe {
+            output.info(&format!("Executable: {}", exe.display()));
+        }
+        Ok(0)
+    } else {
+        output.error("BHC native build failed");
+        Ok(5)
     }
 }
 

@@ -97,7 +97,7 @@ pub enum Commands {
         #[arg(short, long)]
         package: Option<String>,
 
-        /// Use native GHC build (experimental)
+        /// Use native build (experimental)
         #[arg(long)]
         native: bool,
 
@@ -145,7 +145,11 @@ pub enum Commands {
     },
 
     /// Start a REPL
-    Repl,
+    Repl {
+        /// Compiler backend to use (ghc or bhc)
+        #[arg(long, value_parser = parse_compiler_backend)]
+        backend: Option<hx_config::CompilerBackend>,
+    },
 
     /// Type-check the project (fast build)
     Check {

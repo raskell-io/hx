@@ -126,10 +126,20 @@ pub async fn run(
 }
 
 /// Start a REPL.
-pub async fn repl(policy: AutoInstallPolicy, output: &Output) -> Result<i32> {
+pub async fn repl(
+    backend_override: Option<CompilerBackend>,
+    policy: AutoInstallPolicy,
+    output: &Output,
+) -> Result<i32> {
     // Find project root
     let project_root = find_project_root(".")?;
     let project = Project::load(&project_root)?;
+
+    let backend = backend_override.unwrap_or(project.manifest.compiler.backend);
+
+    if backend == CompilerBackend::Bhc {
+        return run_bhc_repl(&project, output).await;
+    }
 
     // Check toolchain requirements
     let mut toolchain = Toolchain::detect().await;
@@ -238,6 +248,41 @@ async fn run_bhc_run(
         Err(e) => {
             output.error(&format!("BHC run failed: {}", e));
             Ok(5)
+        }
+    }
+}
+
+/// Start a BHC REPL session.
+async fn run_bhc_repl(project: &Project, output: &Output) -> Result<i32> {
+    use hx_bhc::native::BhcCompilerConfig;
+    use hx_bhc::repl::start_bhc_repl;
+
+    output.status("Starting", "BHC REPL");
+
+    let bhc = match BhcCompilerConfig::detect().await {
+        Ok(config) => config
+            .with_profile(project.manifest.compiler.bhc.profile)
+            .with_tensor_fusion(project.manifest.compiler.bhc.tensor_fusion),
+        Err(e) => {
+            output.error(&format!("BHC not available: {}", e));
+            output.info("Install BHC with: hx toolchain install --bhc latest");
+            return Ok(4);
+        }
+    };
+
+    let src_dirs: Vec<std::path::PathBuf> = project
+        .manifest
+        .build
+        .src_dirs
+        .iter()
+        .map(std::path::PathBuf::from)
+        .collect();
+
+    match start_bhc_repl(&project.root, &bhc, &src_dirs).await {
+        Ok(code) => Ok(code),
+        Err(e) => {
+            output.error(&format!("BHC REPL failed: {}", e));
+            Ok(1)
         }
     }
 }

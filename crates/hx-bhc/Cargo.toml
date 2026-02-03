@@ -21,6 +21,13 @@ toml.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 async-trait.workspace = true
+sha2.workspace = true
+hex.workspace = true
+hx-solver.workspace = true
+hx-cache.workspace = true
+hx-core.workspace = true
+directories.workspace = true
+which.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
