@@ -356,22 +356,22 @@ The pivot point. hx stops being "a nice wrapper around GHC/Cabal" and starts
 becoming the integrated toolchain — where hx + BHC is to Haskell what
 cargo + rustc is to Rust.
 
-### BHC Platform Expansion
-- [ ] `bhc-platform-2026.2` snapshot (expanded package set, ~120 packages)
-  - [ ] Broader web coverage: scotty, yesod-core, IHP-core
-  - [ ] Broader data coverage: cassava, xlsx, postgresql-simple
-  - [ ] Broader crypto: crypton, tls, x509
-- [ ] Remote snapshot registry
-  - [ ] `hx bhc-platform update` — fetch latest snapshot index from registry
-  - [ ] Snapshot TOML served from `https://bhc-platform.raskell.io/`
-  - [ ] Offline fallback to last-fetched + embedded snapshots
-  - [ ] Signed snapshots (Ed25519 signature verification)
-- [ ] Snapshot diffing
-  - [ ] `hx bhc-platform diff <old> <new>` — show added/removed/upgraded packages
-  - [ ] Migration hints when upgrading snapshots
-- [ ] Custom/overlay snapshots
-  - [ ] `[bhc-platform] overlay = "path/to/overlay.toml"` for org-private packages
-  - [ ] Merge strategy: overlay wins over base snapshot
+### BHC Platform Expansion ✅
+- [x] `bhc-platform-2026.2` snapshot (expanded package set, ~120 packages)
+  - [x] Broader web coverage: scotty, yesod-core, IHP-core
+  - [x] Broader data coverage: cassava, xlsx, postgresql-simple
+  - [x] Broader crypto: crypton, tls, x509
+- [x] Remote snapshot registry
+  - [x] `hx bhc-platform update` — fetch latest snapshot index from registry
+  - [x] Snapshot TOML served from `https://bhc-platform.raskell.io/`
+  - [x] Offline fallback to last-fetched + embedded snapshots
+  - [x] Signed snapshots (Ed25519 signature verification)
+- [x] Snapshot diffing
+  - [x] `hx bhc-platform diff <old> <new>` — show added/removed/upgraded packages
+  - [x] Migration hints when upgrading snapshots
+- [x] Custom/overlay snapshots
+  - [x] `[bhc-platform] overlay = "path/to/overlay.toml"` for org-private packages
+  - [x] Merge strategy: overlay wins over base snapshot
 
 ### BHC-Native Build Pipeline
 - [ ] `hx build` invokes BHC directly (no Cabal intermediary for BHC projects)
