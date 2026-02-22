@@ -718,20 +718,21 @@ async fn run_bhc_native_build(
 
     // For now, invoke BHC directly with native build flags
     let mut args = bhc.bhc_flags();
-    args.push("--make".to_string());
-    args.push(format!("-O{}", options.optimization));
-    args.push(format!("-j{}", options.jobs));
-    args.push(format!("-outputdir={}", options.output_dir.display()));
+    args.push("-O".to_string());
+    args.push(options.optimization.to_string());
+    args.push("--odir".to_string());
+    args.push(options.output_dir.to_string_lossy().to_string());
 
     if options.warnings {
-        args.push("-Wall".to_string());
+        args.push("--Wall".to_string());
     }
     if options.werror {
-        args.push("-Werror".to_string());
+        args.push("--Werror".to_string());
     }
 
     for dir in &options.src_dirs {
-        args.push(format!("-i{}", dir.display()));
+        args.push("--import-path".to_string());
+        args.push(dir.to_string_lossy().to_string());
     }
 
     for ext in &options.extensions {
@@ -745,7 +746,8 @@ async fn run_bhc_native_build(
     }
 
     if let Some(ref exe_path) = options.output_exe {
-        args.push(format!("-o={}", exe_path.display()));
+        args.push("-o".to_string());
+        args.push(exe_path.to_string_lossy().to_string());
         // Ensure output directory exists
         if let Some(parent) = exe_path.parent() {
             let _ = std::fs::create_dir_all(parent);

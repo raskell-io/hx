@@ -1,27 +1,24 @@
 //! BHC package database management.
 //!
-//! This module wraps `bhc-pkg` to manage a per-version package database
-//! used during native BHC compilation. Packages are registered, queried,
+//! This module manages a filesystem-based per-version package database
+//! used during native BHC compilation. Package `.conf` files are stored
+//! directly in the database directory. Packages are registered, queried,
 //! and cached through this interface.
 
 use crate::native::BhcNativeError;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
-use tokio::process::Command;
 use tracing::{debug, info};
 
-/// A BHC package database backed by `bhc-pkg`.
+/// A BHC package database backed by the filesystem.
 ///
 /// Each database is version-specific and stored under a cache directory.
-/// Operations are async because they shell out to `bhc-pkg`.
+/// Package `.conf` files live directly inside the database directory.
 pub struct BhcPackageDb {
     /// Path to the package database directory.
     pub path: PathBuf,
     /// BHC version this database is associated with.
     pub bhc_version: String,
-    /// Path to the `bhc-pkg` executable.
-    pub bhc_pkg_path: PathBuf,
     /// Set of registered package identifiers.
     pub(crate) registered: HashSet<String>,
 }
@@ -30,39 +27,22 @@ impl BhcPackageDb {
     /// Open or create a package database for the given BHC version.
     ///
     /// The database is stored at `<cache_dir>/bhc-<version>/package.db`.
-    /// If the directory does not exist it will be created and initialized
-    /// via `bhc-pkg init`.
+    /// If the directory does not exist it will be created.
     pub async fn open(bhc_version: &str, cache_dir: &Path) -> Result<Self, BhcNativeError> {
         let db_path = cache_dir
             .join(format!("bhc-{}", bhc_version))
             .join("package.db");
 
-        let bhc_pkg_path = find_bhc_pkg(bhc_version).await?;
-
-        info!(
-            "Opening BHC package DB at {} (bhc-pkg: {})",
-            db_path.display(),
-            bhc_pkg_path.display()
-        );
+        info!("Opening BHC package DB at {}", db_path.display());
 
         let mut db = Self {
             path: db_path,
             bhc_version: bhc_version.to_string(),
-            bhc_pkg_path,
             registered: HashSet::new(),
         };
 
-        // Create the directory if needed and initialize the DB
+        // Create the directory if needed
         if !db.path.exists() {
-            if let Some(parent) = db.path.parent() {
-                std::fs::create_dir_all(parent).map_err(|e| BhcNativeError::Io {
-                    message: format!(
-                        "failed to create package DB directory: {}",
-                        parent.display()
-                    ),
-                    source: e,
-                })?;
-            }
             db.init().await?;
         }
 
@@ -71,66 +51,66 @@ impl BhcPackageDb {
         Ok(db)
     }
 
-    /// Initialize the package database with `bhc-pkg init`.
+    /// Initialize the package database directory.
     async fn init(&self) -> Result<(), BhcNativeError> {
         debug!("Initializing package DB at {}", self.path.display());
 
-        let output = Command::new(&self.bhc_pkg_path)
-            .arg("init")
-            .arg(&self.path)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
+        tokio::fs::create_dir_all(&self.path)
             .await
             .map_err(|e| BhcNativeError::Io {
                 message: format!(
-                    "failed to run bhc-pkg init: {}",
-                    self.bhc_pkg_path.display()
+                    "failed to create package DB directory: {}",
+                    self.path.display()
                 ),
                 source: e,
             })?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(BhcNativeError::PackageDbError(format!(
-                "bhc-pkg init failed: {}",
-                stderr.trim()
-            )));
-        }
 
         Ok(())
     }
 
-    /// Load the list of registered packages from the database.
+    /// Load the list of registered packages by scanning `.conf` files.
     async fn load_registered(&mut self) -> Result<(), BhcNativeError> {
         debug!("Loading registered packages from {}", self.path.display());
 
-        let output = Command::new(&self.bhc_pkg_path)
-            .arg("list")
-            .arg("--simple-output")
-            .arg(format!("--package-db={}", self.path.display()))
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .await
-            .map_err(|e| BhcNativeError::Io {
-                message: format!(
-                    "failed to run bhc-pkg list: {}",
-                    self.bhc_pkg_path.display()
-                ),
-                source: e,
-            })?;
+        self.registered.clear();
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            // An empty or newly initialized DB may return non-zero; treat as empty
-            debug!("bhc-pkg list returned non-zero: {}", stderr.trim());
-            self.registered.clear();
-            return Ok(());
+        let mut entries = match tokio::fs::read_dir(&self.path).await {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                debug!("Package DB directory does not exist yet");
+                return Ok(());
+            }
+            Err(e) => {
+                return Err(BhcNativeError::Io {
+                    message: format!(
+                        "failed to read package DB directory: {}",
+                        self.path.display()
+                    ),
+                    source: e,
+                });
+            }
+        };
+
+        while let Some(entry) = entries.next_entry().await.map_err(|e| BhcNativeError::Io {
+            message: format!("failed to read directory entry in {}", self.path.display()),
+            source: e,
+        })? {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "conf") {
+                match tokio::fs::read_to_string(&path).await {
+                    Ok(content) => {
+                        if let Some(id) = extract_package_id(&content) {
+                            self.registered.insert(id);
+                        } else if let Some(stem) = path.file_stem() {
+                            self.registered.insert(stem.to_string_lossy().to_string());
+                        }
+                    }
+                    Err(e) => {
+                        debug!("Failed to read conf file {}: {}", path.display(), e);
+                    }
+                }
+            }
         }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        self.registered = stdout.split_whitespace().map(|s| s.to_string()).collect();
 
         debug!("Loaded {} registered packages", self.registered.len());
 
@@ -139,42 +119,19 @@ impl BhcPackageDb {
 
     /// Register a package from a `.conf` file into the database.
     ///
-    /// Runs `bhc-pkg register --force` and returns the package identifier
-    /// extracted from the conf file.
+    /// Copies the `.conf` file into the database directory and extracts
+    /// the package identifier from it.
     pub async fn register(&mut self, conf_file: &Path) -> Result<String, BhcNativeError> {
         info!("Registering package from {}", conf_file.display());
 
-        let output = Command::new(&self.bhc_pkg_path)
-            .arg("register")
-            .arg("--force")
-            .arg(format!("--package-db={}", self.path.display()))
-            .arg(conf_file)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .await
-            .map_err(|e| BhcNativeError::Io {
-                message: format!(
-                    "failed to run bhc-pkg register: {}",
-                    self.bhc_pkg_path.display()
-                ),
-                source: e,
-            })?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(BhcNativeError::PackageDbError(format!(
-                "bhc-pkg register failed for {}: {}",
-                conf_file.display(),
-                stderr.trim()
-            )));
-        }
-
         // Read the conf file to extract the package id
-        let content = std::fs::read_to_string(conf_file).map_err(|e| BhcNativeError::Io {
-            message: format!("failed to read conf file: {}", conf_file.display()),
-            source: e,
-        })?;
+        let content =
+            tokio::fs::read_to_string(conf_file)
+                .await
+                .map_err(|e| BhcNativeError::Io {
+                    message: format!("failed to read conf file: {}", conf_file.display()),
+                    source: e,
+                })?;
 
         let package_id = extract_package_id(&content).unwrap_or_else(|| {
             conf_file
@@ -182,6 +139,30 @@ impl BhcPackageDb {
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| "unknown".to_string())
         });
+
+        // Ensure the database directory exists
+        tokio::fs::create_dir_all(&self.path)
+            .await
+            .map_err(|e| BhcNativeError::Io {
+                message: format!(
+                    "failed to create package DB directory: {}",
+                    self.path.display()
+                ),
+                source: e,
+            })?;
+
+        // Copy the conf file into the database directory
+        let dest = self.path.join(format!("{}.conf", package_id));
+        tokio::fs::copy(conf_file, &dest)
+            .await
+            .map_err(|e| BhcNativeError::Io {
+                message: format!(
+                    "failed to copy conf file to {}: {}",
+                    dest.display(),
+                    conf_file.display()
+                ),
+                source: e,
+            })?;
 
         self.registered.insert(package_id.clone());
 
@@ -206,34 +187,10 @@ impl BhcPackageDb {
         &self.registered
     }
 
-    /// Recache the package database by running `bhc-pkg recache`.
-    pub async fn recache(&self) -> Result<(), BhcNativeError> {
+    /// Recache the package database by re-scanning `.conf` files.
+    pub async fn recache(&mut self) -> Result<(), BhcNativeError> {
         debug!("Recaching package DB at {}", self.path.display());
-
-        let output = Command::new(&self.bhc_pkg_path)
-            .arg("recache")
-            .arg(format!("--package-db={}", self.path.display()))
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .await
-            .map_err(|e| BhcNativeError::Io {
-                message: format!(
-                    "failed to run bhc-pkg recache: {}",
-                    self.bhc_pkg_path.display()
-                ),
-                source: e,
-            })?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(BhcNativeError::PackageDbError(format!(
-                "bhc-pkg recache failed: {}",
-                stderr.trim()
-            )));
-        }
-
-        Ok(())
+        self.load_registered().await
     }
 
     /// Return the path to the package database directory.
@@ -243,36 +200,13 @@ impl BhcPackageDb {
 
     /// Return BHC flags that point to this package database.
     ///
-    /// Returns `["-package-db", "<path>"]`.
+    /// Returns `["--package-db", "<path>"]`.
     pub fn bhc_flags(&self) -> Vec<String> {
         vec![
-            "-package-db".to_string(),
+            "--package-db".to_string(),
             self.path.to_string_lossy().to_string(),
         ]
     }
-}
-
-/// Find the `bhc-pkg` executable for a given BHC version.
-///
-/// Searches the system PATH for `bhc-pkg` (or `bhc-pkg-<version>`).
-async fn find_bhc_pkg(bhc_version: &str) -> Result<PathBuf, BhcNativeError> {
-    // Try version-specific name first
-    let versioned = format!("bhc-pkg-{}", bhc_version);
-    if let Ok(path) = which::which(&versioned) {
-        debug!("Found versioned bhc-pkg: {}", path.display());
-        return Ok(path);
-    }
-
-    // Fall back to unversioned
-    if let Ok(path) = which::which("bhc-pkg") {
-        debug!("Found bhc-pkg: {}", path.display());
-        return Ok(path);
-    }
-
-    Err(BhcNativeError::BhcNotFound(format!(
-        "bhc-pkg not found in PATH (tried {} and bhc-pkg)",
-        versioned
-    )))
 }
 
 /// Extract the `id:` field from a GHC/BHC package `.conf` file.
@@ -357,13 +291,12 @@ key: base-4.19.0-abcdef1234
         let db = BhcPackageDb {
             path: PathBuf::from("/tmp/test/bhc-2026.2.0/package.db"),
             bhc_version: "2026.2.0".to_string(),
-            bhc_pkg_path: PathBuf::from("bhc-pkg"),
             registered: HashSet::new(),
         };
 
         let flags = db.bhc_flags();
         assert_eq!(flags.len(), 2);
-        assert_eq!(flags[0], "-package-db");
+        assert_eq!(flags[0], "--package-db");
         assert_eq!(flags[1], "/tmp/test/bhc-2026.2.0/package.db");
     }
 
@@ -376,7 +309,6 @@ key: base-4.19.0-abcdef1234
         let db = BhcPackageDb {
             path: PathBuf::from("/tmp/test/package.db"),
             bhc_version: "2026.2.0".to_string(),
-            bhc_pkg_path: PathBuf::from("bhc-pkg"),
             registered,
         };
 
@@ -393,12 +325,46 @@ key: base-4.19.0-abcdef1234
         let db = BhcPackageDb {
             path: PathBuf::from("/tmp/test/package.db"),
             bhc_version: "2026.2.0".to_string(),
-            bhc_pkg_path: PathBuf::from("bhc-pkg"),
             registered,
         };
 
         assert!(db.has_package("base", "4.19.0"));
         assert!(db.has_package("text", "2.1.0"));
         assert!(!db.has_package("containers", "0.7.0"));
+    }
+
+    #[tokio::test]
+    async fn test_register_and_load() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let db_dir = temp.path().join("package.db");
+        std::fs::create_dir_all(&db_dir).unwrap();
+
+        let mut db = BhcPackageDb {
+            path: db_dir.clone(),
+            bhc_version: "2026.2.0".to_string(),
+            registered: HashSet::new(),
+        };
+
+        // Create a conf file
+        let conf_content = "name: test-pkg\nversion: 1.0.0\nid: test-pkg-1.0.0-abc123\n";
+        let conf_path = temp.path().join("test-pkg.conf");
+        std::fs::write(&conf_path, conf_content).unwrap();
+
+        // Register it
+        let id = db.register(&conf_path).await.unwrap();
+        assert_eq!(id, "test-pkg-1.0.0-abc123");
+        assert!(db.is_registered("test-pkg-1.0.0-abc123"));
+
+        // Verify the conf file was copied
+        assert!(db_dir.join("test-pkg-1.0.0-abc123.conf").exists());
+
+        // Load from scratch
+        let mut db2 = BhcPackageDb {
+            path: db_dir,
+            bhc_version: "2026.2.0".to_string(),
+            registered: HashSet::new(),
+        };
+        db2.load_registered().await.unwrap();
+        assert!(db2.is_registered("test-pkg-1.0.0-abc123"));
     }
 }

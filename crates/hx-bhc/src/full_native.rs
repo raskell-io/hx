@@ -161,7 +161,7 @@ impl BhcFullNativeBuilder {
 
             // Build extra flags for package database and dependencies
             let mut extra_flags = vec![
-                "-package-db".to_string(),
+                "--package-db".to_string(),
                 self.package_db.db_path().to_string_lossy().to_string(),
             ];
 
@@ -210,6 +210,18 @@ impl BhcFullNativeBuilder {
         result: &mut FullNativeBuildResult,
     ) -> Result<(), BhcNativeError> {
         let pkg_key = format!("{}-{}", unit.name, unit.version);
+
+        // Check if this package is a BHC builtin (provided by the compiler's stdlib)
+        if let Some(builtin_id) = crate::builtin_packages::builtin_package_id(&unit.name) {
+            debug!(
+                "Skipping BHC builtin package: {} (mapped to {})",
+                unit.name, builtin_id
+            );
+            result.packages_skipped += 1;
+            result.registered_packages.push(builtin_id.clone());
+            self.built_packages.insert(unit.name.clone(), builtin_id);
+            return Ok(());
+        }
 
         output.status("Building", &format!("{} {}", unit.name, unit.version));
 
@@ -387,7 +399,6 @@ mod tests {
         let package_db = BhcPackageDb {
             path: PathBuf::from("/tmp/test.db"),
             bhc_version: "2026.2.0".to_string(),
-            bhc_pkg_path: PathBuf::from("bhc-pkg"),
             registered: std::collections::HashSet::new(),
         };
         let cache_dir = PathBuf::from("/tmp/cache");

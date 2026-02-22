@@ -6,6 +6,7 @@
 //! - bhc.toml manifest generation
 
 pub mod build;
+pub mod builtin_packages;
 pub mod compile;
 pub mod diagnostics;
 pub mod full_native;

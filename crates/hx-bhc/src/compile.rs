@@ -48,17 +48,21 @@ pub fn build_compile_args(
     // Output directories for interface and object files
     let hi_dir = build_dir.join("hi");
     let o_dir = build_dir.join("o");
-    args.push(format!("-hidir={}", hi_dir.display()));
-    args.push(format!("-odir={}", o_dir.display()));
+    args.push("--hidir".to_string());
+    args.push(hi_dir.to_string_lossy().to_string());
+    args.push("--odir".to_string());
+    args.push(o_dir.to_string_lossy().to_string());
 
     // Source directories as search paths
     for src_dir in &options.src_dirs {
-        args.push(format!("-i{}", src_dir.display()));
+        args.push("--import-path".to_string());
+        args.push(src_dir.to_string_lossy().to_string());
     }
 
     // Package databases
     for db in &bhc.package_dbs {
-        args.push(format!("-package-db={}", db.display()));
+        args.push("--package-db".to_string());
+        args.push(db.to_string_lossy().to_string());
     }
 
     // Dependency package IDs
@@ -68,7 +72,8 @@ pub fn build_compile_args(
     }
 
     // Optimization level
-    args.push(format!("-O{}", options.optimization));
+    args.push("-O".to_string());
+    args.push(options.optimization.to_string());
 
     // Profile
     args.push(format!("--profile={}", bhc.profile.as_str()));
@@ -85,11 +90,11 @@ pub fn build_compile_args(
 
     // Warnings
     if options.warnings {
-        args.push("-Wall".to_string());
+        args.push("--Wall".to_string());
     }
 
     if options.werror {
-        args.push("-Werror".to_string());
+        args.push("--Werror".to_string());
     }
 
     // Extra flags
@@ -151,11 +156,11 @@ pub async fn compile_module(
     }
 
     // Compute expected output paths
-    // Module "Data.List" => hi/Data/List.hi and o/Data/List.o
+    // Module "Data.List" => hi/Data/List.bhi and o/Data/List.o
     let module_path_component = module_name.replace('.', std::path::MAIN_SEPARATOR_STR);
     let hi_dir = build_dir.join("hi");
     let o_dir = build_dir.join("o");
-    let interface_file = hi_dir.join(format!("{}.hi", module_path_component));
+    let interface_file = hi_dir.join(format!("{}.bhi", module_path_component));
     let object_file = o_dir.join(format!("{}.o", module_path_component));
 
     Ok(ModuleCompileResult {
@@ -223,22 +228,27 @@ mod tests {
         assert!(args.contains(&"src/Main.hs".to_string()));
 
         // Output directories
-        assert!(args.contains(&format!("-hidir={}", Path::new("dist/build/hi").display())));
-        assert!(args.contains(&format!("-odir={}", Path::new("dist/build/o").display())));
+        assert!(args.contains(&"--hidir".to_string()));
+        assert!(args.contains(&Path::new("dist/build/hi").to_string_lossy().to_string()));
+        assert!(args.contains(&"--odir".to_string()));
+        assert!(args.contains(&Path::new("dist/build/o").to_string_lossy().to_string()));
 
         // Source dirs
-        assert!(args.contains(&"-isrc".to_string()));
-        assert!(args.contains(&"-ilib".to_string()));
+        assert!(args.contains(&"--import-path".to_string()));
+        assert!(args.contains(&"src".to_string()));
+        assert!(args.contains(&"lib".to_string()));
 
         // Package DB
-        assert!(args.contains(&"-package-db=/tmp/pkg.db".to_string()));
+        assert!(args.contains(&"--package-db".to_string()));
+        assert!(args.contains(&"/tmp/pkg.db".to_string()));
 
         // Dependency IDs
         assert!(args.contains(&"-package-id".to_string()));
         assert!(args.contains(&"base-4.18.0-abc123".to_string()));
 
         // Optimization
-        assert!(args.contains(&"-O2".to_string()));
+        assert!(args.contains(&"-O".to_string()));
+        assert!(args.contains(&"2".to_string()));
 
         // Profile
         assert!(args.contains(&"--profile=numeric".to_string()));
@@ -251,8 +261,8 @@ mod tests {
         assert!(args.contains(&"-XGADTs".to_string()));
 
         // Warnings
-        assert!(args.contains(&"-Wall".to_string()));
-        assert!(args.contains(&"-Werror".to_string()));
+        assert!(args.contains(&"--Wall".to_string()));
+        assert!(args.contains(&"--Werror".to_string()));
 
         // Extra flags
         assert!(args.contains(&"-fforce-recomp".to_string()));
@@ -273,11 +283,12 @@ mod tests {
 
         assert!(args.contains(&"-c".to_string()));
         assert!(args.contains(&"src/Main.hs".to_string()));
-        assert!(args.contains(&"-O1".to_string()));
+        assert!(args.contains(&"-O".to_string()));
+        assert!(args.contains(&"1".to_string()));
         assert!(args.contains(&"--profile=default".to_string()));
-        assert!(args.contains(&"-Wall".to_string()));
-        // No -Werror by default
-        assert!(!args.contains(&"-Werror".to_string()));
+        assert!(args.contains(&"--Wall".to_string()));
+        // No --Werror by default
+        assert!(!args.contains(&"--Werror".to_string()));
         // No tensor fusion by default
         assert!(!args.contains(&"--tensor-fusion".to_string()));
     }
@@ -298,6 +309,6 @@ mod tests {
             &[],
         );
 
-        assert!(!args.contains(&"-Wall".to_string()));
+        assert!(!args.contains(&"--Wall".to_string()));
     }
 }

@@ -344,7 +344,7 @@ impl BhcNativeBuilder {
 
         // Package databases
         for db in &self.bhc.package_dbs {
-            args.push("-package-db".to_string());
+            args.push("--package-db".to_string());
             args.push(db.to_string_lossy().to_string());
         }
 

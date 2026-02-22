@@ -198,13 +198,13 @@ impl BhcCompilerConfig {
 
         // Package databases
         for db in &self.package_dbs {
-            flags.push("-package-db".to_string());
+            flags.push("--package-db".to_string());
             flags.push(db.to_string_lossy().to_string());
         }
 
         // Explicit packages
         for pkg in &self.packages {
-            flags.push("-package".to_string());
+            flags.push("--package".to_string());
             flags.push(pkg.clone());
         }
 
@@ -362,9 +362,9 @@ mod tests {
         assert!(flags.contains(&"--profile=server".to_string()));
         assert!(flags.contains(&"--tensor-fusion".to_string()));
         assert!(flags.contains(&"--emit-kernel-report".to_string()));
-        assert!(flags.contains(&"-package-db".to_string()));
+        assert!(flags.contains(&"--package-db".to_string()));
         assert!(flags.contains(&"/tmp/test/package.db".to_string()));
-        assert!(flags.contains(&"-package".to_string()));
+        assert!(flags.contains(&"--package".to_string()));
         assert!(flags.contains(&"base".to_string()));
     }
 
